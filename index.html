@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brieftauben-Verwaltung</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0F1117;--bg2:#161B22;--bg3:#1C2333;--bg4:#242B3D;
+  --green:#5B8659;--green2:#4a6e48;--green3:#3d5c3b;
+  --text:#E8EAF0;--text2:#9BA3AF;--text3:#6B7280;
+  --border:#2A3347;--border2:#3A4560;
+  --blue:#4A90D9;--purple:#a855f7;--orange:#e8893a;
+  --radius:10px;--radius-sm:6px;
+}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh}
+.serif{font-family:'Playfair Display',serif}
+
+/* ── Header ── */
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:13px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100}
+.header-left{display:flex;align-items:center;gap:12px}
+.logo{width:34px;height:34px;background:var(--green3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+header h1{font-family:'Playfair Display',serif;font-size:18px;font-weight:600}
+.db-status{font-size:11px;color:var(--text3);margin-top:1px}
+.header-right{display:flex;align-items:center;gap:8px}
+.stat-pill{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:12px;color:var(--text2);white-space:nowrap}
+.stat-pill span{color:var(--green);font-weight:500;font-family:monospace}
+
+/* ── Nav ── */
+nav{background:var(--bg2);border-bottom:1px solid var(--border);display:flex;padding:0 16px;overflow-x:auto}
+nav button{background:none;border:none;border-bottom:2px solid transparent;color:var(--text2);padding:11px 16px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;white-space:nowrap;transition:color .15s,border-color .15s}
+nav button:hover{color:var(--text)}
+nav button.active{color:var(--green);border-bottom-color:var(--green);font-weight:500}
+
+/* ── Main ── */
+main{padding:18px 20px;max-width:1300px;margin:0 auto}
+
+/* ── Cards ── */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.card-title{font-weight:500;font-size:14px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+
+/* ── Suche & Filter ── */
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.search-wrap{position:relative;flex:1;min-width:200px}
+.search-wrap input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px 9px 36px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--green)}
+.search-wrap input::placeholder{color:var(--text3)}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none}
+select{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:8px 10px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;height:36px}
+select:focus{border-color:var(--green)}
+.count-label{font-size:12px;color:var(--text3);white-space:nowrap}
+
+/* ── Tabelle ── */
+.table-wrap{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--bg3);color:var(--text3);font-weight:500;text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+th:hover{color:var(--text2)}
+td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
+.ring{font-family:monospace;font-size:11.5px;color:var(--text);background:var(--bg3);padding:2px 7px;border-radius:4px;border:1px solid var(--border)}
+.ring-sm{font-family:monospace;font-size:11px;color:var(--green);background:color-mix(in srgb,var(--green) 10%,var(--bg3));padding:1px 6px;border-radius:3px;cursor:pointer;transition:background .15s}
+.ring-sm:hover{background:color-mix(in srgb,var(--green) 20%,var(--bg3))}
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:500}
+.badge-m{background:#1a2d4a;color:#7ab3e0}
+.badge-f{background:#2d1a3d;color:#c97fd4}
+.badge-u{background:var(--bg3);color:var(--text3);border:1px solid var(--border)}
+
+/* ── Pagination ── */
+.pagination{display:flex;align-items:center;gap:6px;margin-top:12px;justify-content:flex-end;flex-wrap:wrap}
+.pagination button{background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:5px 11px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;transition:all .15s}
+.pagination button:hover:not(:disabled){border-color:var(--green);color:var(--text)}
+.pagination button:disabled{opacity:.3;cursor:default}
+.pagination span{font-size:12px;color:var(--text3)}
+
+/* ── Detail ── */
+.back-btn{background:none;border:1px solid var(--border);color:var(--text2);padding:7px 14px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;margin-bottom:14px;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.back-btn:hover{border-color:var(--green);color:var(--text)}
+.detail-name{font-family:'Playfair Display',serif;font-size:26px;margin-bottom:3px}
+.detail-ring{font-family:monospace;font-size:14px;color:var(--green);margin-bottom:14px}
+.section-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin:18px 0 10px}
+.parent-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;cursor:pointer;transition:border-color .15s,background .15s}
+.parent-card:hover{border-color:var(--green);background:var(--bg4)}
+.parent-card.male{border-left:3px solid var(--blue)}
+.parent-card.female{border-left:3px solid var(--purple)}
+.parent-card.unknown{cursor:default;opacity:.5}
+.parent-card.unknown:hover{border-color:var(--border);background:var(--bg3)}
+.field-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.field-item label{display:block;font-size:10px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.field-item span{font-size:13px;color:var(--text)}
+
+/* ── Buttons ── */
+.btn{background:var(--green3);border:1px solid var(--green2);color:#e8f0e8;padding:7px 15px;border-radius:var(--radius-sm);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:background .15s;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--green2)}
+.btn-outline{background:none;border:1px solid var(--border);color:var(--text2)}
+.btn-outline:hover{border-color:var(--green);color:var(--text);background:none}
+.btn-sm{padding:5px 11px;font-size:12px}
+
+/* ── Pedigree ── */
+.ped-wrap{overflow-x:auto;padding:4px 0 8px}
+/* ── Stammbaum-Grid ── */
+.ped-tree{display:flex;flex-direction:row;align-items:stretch;gap:0;min-width:860px;overflow-x:auto}
+.ped-col{display:flex;flex-direction:column;justify-content:space-around;position:relative;padding:0 6px}
+.ped-col-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;text-align:center;padding:4px 0 8px;border-bottom:1px solid var(--border);margin-bottom:4px}
+.ped-col-hdr{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;text-align:center;padding:4px 0;margin-bottom:6px}
+.ped-cell{display:flex;align-items:center;flex:1;position:relative;min-height:60px}
+.ped-cell-inner{width:100%}
+/* Verbindungslinien */
+.ped-col.has-lines .ped-cell::before{
+  content:'';position:absolute;left:-6px;top:50%;
+  width:6px;height:1px;background:var(--border);
+}
+.ped-col.has-lines .ped-cell::after{
+  content:'';position:absolute;left:-6px;
+  width:1px;background:var(--border);
+}
+/* Obere Hälfte des Paares */
+.ped-cell.pair-top::after{top:50%;bottom:0}
+/* Untere Hälfte des Paares */
+.ped-cell.pair-bottom::after{top:0;bottom:50%}
+/* Einzelkind (Proband) */
+.ped-cell.solo::after{display:none}
+.ped-col-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.ped-box{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 10px;cursor:pointer;transition:border-color .15s,background .15s}
+.ped-box:hover{border-color:var(--green);background:var(--bg4)}
+.ped-box.male{border-left:3px solid var(--blue)}
+.ped-box.female{border-left:3px solid var(--purple)}
+.ped-box.empty{opacity:.3;cursor:default;border-style:dashed}
+.ped-box.empty:hover{border-color:var(--border);background:var(--bg3)}
+.ped-box.root{border-color:var(--green2);background:color-mix(in srgb,var(--green) 8%,var(--bg3))}
+.ped-ring{font-family:monospace;font-size:11px;color:var(--green);font-weight:600}
+.ped-name{font-size:12px;color:var(--text);margin-top:2px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ped-info{font-size:11px;color:var(--text3);margin-top:1px}
+
+/* ── Stammbaum Suche ── */
+.ped-result{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:10px}
+.ped-result:hover{background:var(--bg3)}
+.ped-result:last-child{border-bottom:none}
+
+/* ── Statistik ── */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 16px;text-align:center}
+.stat-num{font-family:'Playfair Display',serif;font-size:32px;color:var(--green);font-weight:600;line-height:1}
+.stat-label{font-size:12px;color:var(--text3);margin-top:5px}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:7px}
+.bar-label{font-size:12px;color:var(--text2);width:50px;flex-shrink:0;font-family:monospace;text-align:right}
+.bar-track{flex:1;background:var(--bg3);border-radius:4px;height:18px;overflow:hidden}
+.bar-fill{background:linear-gradient(90deg,var(--green3),var(--green2));height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;min-width:30px;transition:width .4s ease}
+.bar-fill span{font-size:11px;color:#e8f0e8;white-space:nowrap}
+
+/* ── Neue Taube / Formular ── */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.form-field{display:grid;gap:5px}
+.form-field label{font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.4px}
+.form-field input,.form-field select,.form-field textarea{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:8px 10px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s}
+.form-field input:focus,.form-field select:focus,.form-field textarea:focus{border-color:var(--green)}
+.form-field textarea{min-height:80px;resize:vertical}
+.form-full{grid-column:1 / -1}
+.form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+.form-msg{font-size:12px;padding:8px 12px;border-radius:var(--radius-sm);margin-bottom:10px}
+.form-msg.ok{background:color-mix(in srgb,var(--green) 10%,var(--bg3));color:var(--green);border:1px solid color-mix(in srgb,var(--green) 30%,var(--border))}
+.form-msg.err{background:#1e0f0f;color:#e07070;border:1px solid #5a1f1f}
+.autocomplete-wrap{position:relative}
+.autocomplete-drop{position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--border2);border-top:none;border-radius:0 0 var(--radius-sm) var(--radius-sm);z-index:50;max-height:160px;overflow-y:auto;display:none}
+.autocomplete-drop.open{display:block}
+.ac-item{padding:7px 10px;cursor:pointer;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:8px;transition:background .1s}
+.ac-item:hover,.ac-item.selected{background:var(--bg3);color:var(--text)}
+.ac-ring{font-family:monospace;font-size:11px;color:var(--green)}
+
+/* ── Inzuchtrechner ── */
+.ibc-result{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;margin-top:12px}
+.ibc-num{font-family:'Playfair Display',serif;font-size:36px;font-weight:600}
+.ibc-num.low{color:var(--green)}
+.ibc-num.mid{color:var(--orange)}
+.ibc-num.high{color:#e07070}
+.ibc-label{font-size:12px;color:var(--text3);margin-top:4px}
+
+/* ── Sonstige ── */
+.loading{text-align:center;padding:48px;color:var(--text3)}
+.spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error-box{background:#1e0f0f;border:1px solid #5a1f1f;color:#e07070;border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:14px;font-size:13px}
+.dot{width:8px;height:8px;border-radius:2px;display:inline-block}
+.divider{border:none;border-top:1px solid var(--border);margin:14px 0}
+.empty-state{text-align:center;padding:40px;color:var(--text3)}
+.empty-state .icon{font-size:32px;margin-bottom:10px}
+.tag-list{display:flex;flex-wrap:wrap;gap:6px}
+.tag{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 11px;font-size:12px;color:var(--text2)}
+.tag strong{color:var(--text);margin-left:5px}
+@media(max-width:640px){
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .ped-grid{grid-template-columns:repeat(4,160px)}
+  .header-right{display:none}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo">🕊</div>
+    <div>
+      <h1>Brieftauben-Verwaltung</h1>
+      <div class="db-status" id="db-status">Verbinde mit Datenbank…</div>
+    </div>
+  </div>
+  <div class="header-right" id="headerStats"></div>
+</header>
+
+<nav id="nav">
+  <button class="active" onclick="showTab('tauben')">🐦 Tauben</button>
+  <button onclick="showTab('stammbaum')">🌳 Stammbaum</button>
+  <button onclick="showTab('paarung')">💑 Paarungscheck</button>
+  <button onclick="showTab('neu')">＋ Neue Taube</button>
+  <button onclick="showTab('nachkommen')">🐣 Nachkommen</button>
+  <button onclick="showTab('statistik')">📊 Statistik</button>
+</nav>
+
+<main id="main">
+  <div class="loading"><div class="spinner"></div>Lade Daten…</div>
+</main>
+
+<script>
+const SUPA_URL = 'https://vwdqqdmtjztduzqrdbpc.supabase.co/rest/v1';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3ZHFxZG10anp0ZHV6cXJkYnBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NDM2NzEsImV4cCI6MjA4MDUxOTY3MX0.igi8KVrlMvc5EuHkNTS0WsQm5ySq6eK7lawASWVxdJg';
+const H = {'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation'};
+
+const S = {
+  tab: 'tauben', pigeons: [], filtered: [],
+  page: 0, pageSize: 50,
+  search: '', sexFilter: 'all', yearFilter: 'all', inStockFilter: 'all',
+  sortCol: 'ringnumber', sortDir: 1,
+  selected: null, selectedPed: null,
+  loading: true, error: null, _loadingMore: false,
+  paarungM: null, paarungF: null, selectedNach: null
+};
+
+// ── Feldhelfer ─────────────────────────────────────────────────
+const ring   = p => p.ringnumber || p.ringnumberold || p.pigeonid || '?';
+const name_  = p => p.name || '';
+const sex_   = p => { const g = String(p.gender||'').trim().toLowerCase(); if(['m','1'].includes(g))return'M'; if(['f','2','w'].includes(g))return'F'; return '?'; };
+const year_  = p => p.date_year || '';
+const label_ = p => p.name ? `${p.name} (${ring(p)})` : ring(p);
+
+function findFather(p){ return p.fatherid ? S.pigeons.find(x=>x.pigeonid===p.fatherid)||null : p.ringnumberfather ? S.pigeons.find(x=>x.ringnumber===p.ringnumberfather)||null : null; }
+function findMother(p){ return p.motherid ? S.pigeons.find(x=>x.pigeonid===p.motherid)||null : p.ringnumbermother ? S.pigeons.find(x=>x.ringnumber===p.ringnumbermother)||null : null; }
+function findById(id){ if(!id)return null; return S.pigeons.find(p=>p.pigeonid===id||p.ringnumber===String(id))||null; }
+function getAncestors(p, depth=4){
+  if(!p||depth===0) return new Set();
+  const s = new Set([p.pigeonid]);
+  const f = findFather(p), m = findMother(p);
+  getAncestors(f,depth-1).forEach(x=>s.add(x));
+  getAncestors(m,depth-1).forEach(x=>s.add(x));
+  return s;
+}
+
+// ── Inzuchtberechnung (Wright-Koeffizient, 5 Gen.) ───────────
+function calcInbreeding(bird, depth=5){
+  function ancestors(b, gen, path){
+    if(!b||gen>depth) return {};
+    const res = {};
+    if(gen>0){ if(!res[b.pigeonid]) res[b.pigeonid]=[]; res[b.pigeonid].push(gen); }
+    const f=findFather(b), m=findMother(b);
+    const fa=ancestors(f,gen+1,path+'-f'), ma=ancestors(m,gen+1,path+'-m');
+    for(const [id,gens] of Object.entries(fa)){ if(!res[id])res[id]=[]; res[id].push(...gens); }
+    for(const [id,gens] of Object.entries(ma)){ if(!res[id])res[id]=[]; res[id].push(...gens); }
+    return res;
+  }
+  const f=findFather(bird), m=findMother(bird);
+  if(!f||!m) return 0;
+  const fa=ancestors(f,1,''), ma=ancestors(m,1,'');
+  let coeff=0;
+  for(const id of Object.keys(fa)){
+    if(ma[id]){
+      const fGens=fa[id], mGens=ma[id];
+      for(const n of fGens) for(const p of mGens) coeff+=Math.pow(0.5,n+p+1);
+    }
+  }
+  return coeff;
+}
+
+function calcInbreedingPair(male, female, depth=5){
+  // Simuliere ein hypothetisches Nachkomme-Objekt
+  const fake = { pigeonid: '__tmp__', fatherid: male.pigeonid, motherid: female.pigeonid };
+  const origFind = (id) => S.pigeons.find(p=>p.pigeonid===id);
+  // patching findFather/findMother lokal
+  function anc(b, gen){
+    if(!b||gen>depth) return {};
+    const res={};
+    if(gen>0){ if(!res[b.pigeonid])res[b.pigeonid]=[]; res[b.pigeonid].push(gen); }
+    const fid = b===fake ? male.pigeonid : (b.fatherid||null);
+    const mid = b===fake ? female.pigeonid : (b.motherid||null);
+    const fb  = fid ? (S.pigeons.find(p=>p.pigeonid===fid)||null) : null;
+    const mb  = mid ? (S.pigeons.find(p=>p.pigeonid===mid)||null) : null;
+    const fa=anc(fb,gen+1), ma=anc(mb,gen+1);
+    for(const [id,g] of Object.entries(fa)){ if(!res[id])res[id]=[]; res[id].push(...g); }
+    for(const [id,g] of Object.entries(ma)){ if(!res[id])res[id]=[]; res[id].push(...g); }
+    return res;
+  }
+  const fa=anc(male,1), ma=anc(female,1);
+  let coeff=0;
+  for(const id of Object.keys(fa)){
+    if(ma[id]){
+      for(const n of fa[id]) for(const p of ma[id]) coeff+=Math.pow(0.5,n+p+1);
+    }
+  }
+  return coeff;
+}
+
+// ── API ────────────────────────────────────────────────────────
+async function apiGet(path){
+  const r = await fetch(SUPA_URL+path,{headers:H});
+  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  return r.json();
+}
+async function apiPost(table, body){
+  const r = await fetch(SUPA_URL+'/'+table,{method:'POST',headers:H,body:JSON.stringify(body)});
+  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  return r.json();
+}
+async function apiPatch(table, id, body){
+  const r = await fetch(SUPA_URL+'/'+table+'?pigeonid=eq.'+id,{method:'PATCH',headers:H,body:JSON.stringify(body)});
+  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  return r.json();
+}
+
+function updateHeaderStats(){
+  const instock = S.pigeons.filter(p=>p.instock).length;
+  const el = document.getElementById('db-status');
+  if(el) el.textContent = S._loadingMore
+    ? `${S.pigeons.length.toLocaleString('de')} Tauben geladen (lade weiter…)`
+    : `${S.pigeons.length.toLocaleString('de')} Tauben geladen`;
+  const hs = document.getElementById('headerStats');
+  if(hs) hs.innerHTML=`
+    <div class="stat-pill">Gesamt <span>${S.pigeons.length.toLocaleString('de')}</span></div>
+    <div class="stat-pill">Im Bestand <span>${instock.toLocaleString('de')}</span></div>
+    <div class="stat-pill">Täuber <span>${S.pigeons.filter(p=>sex_(p)==='M').length}</span></div>
+    <div class="stat-pill">Täubin <span>${S.pigeons.filter(p=>sex_(p)==='F').length}</span></div>`;
+}
+
+async function loadData(){
+  S.loading=true; S._loadingMore=false; render();
+  const BATCH=500;
+  try{
+    // Erste Batch sofort laden → UI erscheint schnell
+    const first = await apiGet('/pigeons?deleted=eq.false&limit='+BATCH+'&offset=0&order=date_year.desc,number.asc');
+    S.pigeons = first||[];
+    S.error=null;
+    S.loading=false;
+    updateHeaderStats();
+    // Beim Start: komplettes render() damit DOM aufgebaut wird
+    render();
+    applyFilter();
+
+    // Rest im Hintergrund nachladen
+    if((first||[]).length===BATCH){
+      S._loadingMore=true;
+      updateHeaderStats();
+      let offset=BATCH;
+      while(true){
+        const batch = await apiGet('/pigeons?deleted=eq.false&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc');
+        if(!batch||batch.length===0) break;
+        S.pigeons = S.pigeons.concat(batch);
+        updateHeaderStats();
+        // Hintergrund-Batch: Tabelle still aktualisieren
+        S.filtered=[...S.pigeons];
+        if(document.getElementById('table-wrap')) renderTableOnly();
+        if(batch.length<BATCH) break;
+        offset+=BATCH;
+      }
+      S._loadingMore=false;
+      updateHeaderStats();
+      applyFilter();
+    }
+  } catch(e){
+    S.loading=false;
+    S._loadingMore=false;
+    S.error=e.message;
+    document.getElementById('db-status').textContent='Verbindungsfehler';
+    render();
+  }
+}
+
+function renderTableOnly() {
+  // Nur Tabelle + Pagination aktualisieren, Suchfeld NICHT anfassen
+  const years = [...new Set(S.pigeons.map(p => p.date_year).filter(Boolean))].sort((a, b) => b - a);
+  const si = c => c === S.sortCol ? (S.sortDir > 0 ? ' ↑' : ' ↓') : '';
+  const start = S.page * S.pageSize, end = start + S.pageSize;
+  const page = S.filtered.slice(start, end);
+  const totalPages = Math.ceil(S.filtered.length / S.pageSize) || 1;
+
+  // Jahrgänge-Filter aktualisieren (Wert behalten)
+  const yearSel = document.getElementById('year-filter');
+  if (yearSel) {
+    const cur = yearSel.value;
+    yearSel.innerHTML = `<option value="all">Alle Jahrgänge</option>`
+      + years.map(y => `<option value="${y}"${S.yearFilter === String(y) ? ' selected' : ''}>${y}</option>`).join('');
+    yearSel.value = cur;
+  }
+
+  // Trefferzahl
+  const countEl = document.getElementById('count-label');
+  if (countEl) countEl.textContent = `${S.filtered.length.toLocaleString('de')} / ${S.pigeons.length.toLocaleString('de')}`;
+
+  // Tabelle
+  const tw = document.getElementById('table-wrap');
+  if (tw) tw.innerHTML = buildTableHTML(page, si);
+
+  // Pagination
+  const pg = document.getElementById('pagination-wrap');
+  if (pg) pg.innerHTML = totalPages > 1 ? buildPagination(totalPages) : '';
+}
+
+
+function applyFilter(){
+  let arr=[...S.pigeons];
+  const q=S.search.trim();
+  const ql=q.toLowerCase();
+
+  if(q){
+    /*
+      Eingabe-Erkennung — 4 Modi:
+      A) "26/1" oder "2026/1" oder "26-1" → Jahrgang + Endnummer
+      B) "idefix 1" oder "1 idefix"       → Name + Nummer kombiniert
+      C) Rein numerisch                   → Endnummer-Scoring
+      D) Text                             → Freitext
+    */
+
+    // ── Modus A: Jahrgang/Endnummer z.B. "26/1", "2026-1", "25/455" ──
+    const modeA = q.match(/^(\d{2,4})[\/\-\s](\d{1,6})$/) || q.match(/^(\d{1,6})[\/\-\s](\d{2,4})$/);
+    // ── Modus B: Gemischt z.B. "idefix 1", "chef 333" ──
+    const modeB_numWord = q.match(/^(\d{1,6})\s+(.+)$/) || q.match(/^(.+)\s+(\d{1,6})$/);
+
+    if(modeA){
+      // Beide Teile extrahieren — prüfe welcher der Jahrgang ist (2- oder 4-stellig ≥ 19xx/20xx)
+      let part1 = modeA[1], part2 = modeA[2];
+      let yr, num;
+      const isYear = v => {
+        const n=parseInt(v);
+        if(v.length===4 && n>=1900 && n<=2100) return true;
+        if(v.length===2 && n>=0 && n<=99) return true;
+        return false;
+      };
+      if(isYear(part1) && !isYear(part2)){ yr=part1; num=part2; }
+      else if(isYear(part2) && !isYear(part1)){ yr=part2; num=part1; }
+      else { yr=part1; num=part2; }
+      // Jahrgang normalisieren (2-stellig → 20xx)
+      const yrFull = yr.length===2 ? '20'+yr : yr;
+      arr = arr.filter(p=>{
+        if(String(p.date_year) !== yrFull) return false;
+        const segs = (p.ringnumber||p.ringnumberold||'').split(/[^\d]+/).filter(s=>s);
+        const last = segs[segs.length-1]||'';
+        const lastS = last.replace(/^0+/,'')||'0';
+        const numS  = num.replace(/^0+/,'')||'0';
+        const rnNoSp = (p.ringnumber||p.ringnumberold||'').replace(/\s+/g,'');
+        const idxN = rnNoSp.lastIndexOf(num);
+        const endsExact = rnNoSp.endsWith(num) && (idxN===0||!/\d/.test(rnNoSp[idxN-1]));
+        return last===num || lastS===numS || endsExact;
+      });
+      arr.sort((a,b)=>(ring(a)||'').localeCompare(ring(b)));
+
+    } else {
+      const isNumeric = /^\d{1,}$/.test(q);
+
+      if(isNumeric){
+        // ── Modus C: Endnummer-Suche mit Relevanz-Scoring ──
+        function getNumSegs(rn){
+          return (rn||'').trim().split(/[^\d]+/).filter(s=>s.length>0);
+        }
+        const scored=[];
+        S.pigeons.forEach(p=>{
+          const rn       = (p.ringnumber||p.ringnumberold||'').trim();
+          const rnNoSpace= rn.replace(/\s+/g,'');
+          const rnC      = rn.replace(/[^\d]/g,'');
+          const numSegs  = getNumSegs(rn);
+          const lastSeg  = numSegs[numSegs.length-1]||'';
+          const idxQ     = rnNoSpace.lastIndexOf(q);
+          const endsExact= rnNoSpace.endsWith(q) && (idxQ===0||!/\d/.test(rnNoSpace[idxQ-1]));
+          const lastExact= lastSeg===q;
+          const nameWords= (p.name||'').trim().split(/\s+/);
+          const nameExact= nameWords.some(w=>w===q);
+          const nameCont = (p.name||'').includes(q);
+          const rnCont   = rnC.includes(q);
+
+          if(lastExact || endsExact){
+            scored.push({p,score:1});
+          } else if(numSegs.some(s=>s===q)){
+            scored.push({p,score:2});
+          } else if(nameExact){
+            scored.push({p,score:3});
+          } else if(rnCont){
+            scored.push({p,score:4});
+          } else if(nameCont){
+            scored.push({p,score:5});
+          }
+        });
+        scored.sort((a,b)=>{
+          if(a.score!==b.score) return a.score-b.score;
+          // Gleicher Score: neueste zuerst
+          const yd=(b.p.date_year||0)-(a.p.date_year||0);
+          if(yd!==0) return yd;
+          return (ring(a.p)||'').localeCompare(ring(b.p));
+        });
+        arr=scored.map(x=>x.p);
+
+      } else {
+        // ── Modus D: Freitext + optionaler Name+Nummer-Kombi ──
+        // Prüfe ob ein Zahlenanteil + Textanteil (z.B. "idefix 1")
+        const mixMatch = q.match(/^(.+?)\s+(\d{1,6})$/) || q.match(/^(\d{1,6})\s+(.+)$/);
+        if(mixMatch){
+          const numPart  = (mixMatch[1].match(/^\d+$/) ? mixMatch[1] : mixMatch[2]);
+          const textPart = (mixMatch[1].match(/^\d+$/) ? mixMatch[2] : mixMatch[1]).toLowerCase();
+          const scored=[];
+          S.pigeons.forEach(p=>{
+            const nameMatch = (p.name||'').toLowerCase().includes(textPart);
+            const segs = (p.ringnumber||p.ringnumberold||'').split(/[^\d]+/).filter(s=>s);
+            const last = segs[segs.length-1]||'';
+            const rnNoSp = (p.ringnumber||p.ringnumberold||'').replace(/\s+/g,'');
+            const idxN = rnNoSp.lastIndexOf(numPart);
+            const endsExact = rnNoSp.endsWith(numPart)&&(idxN===0||!/\d/.test(rnNoSp[idxN-1]));
+            const numMatch = last===numPart||endsExact||segs.some(s=>s===numPart);
+            if(nameMatch && numMatch) scored.push({p,score:1});
+            else if(nameMatch)        scored.push({p,score:2});
+            else if(numMatch)         scored.push({p,score:3});
+          });
+          scored.sort((a,b)=>{
+            if(a.score!==b.score) return a.score-b.score;
+            return (b.p.date_year||0)-(a.p.date_year||0);
+          });
+          arr=scored.map(x=>x.p);
+        } else {
+          arr=arr.filter(p=>(p.ringnumber||'').toLowerCase().includes(ql)
+            ||(p.ringnumberold||'').toLowerCase().includes(ql)
+            ||(p.name||'').toLowerCase().includes(ql)
+            ||(p.color||'').toLowerCase().includes(ql)
+            ||(p.strain||'').toLowerCase().includes(ql)
+            ||(p.breeder||'').toLowerCase().includes(ql)
+            ||(p.owner||'').toLowerCase().includes(ql)
+            ||(p.ringnumberfather||'').toLowerCase().includes(ql)
+            ||(p.ringnumbermother||'').toLowerCase().includes(ql));
+        }
+      }
+    }
+  }
+
+  if(S.sexFilter!=='all') arr=arr.filter(p=>sex_(p)===S.sexFilter);
+  if(S.yearFilter!=='all') arr=arr.filter(p=>String(p.date_year)===S.yearFilter);
+  if(S.inStockFilter==='yes') arr=arr.filter(p=>p.instock);
+  if(S.inStockFilter==='no') arr=arr.filter(p=>!p.instock);
+
+  // Fallback-Sortierung nur wenn KEIN Scoring aktiv war
+  if(!q || !((/^\d/.test(q)) || q.match(/^(\d{2,4})[\/\-\s](\d{1,6})$/))){
+    arr.sort((a,b)=>{
+      let av,bv;
+      if(S.sortCol==='ringnumber'){av=ring(a);bv=ring(b);}
+      else if(S.sortCol==='name'){av=a.name||'';bv=b.name||'';}
+      else if(S.sortCol==='gender'){av=sex_(a);bv=sex_(b);}
+      else if(S.sortCol==='year'){av=a.date_year||0;bv=b.date_year||0;}
+      else if(S.sortCol==='color'){av=a.color||'';bv=b.color||'';}
+      else if(S.sortCol==='strain'){av=a.strain||'';bv=b.strain||'';}
+      else{av='';bv='';}
+      if(av<bv) return -1*S.sortDir;
+      if(av>bv) return 1*S.sortDir;
+      return 0;
+    });
+  }
+
+  S.filtered=arr;
+  const totalPages=Math.max(1,Math.ceil(S.filtered.length/S.pageSize));
+  if(S.page>totalPages-1) S.page=0;
+  if(S.tab==='tauben'&&!S.selected){
+    if(document.getElementById('table-wrap')) renderTableOnly();
+    else render();
+  } else { render(); }
+}
+
+function sortBy(col){ S.sortCol===col ? S.sortDir*=-1 : (S.sortCol=col,S.sortDir=1); applyFilter(); }
+
+// ── Navigation ─────────────────────────────────────────────────
+function showTab(t){
+  S.tab=t; S.selected=null;
+  document.querySelectorAll('nav button').forEach((b,i)=>b.classList.toggle('active',['tauben','stammbaum','nachkommen','paarung','neu','statistik'][i]===t));
+  render();
+}
+function selectPigeon(id){ S.selected=findById(id); S.tab='tauben'; document.querySelectorAll('nav button').forEach((b,i)=>b.classList.toggle('active',i===0)); render(); window.scrollTo(0,0); }
+function showPedigree(id){ S.selectedPed=id; S.tab='stammbaum'; document.querySelectorAll('nav button').forEach((b,i)=>b.classList.toggle('active',i===1)); render(); window.scrollTo(0,0); }
+
+// ── RENDER ─────────────────────────────────────────────────────
+function render(){
+  const m=document.getElementById('main');
+  if(S.loading){ m.innerHTML='<div class="loading"><div class="spinner"></div>Lade Tauben…</div>'; return; }
+  if(S.tab==='tauben')     m.innerHTML=S.selected ? renderDetail(S.selected) : renderList();
+  else if(S.tab==='stammbaum')  m.innerHTML=S.selectedPed ? renderPedigree(S.selectedPed) : renderPedSearch();
+  else if(S.tab==='nachkommen') m.innerHTML=S.selectedNach ? renderNachkommen(S.selectedNach) : renderNachSearch();
+  else if(S.tab==='paarung')    m.innerHTML=renderPaarung();
+  else if(S.tab==='neu')        m.innerHTML=renderNeu();
+  else                          m.innerHTML=renderStats();
+  bindAutocomplete();
+  bindPedSearch();
+  bindNachSearch();
+}
+
+// ── LISTE ──────────────────────────────────────────────────────
+function buildTableHTML(page, si){
+  return `<table>
+      <thead><tr>
+        <th onclick="sortBy('ringnumber')">Ringnummer${si('ringnumber')}</th>
+        <th onclick="sortBy('name')">Name${si('name')}</th>
+        <th onclick="sortBy('gender')">Gesch.${si('gender')}</th>
+        <th onclick="sortBy('year')">Jg.${si('year')}</th>
+        <th onclick="sortBy('color')">Farbe${si('color')}</th>
+        <th onclick="sortBy('strain')">Linie${si('strain')}</th>
+        <th>Vater</th><th>Mutter</th>
+      </tr></thead>
+      <tbody>${page.map(p=>{
+        const f=findFather(p),mo=findMother(p),sx=sex_(p);
+        const fR=f?ring(f):(p.ringnumberfather||''), mR=mo?ring(mo):(p.ringnumbermother||'');
+        return `<tr onclick="selectPigeon('${p.pigeonid}')">
+          <td><span class="ring">${escH(ring(p))}</span></td>
+          <td>${escH(p.name||'')||'<span style="color:var(--text3)">—</span>'}</td>
+          <td>${sx==='M'?'<span class="badge badge-m">♂</span>':sx==='F'?'<span class="badge badge-f">♀</span>':'<span class="badge badge-u">?</span>'}</td>
+          <td>${p.date_year||'—'}</td>
+          <td>${escH(p.color||'—')}</td>
+          <td>${escH(p.strain||'—')}</td>
+          <td>${fR?`<span class="ring-sm" onclick="event.stopPropagation();${f?`selectPigeon('${f.pigeonid}')`:'void(0)'}">${escH(fR)}</span>`:'—'}</td>
+          <td>${mR?`<span class="ring-sm" onclick="event.stopPropagation();${mo?`selectPigeon('${mo.pigeonid}')`:'void(0)'}">${escH(mR)}</span>`:'—'}</td>
+        </tr>`;}).join('')}
+      </tbody>
+    </table>`;
+}
+
+function buildPagination(totalPages){
+  return `<div class="pagination">
+      <button onclick="S.page=0;renderTableOnly()" ${S.page===0?'disabled':''}>«</button>
+      <button onclick="S.page--;renderTableOnly()" ${S.page===0?'disabled':''}>‹</button>
+      <span>Seite ${S.page+1} / ${totalPages}</span>
+      <button onclick="S.page++;renderTableOnly()" ${S.page>=totalPages-1?'disabled':''}>›</button>
+      <button onclick="S.page=totalPages-1;renderTableOnly()" ${S.page>=totalPages-1?'disabled':''}>»</button>
+    </div>`;
+}
+
+function renderList(){
+  const years=[...new Set(S.pigeons.map(p=>p.date_year).filter(Boolean))].sort((a,b)=>b-a);
+  const si=c=>c===S.sortCol?(S.sortDir>0?' ↑':' ↓'):'';
+  const start=S.page*S.pageSize, end=start+S.pageSize;
+  const page=S.filtered.slice(start,end);
+  const totalPages=Math.ceil(S.filtered.length/S.pageSize)||1;
+  return `
+    ${S.error?`<div class="error-box">⚠️ ${escH(S.error)}</div>`:''}
+    <div class="toolbar">
+      <div class="search-wrap"><span class="search-icon">🔍</span>
+        <input id="tauben-search" type="text" placeholder="Endnr. (1), Jahrg+Nr (26/1), Name+Nr (idefix 1), Text…" title="26/1 = Jahrgang 2026 Endnummer 1 | idefix 1 = Name + Nummer | 455 = Endnummer" value="${escH(S.search)}" oninput="S.search=this.value;applyFilter()">
+      </div>
+      <select id="sex-filter" onchange="S.sexFilter=this.value;applyFilter()">
+        <option value="all" ${S.sexFilter==='all'?'selected':''}>Alle</option>
+        <option value="M" ${S.sexFilter==='M'?'selected':''}>♂ Täuber</option>
+        <option value="F" ${S.sexFilter==='F'?'selected':''}>♀ Täubin</option>
+      </select>
+      <select id="year-filter" onchange="S.yearFilter=this.value;applyFilter()">
+        <option value="all">Alle Jahrgänge</option>
+        ${years.map(y=>`<option value="${y}"${S.yearFilter===String(y)?' selected':''}>${y}</option>`).join('')}
+      </select>
+      <select id="stock-filter" onchange="S.inStockFilter=this.value;applyFilter()">
+        <option value="all">Alle Bestände</option>
+        <option value="yes"${S.inStockFilter==='yes'?' selected':''}>Im Bestand</option>
+        <option value="no"${S.inStockFilter==='no'?' selected':''}>Nicht im Bestand</option>
+      </select>
+      <button class="btn btn-outline btn-sm" onclick="resetTaubenFilter()">Filter zurücksetzen</button>
+      <span id="count-label" class="count-label">${S.filtered.length.toLocaleString('de')} / ${S.pigeons.length.toLocaleString('de')}</span>
+    </div>
+    <div id="table-wrap" class="table-wrap">${buildTableHTML(page, si)}</div>
+    <div id="pagination-wrap">${totalPages>1?buildPagination(totalPages):''}</div>`;
+}
+
+// ── DETAIL ─────────────────────────────────────────────────────
+function renderDetail(p){
+  if(p._editMode) return renderDetailEdit(p);
+  const sx=sex_(p),f=findFather(p),mo=findMother(p);
+  const ib=calcInbreeding(p);
+  const fR=f?ring(f):(p.ringnumberfather||''), mR=mo?ring(mo):(p.ringnumbermother||'');
+  const fields=[
+    ['Ringnummer',p.ringnumber],['Alte Ringnr.',p.ringnumberold],['Jahrgang',p.date_year],
+    ['Nummer',p.number],['Farbe',p.color],['Rasse',p.race],['Linie/Stamm',p.strain],
+    ['Geburtstag',p.birthday],['Verstorben',p.died],['Gekauft',p.bought],['Verkauft',p.sold],
+    ['Im Bestand',p.instock!=null?(p.instock?'Ja':'Nein'):null],
+    ['Inzuchtkoeff.',p.inbreedcoefficient!=null?Number(p.inbreedcoefficient).toFixed(4):null],
+    ['Ber. Inzucht',ib>0?`${(ib*100).toFixed(2)} %`:null],
+    ['Land',p.countrycode],['Verbandsnr.',p.associationno],
+    ['Züchter',p.breeder],['Besitzer',p.owner],['Zustand',p.pigeonstate],
+    ['Info',p.info],['Interne Info',p.internalinfo],
+    ['Benutzer 1',p.userdefined1],['Benutzer 2',p.userdefined2],['Benutzer 3',p.userdefined3],
+  ].filter(([,v])=>v!==null&&v!==undefined&&v!=='');
+  return `
+    <button class="back-btn" onclick="S.selected=null;render()">← Zurück zur Liste</button>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+        <div>
+          <div class="detail-name">${escH(p.name||ring(p))}</div>
+          <div class="detail-ring">🏷 ${escH(ring(p))}</div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap">
+            ${sx==='M'?'<span class="badge badge-m">♂ Täuber</span>':sx==='F'?'<span class="badge badge-f">♀ Täubin</span>':''}
+            ${p.date_year?`<span class="badge badge-u">Jg. ${p.date_year}</span>`:''}
+            ${p.color?`<span class="badge badge-u">${escH(p.color)}</span>`:''}
+            ${p.strain?`<span class="badge badge-u">${escH(p.strain)}</span>`:''}
+            ${p.instock===false?'<span class="badge" style="background:#2a1a0a;color:#c8883a">Nicht im Bestand</span>':''}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="startEdit('${p.pigeonid}')">✏️ Bearbeiten</button>
+          <button class="btn btn-outline btn-sm" onclick="showPedigree('${p.pigeonid}')">🌳 Stammbaum</button>
+          <button class="btn btn-outline btn-sm" onclick="showNachkommen('${p.pigeonid}')">🐣 Nachkommen</button>
+          <button class="btn btn-outline btn-sm" onclick="setPaarungVogel('${p.pigeonid}')">💑 Paarungscheck</button>
+        </div>
+      </div>
+      ${(fR||mR)?`
+      <div class="section-label">Eltern</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="parent-card male ${!f?'unknown':''}" onclick="${f?`selectPigeon('${f.pigeonid}')`:'void(0)'}">
+          <div style="font-size:10px;color:var(--blue);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Vater</div>
+          <div class="ped-ring">${escH(fR||'Unbekannt')}</div>
+          ${f?`<div style="font-size:13px;color:var(--text);margin-top:3px">${escH(f.name||'—')}</div>
+               <div style="font-size:11px;color:var(--text3);margin-top:2px">${[f.date_year,f.color].filter(Boolean).map(escH).join(' · ')}</div>`:''}
+        </div>
+        <div class="parent-card female ${!mo?'unknown':''}" onclick="${mo?`selectPigeon('${mo.pigeonid}')`:'void(0)'}">
+          <div style="font-size:10px;color:var(--purple);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Mutter</div>
+          <div class="ped-ring">${escH(mR||'Unbekannt')}</div>
+          ${mo?`<div style="font-size:13px;color:var(--text);margin-top:3px">${escH(mo.name||'—')}</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:2px">${[mo.date_year,mo.color].filter(Boolean).map(escH).join(' · ')}</div>`:''}
+        </div>
+      </div>`:''}
+      <div class="section-label">Details</div>
+      <div class="field-grid">
+        ${fields.map(([l,v])=>`<div class="field-item"><label>${escH(l)}</label><span>${escH(String(v))}</span></div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function startEdit(id){
+  const p=findById(id);
+  if(!p) return;
+  p._editMode=true;
+  S.selected=p;
+  render();
+}
+
+function fv(p,f){ return escH(String(p[f]||'')); }
+
+function renderDetailEdit(p){
+  const f=findFather(p),mo=findMother(p);
+  const fR=f?ring(f):(p.ringnumberfather||'');
+  const mR=mo?ring(mo):(p.ringnumbermother||'');
+  return `
+    <button class="back-btn" onclick="cancelEdit('${p.pigeonid}')">← Abbrechen</button>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+        <div class="serif" style="font-size:20px">✏️ Taube bearbeiten</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm" onclick="saveEdit('${p.pigeonid}')">💾 Speichern</button>
+          <button class="btn btn-outline btn-sm" onclick="cancelEdit('${p.pigeonid}')">Abbrechen</button>
+        </div>
+      </div>
+      <div id="edit-msg" style="display:none;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:14px;font-size:13px"></div>
+      <div class="form-grid">
+        <div class="form-field"><label>Ringnummer</label><input id="e_ringnumber" value="${fv(p,'ringnumber')}"></div>
+        <div class="form-field"><label>Alte Ringnr.</label><input id="e_ringnumberold" value="${fv(p,'ringnumberold')}"></div>
+        <div class="form-field"><label>Name</label><input id="e_name" value="${fv(p,'name')}"></div>
+        <div class="form-field"><label>Jahrgang</label><input id="e_date_year" type="number" value="${fv(p,'date_year')}"></div>
+        <div class="form-field"><label>Geschlecht</label>
+          <select id="e_gender">
+            <option value="">—</option>
+            <option value="1" ${String(p.gender)==='1'?'selected':''}>♂ Täuber</option>
+            <option value="2" ${String(p.gender)==='2'?'selected':''}>♀ Täubin</option>
+          </select>
+        </div>
+        <div class="form-field"><label>Farbe</label><input id="e_color" value="${fv(p,'color')}"></div>
+        <div class="form-field"><label>Rasse</label><input id="e_race" value="${fv(p,'race')}"></div>
+        <div class="form-field"><label>Linie / Stamm</label><input id="e_strain" value="${fv(p,'strain')}"></div>
+        <div class="form-field"><label>Züchter</label><input id="e_breeder" value="${fv(p,'breeder')}"></div>
+        <div class="form-field"><label>Besitzer</label><input id="e_owner" value="${fv(p,'owner')}"></div>
+        <div class="form-field"><label>Land</label><input id="e_countrycode" value="${fv(p,'countrycode')}"></div>
+        <div class="form-field"><label>Verbandsnr.</label><input id="e_associationno" value="${fv(p,'associationno')}"></div>
+        <div class="form-field"><label>Geburtstag</label><input id="e_birthday" value="${fv(p,'birthday')}"></div>
+        <div class="form-field"><label>Verstorben</label><input id="e_died" value="${fv(p,'died')}"></div>
+        <div class="form-field"><label>Gekauft</label><input id="e_bought" value="${fv(p,'bought')}"></div>
+        <div class="form-field"><label>Verkauft</label><input id="e_sold" value="${fv(p,'sold')}"></div>
+        <div class="form-field"><label>Im Bestand</label>
+          <select id="e_instock">
+            <option value="true" ${p.instock!==false?'selected':''}>Ja</option>
+            <option value="false" ${p.instock===false?'selected':''}>Nein</option>
+          </select>
+        </div>
+        <div class="form-field" style="grid-column:1/-1"><label>Info</label><input id="e_info" value="${fv(p,'info')}"></div>
+        <div class="form-field" style="grid-column:1/-1"><label>Interne Info</label><input id="e_internalinfo" value="${fv(p,'internalinfo')}"></div>
+      </div>
+      <div class="section-label">Eltern</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-field">
+          <label>Vater (Ringnummer)</label>
+          <div style="position:relative">
+            <input id="e_father_inp" value="${escH(fR)}" autocomplete="off" placeholder="Ringnummer eingeben…">
+            <input type="hidden" id="e_father_id" value="${escH(p.fatherid||'')}">
+            <div id="e_father_drop" class="ac-drop"></div>
+          </div>
+        </div>
+        <div class="form-field">
+          <label>Mutter (Ringnummer)</label>
+          <div style="position:relative">
+            <input id="e_mother_inp" value="${escH(mR)}" autocomplete="off" placeholder="Ringnummer eingeben…">
+            <input type="hidden" id="e_mother_id" value="${escH(p.motherid||'')}">
+            <div id="e_mother_drop" class="ac-drop"></div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:20px">
+        <button class="btn" onclick="saveEdit('${p.pigeonid}')">💾 Speichern</button>
+        <button class="btn btn-outline" onclick="cancelEdit('${p.pigeonid}')">Abbrechen</button>
+      </div>
+    </div>`;
+}
+
+function cancelEdit(id){
+  const p=findById(id);
+  if(p) delete p._editMode;
+  render();
+}
+
+async function saveEdit(id){
+  const msg=document.getElementById('edit-msg');
+  const g=id=>document.getElementById(id);
+  const val=id=>{const el=g(id);return el?el.value.trim():'';};
+  const row={
+    ringnumber:     val('e_ringnumber'),
+    ringnumberold:  val('e_ringnumberold'),
+    name:           val('e_name'),
+    date_year:      val('e_date_year')?Number(val('e_date_year')):null,
+    gender:         val('e_gender')||null,
+    color:          val('e_color'),
+    race:           val('e_race'),
+    strain:         val('e_strain'),
+    breeder:        val('e_breeder'),
+    owner:          val('e_owner'),
+    countrycode:    val('e_countrycode'),
+    associationno:  val('e_associationno'),
+    birthday:       val('e_birthday')||null,
+    died:           val('e_died')||null,
+    bought:         val('e_bought')||null,
+    sold:           val('e_sold')||null,
+    instock:        val('e_instock')==='true',
+    info:           val('e_info'),
+    internalinfo:   val('e_internalinfo'),
+    fatherid:       g('e_father_id')&&g('e_father_id').value ? g('e_father_id').value : null,
+    motherid:       g('e_mother_id')&&g('e_mother_id').value ? g('e_mother_id').value : null,
+  };
+  // Leere Strings als null
+  Object.keys(row).forEach(k=>{ if(row[k]==='') row[k]=null; });
+  if(msg){ msg.style.display='block'; msg.style.background='var(--bg3)'; msg.style.color='var(--text2)'; msg.textContent='Speichern…'; }
+  try{
+    await apiPatch('pigeons', id, row);
+    // Lokalen State aktualisieren
+    const idx=S.pigeons.findIndex(p=>p.pigeonid===id);
+    if(idx!==-1){ S.pigeons[idx]=Object.assign({},S.pigeons[idx],row,{pigeonid:id}); }
+    S.selected=S.pigeons.find(p=>p.pigeonid===id)||null;
+    if(S.selected) delete S.selected._editMode;
+    applyFilter();
+    render();
+  } catch(err){
+    if(msg){ msg.style.background='#2a0f0f'; msg.style.color='#e07070'; msg.textContent='❌ Fehler: '+err.message; }
+  }
+}
+
+// ── STAMMBAUM SUCHE ────────────────────────────────────────────
+function renderPedSearch(){
+  return `<div class="card">
+    <div class="card-title serif" style="font-size:18px">🌳 Stammbaum-Suche</div>
+    <div class="search-wrap" style="max-width:500px">
+      <span class="search-icon">🔍</span>
+      <input id="ped-inp" type="text" placeholder="Ringnummer oder Name eingeben…" autocomplete="off">
+    </div>
+    <div id="ped-results" style="border:1px solid var(--border);border-radius:0 0 var(--radius-sm) var(--radius-sm);overflow:hidden;max-width:500px;display:none"></div>
+  </div>
+  <div class="empty-state"><div class="icon">🌳</div>Stammbaum-Suche: Tippe einen Namen oder eine Ringnummer ein</div>`;
+}
+
+function bindPedSearch(){
+  const inp=document.getElementById('ped-inp');
+  const res=document.getElementById('ped-results');
+  if(!inp||!res) return;
+  inp.addEventListener('input',()=>{
+    const q=inp.value.trim();
+    if(q.length<2){ res.style.display='none'; res.innerHTML=''; return; }
+    const hits=S.pigeons.filter(p=>(p.ringnumber||'').toLowerCase().includes(q.toLowerCase())||(p.name||'').toLowerCase().includes(q.toLowerCase())).slice(0,10);
+    res.style.display='block';
+    res.innerHTML=hits.length ? hits.map(p=>`
+      <div class="ped-result" onclick="showPedigree('${p.pigeonid}')">
+        <span class="ring">${escH(ring(p))}</span>
+        ${p.name?`<span style="color:var(--text)">${escH(p.name)}</span>`:''}
+        <span style="color:var(--text3);font-size:12px;margin-left:auto">${sex_(p)==='M'?'♂':sex_(p)==='F'?'♀':'?'} ${p.date_year||''}</span>
+      </div>`).join('')
+    : '<div style="padding:12px;color:var(--text3);font-size:13px">Keine Tauben gefunden</div>';
+  });
+}
+
+// ── STAMMBAUM ANZEIGE ──────────────────────────────────────────
+function renderPedigree(pid){
+  const root=findById(pid);
+  if(!root) return '<div style="padding:20px;color:var(--text3)">Taube nicht gefunden.</div>';
+  function node(p,isRoot=false){
+    if(!p) return `<div class="ped-box empty"><div class="ped-info">Unbekannt</div></div>`;
+    const sx=sex_(p);
+    return `<div class="ped-box ${sx==='M'?'male':sx==='F'?'female':''} ${isRoot?'root':''}" onclick="showPedigree('${p.pigeonid}')">
+      <div class="ped-ring">${escH(ring(p))}</div>
+      ${p.name?`<div class="ped-name">${escH(p.name)}</div>`:''}
+      <div class="ped-info">${[p.date_year,p.color].filter(Boolean).map(escH).join(' · ')||'—'}</div>
+    </div>`;
+  }
+  const f=findFather(root),mo=findMother(root);
+  const ff=findFather(f),fm=findMother(f),mf=findFather(mo),mm=findMother(mo);
+  const fff=findFather(ff),ffm=findMother(ff),fmf=findFather(fm),fmm=findMother(fm);
+  const mff=findFather(mf),mfm=findMother(mf),mmf=findFather(mm),mmm=findMother(mm);
+  const sx=sex_(root), ib=calcInbreeding(root);
+  return `
+    <button class="back-btn" onclick="S.selectedPed=null;render()">← Stammbaum-Suche</button>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+        <div>
+          <div class="serif" style="font-size:22px">${escH(root.name||ring(root))}</div>
+          <div style="font-family:monospace;font-size:13px;color:var(--green);margin-top:4px">
+            ${escH(ring(root))} · ${sx==='M'?'♂ Täuber':sx==='F'?'♀ Täubin':'?'} · Jg. ${root.date_year||'—'}${root.color?` · ${escH(root.color)}`:''}
+          </div>
+          ${ib>0?`<div style="margin-top:6px;font-size:12px;color:${ib<0.03?'var(--green)':ib<0.1?'var(--orange)':'#e07070'}">Inzuchtkoeff. (ber.): ${(ib*100).toFixed(2)} %</div>`:''}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" onclick="selectPigeon('${root.pigeonid}')">Details →</button>
+          <button class="btn btn-outline btn-sm" onclick="showNachkommen('${root.pigeonid}')">🐣 Nachkommen</button>
+          <button class="btn btn-outline btn-sm" onclick="setPaarungVogel('${root.pigeonid}')">💑 Paarungscheck</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap">
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--blue)"></span>Täuber</span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--purple)"></span>Täubin</span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--green)"></span>Proband</span>
+        <span style="font-size:12px;color:var(--text3)">Klick → Stammbaum wechseln</span>
+      </div>
+      <div class="ped-wrap">
+      <div style="display:grid;grid-template-columns:160px 28px 160px 28px 160px 28px 160px;grid-template-rows:28px repeat(8,80px);min-width:940px;align-items:stretch">
+
+        <!-- Spalten-Header: nur über die Daten-Spalten, nicht Verbinder -->
+        <div class="ped-col-hdr" style="grid-column:1">Proband</div>
+        <div style="grid-column:2"></div>
+        <div class="ped-col-hdr" style="grid-column:3">Eltern</div>
+        <div style="grid-column:4"></div>
+        <div class="ped-col-hdr" style="grid-column:5">Großeltern</div>
+        <div style="grid-column:6"></div>
+        <div class="ped-col-hdr" style="grid-column:7">Urgroßeltern</div>
+
+        <!-- PROBAND: Spalte 1 -->
+        <div style="grid-column:1;grid-row:2/10;display:flex;align-items:center;justify-content:center;padding:4px">${node(root,true)}</div>
+
+        <!-- VERBINDER Proband→Eltern: Spalte 2 -->
+        <div style="grid-column:2;grid-row:2/6;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div style="grid-column:2;grid-row:6/10;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+
+        <!-- ELTERN: Spalte 3 -->
+        <div style="grid-column:3;grid-row:2/6;display:flex;align-items:center;padding:4px 0">${node(f)}</div>
+        <div style="grid-column:3;grid-row:6/10;display:flex;align-items:center;padding:4px 0">${node(mo)}</div>
+
+        <!-- VERBINDER Vater→Großeltern: Spalte 4 -->
+        <div style="grid-column:4;grid-row:2/4;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div style="grid-column:4;grid-row:4/6;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div style="grid-column:4;grid-row:6/8;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div style="grid-column:4;grid-row:8/10;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+
+        <!-- GROßELTERN: Spalte 5 -->
+        <div style="grid-column:5;grid-row:2/4;display:flex;align-items:center;padding:4px 0">${node(ff)}</div>
+        <div style="grid-column:5;grid-row:4/6;display:flex;align-items:center;padding:4px 0">${node(fm)}</div>
+        <div style="grid-column:5;grid-row:6/8;display:flex;align-items:center;padding:4px 0">${node(mf)}</div>
+        <div style="grid-column:5;grid-row:8/10;display:flex;align-items:center;padding:4px 0">${node(mm)}</div>
+
+        <!-- VERBINDER Großeltern→Urgroßeltern: Spalte 6 -->
+        <div style="grid-column:6;grid-row:2/3;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div style="grid-column:6;grid-row:3/4;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div style="grid-column:6;grid-row:4/5;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div style="grid-column:6;grid-row:5/6;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div style="grid-column:6;grid-row:6/7;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div style="grid-column:6;grid-row:7/8;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div style="grid-column:6;grid-row:8/9;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div style="grid-column:6;grid-row:9/10;position:relative">
+          <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+          </svg>
+        </div>
+
+        <!-- URGROßELTERN: Spalte 7 -->
+        <div style="grid-column:7;grid-row:2/3;display:flex;align-items:center;padding:4px 0">${node(fff)}</div>
+        <div style="grid-column:7;grid-row:3/4;display:flex;align-items:center;padding:4px 0">${node(ffm)}</div>
+        <div style="grid-column:7;grid-row:4/5;display:flex;align-items:center;padding:4px 0">${node(fmf)}</div>
+        <div style="grid-column:7;grid-row:5/6;display:flex;align-items:center;padding:4px 0">${node(fmm)}</div>
+        <div style="grid-column:7;grid-row:6/7;display:flex;align-items:center;padding:4px 0">${node(mff)}</div>
+        <div style="grid-column:7;grid-row:7/8;display:flex;align-items:center;padding:4px 0">${node(mfm)}</div>
+        <div style="grid-column:7;grid-row:8/9;display:flex;align-items:center;padding:4px 0">${node(mmf)}</div>
+        <div style="grid-column:7;grid-row:9/10;display:flex;align-items:center;padding:4px 0">${node(mmm)}</div>
+
+      </div></div>
+    </div>`;
+}
+
+// ── PAARUNGSCHECK ──────────────────────────────────────────────
+function setPaarungVogel(id){
+  const p=findById(id);
+  if(!p) return;
+  if(sex_(p)==='M') S.paarungM=p;
+  else if(sex_(p)==='F') S.paarungF=p;
+  showTab('paarung');
+}
+
+function renderPaarung(){
+  const ib = S.paarungM && S.paarungF ? calcInbreedingPair(S.paarungM, S.paarungF) : null;
+  const ibClass = ib===null?'':ib<0.03?'low':ib<0.1?'mid':'high';
+  const sharedAnc = S.paarungM && S.paarungF ? (() => {
+    const fa=getAncestors(S.paarungM,4), ma=getAncestors(S.paarungF,4);
+    const shared=[...fa].filter(x=>ma.has(x)).filter(id=>![S.paarungM.pigeonid,S.paarungF.pigeonid].includes(id));
+    return shared.map(id=>S.pigeons.find(p=>p.pigeonid===id)).filter(Boolean);
+  })() : [];
+
+  function birdPicker(role, current, label, sx){
+    const id_prefix = role+'_';
+    return `<div class="card">
+      <div class="card-title">${label}</div>
+      ${current?`
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div>
+            <div style="font-size:15px;font-weight:500">${escH(current.name||ring(current))}</div>
+            <div style="font-family:monospace;font-size:12px;color:var(--green)">${escH(ring(current))}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${current.date_year||''} ${current.color?'· '+escH(current.color):''}</div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="S.${role}=null;render()">✕ Ändern</button>
+        </div>`
+      :`<div class="autocomplete-wrap" style="margin-bottom:8px">
+        <div class="search-wrap"><span class="search-icon">🔍</span>
+          <input id="${id_prefix}inp" type="text" placeholder="Ringnummer oder Name…" autocomplete="off">
+        </div>
+        <div class="autocomplete-drop" id="${id_prefix}drop"></div>
+      </div>
+      <div style="font-size:12px;color:var(--text3)">Nur ${sx==='M'?'Täuber':'Täubin'} werden angezeigt</div>`}
+    </div>`;
+  }
+
+  return `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      ${birdPicker('paarungM', S.paarungM, '♂ Täuber wählen','M')}
+      ${birdPicker('paarungF', S.paarungF, '♀ Täubin wählen','F')}
+    </div>
+    ${S.paarungM && S.paarungF ? `
+    <div class="card">
+      <div class="card-title serif" style="font-size:18px">Ergebnis: ${escH(label_(S.paarungM))} × ${escH(label_(S.paarungF))}</div>
+      <div class="ibc-result">
+        <div class="ibc-num ${ibClass}">${(ib*100).toFixed(2)} %</div>
+        <div class="ibc-label">Berechneter Inzuchtkoeffizient der Nachkommen (5 Generationen)</div>
+        <div style="margin-top:10px;font-size:12px;color:var(--text3)">
+          ${ib<0.01?'✅ Sehr gering — unbedenklich':ib<0.03?'✅ Gering — akzeptabel':ib<0.065?'⚠️ Moderat — mit Bedacht einsetzen':ib<0.1?'⚠️ Erhöht — kritisch prüfen':'🚫 Hoch — Paarung nicht empfohlen'}
+        </div>
+      </div>
+      ${sharedAnc.length?`
+      <div class="section-label">Gemeinsame Vorfahren (bis 4. Generation)</div>
+      <div class="tag-list">
+        ${sharedAnc.map(p=>`<div class="tag">${escH(ring(p))}${p.name?`<strong>${escH(p.name)}</strong>`:''}</div>`).join('')}
+      </div>`:'<div style="margin-top:12px;font-size:13px;color:var(--text3)">Keine gemeinsamen Vorfahren in 4 Generationen gefunden.</div>'}
+    </div>` : `<div class="empty-state"><div class="icon">💑</div>Wähle einen Täuber und eine Täubin, um den Inzuchtkoeffizienten der Nachkommen zu berechnen.</div>`}`;
+}
+
+// ── NEUE TAUBE ─────────────────────────────────────────────────
+function renderNeu(){
+  return `<div class="card">
+    <div class="card-title serif" style="font-size:18px">＋ Neue Taube erfassen</div>
+    <div id="form-msg" style="display:none"></div>
+    <form id="neu-form" onsubmit="submitNeu(event)">
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Ringnummer *</label>
+          <input name="ringnumber" required placeholder="z. B. DE-04987-26-001">
+        </div>
+        <div class="form-field">
+          <label>Name</label>
+          <input name="name" placeholder="Kurzbezeichnung">
+        </div>
+        <div class="form-field">
+          <label>Jahrgang</label>
+          <input name="date_year" type="number" min="2000" max="2100" placeholder="${new Date().getFullYear()}">
+        </div>
+        <div class="form-field">
+          <label>Geschlecht</label>
+          <select name="gender">
+            <option value="">— wählen —</option>
+            <option value="M">♂ Täuber</option>
+            <option value="F">♀ Täubin</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Farbe</label>
+          <input name="color" placeholder="z. B. blau, gescheckt">
+        </div>
+        <div class="form-field">
+          <label>Rasse</label>
+          <input name="race" placeholder="z. B. Brieftaube">
+        </div>
+        <div class="form-field">
+          <label>Linie / Stamm</label>
+          <input name="strain" placeholder="z. B. Janssen, van Loon">
+        </div>
+        <div class="form-field">
+          <label>Vater-Ringnummer</label>
+          <div class="autocomplete-wrap">
+            <input id="father_inp" name="ringnumberfather" placeholder="Ringnummer oder Name suchen…" autocomplete="off">
+            <div class="autocomplete-drop" id="father_drop"></div>
+            <input type="hidden" id="father_id" name="fatherid">
+          </div>
+        </div>
+        <div class="form-field">
+          <label>Mutter-Ringnummer</label>
+          <div class="autocomplete-wrap">
+            <input id="mother_inp" name="ringnumbermother" placeholder="Ringnummer oder Name suchen…" autocomplete="off">
+            <div class="autocomplete-drop" id="mother_drop"></div>
+            <input type="hidden" id="mother_id" name="motherid">
+          </div>
+        </div>
+        <div class="form-field">
+          <label>Züchter</label>
+          <input name="breeder" placeholder="Name des Züchters">
+        </div>
+        <div class="form-field form-full">
+          <label>Notizen</label>
+          <textarea name="info" placeholder="Zuchtwert, Beobachtungen, Herkunft…"></textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-outline" onclick="document.getElementById('neu-form').reset()">Zurücksetzen</button>
+        <button type="submit" class="btn">🕊 Taube speichern</button>
+      </div>
+    </form>
+  </div>`;
+}
+
+async function submitNeu(e){
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  const row={};
+  for(const [k,v] of fd.entries()){ if(v!=='') row[k]=v; }
+  if(!row.pigeonid) row.pigeonid=crypto.randomUUID();
+  if(row.date_year) row.date_year=Number(row.date_year);
+  row.deleted=false; row.instock=true;
+  const msg=document.getElementById('form-msg');
+  msg.style.display='block';
+  msg.className='form-msg';
+  msg.textContent='Speichern…';
+  try{
+    await apiPost('pigeons',row);
+    msg.className='form-msg ok';
+    msg.textContent='✅ Taube erfolgreich gespeichert!';
+    e.target.reset();
+    await loadData();
+  } catch(err){
+    msg.className='form-msg err';
+    msg.textContent='❌ Fehler: '+err.message;
+  }
+}
+
+// ── STATISTIK ──────────────────────────────────────────────────
+function renderStats(){
+  const total=S.pigeons.length,males=S.pigeons.filter(p=>sex_(p)==='M').length,females=S.pigeons.filter(p=>sex_(p)==='F').length;
+  const instock=S.pigeons.filter(p=>p.instock).length;
+  const withBoth=S.pigeons.filter(p=>(p.fatherid||p.ringnumberfather)&&(p.motherid||p.ringnumbermother)).length;
+  const years={};S.pigeons.forEach(p=>{if(p.date_year)years[p.date_year]=(years[p.date_year]||0)+1;});
+  const topYears=Object.entries(years).sort((a,b)=>b[0]-a[0]).slice(0,15);
+  const maxY=Math.max(...topYears.map(y=>y[1]),1);
+  const colors={};S.pigeons.forEach(p=>{if(p.color)colors[p.color]=(colors[p.color]||0)+1;});
+  const topColors=Object.entries(colors).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const strains={};S.pigeons.forEach(p=>{if(p.strain)strains[p.strain]=(strains[p.strain]||0)+1;});
+  const topStrains=Object.entries(strains).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  return `
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-num">${total.toLocaleString('de')}</div><div class="stat-label">Tauben gesamt</div></div>
+      <div class="stat-card"><div class="stat-num">${males.toLocaleString('de')}</div><div class="stat-label">♂ Täuber</div></div>
+      <div class="stat-card"><div class="stat-num">${females.toLocaleString('de')}</div><div class="stat-label">♀ Täubin</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+      <div class="stat-card"><div class="stat-num" style="font-size:24px">${instock.toLocaleString('de')}</div><div class="stat-label">Im Bestand</div></div>
+      <div class="stat-card"><div class="stat-num" style="font-size:24px">${withBoth.toLocaleString('de')}</div><div class="stat-label">Mit beiden Eltern</div></div>
+      <div class="stat-card"><div class="stat-num" style="font-size:24px">${Object.keys(years).length}</div><div class="stat-label">Jahrgänge</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Tauben pro Jahrgang</div>
+      ${topYears.map(([y,n])=>`<div class="bar-row"><span class="bar-label">${y}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/maxY*100)}%"><span>${n}</span></div></div></div>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      ${topColors.length?`<div class="card"><div class="card-title">Farben</div><div class="tag-list">${topColors.map(([c,n])=>`<div class="tag">${escH(c)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+      ${topStrains.length?`<div class="card"><div class="card-title">Linien / Stämme</div><div class="tag-list">${topStrains.map(([s,n])=>`<div class="tag">${escH(s)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+    </div>`;
+}
+
+// ── AUTOCOMPLETE ───────────────────────────────────────────────
+function bindAutocomplete(){
+  // Paarungscheck
+  bindAC('paarungM_inp','paarungM_drop','M', id=>{ S.paarungM=findById(id); render(); });
+  bindAC('paarungF_inp','paarungF_drop','F', id=>{ S.paarungF=findById(id); render(); });
+  // Edit-Modus Elternfelder
+  bindAC('e_father_inp','e_father_drop',null, id=>{
+    const p=findById(id); if(!p) return;
+    const inp=document.getElementById('e_father_inp');
+    const hid=document.getElementById('e_father_id');
+    if(inp) inp.value=ring(p);
+    if(hid) hid.value=p.pigeonid;
+    const drop=document.getElementById('e_father_drop');
+    if(drop) drop.classList.remove('open');
+  });
+  bindAC('e_mother_inp','e_mother_drop',null, id=>{
+    const p=findById(id); if(!p) return;
+    const inp=document.getElementById('e_mother_inp');
+    const hid=document.getElementById('e_mother_id');
+    if(inp) inp.value=ring(p);
+    if(hid) hid.value=p.pigeonid;
+    const drop=document.getElementById('e_mother_drop');
+    if(drop) drop.classList.remove('open');
+  });
+  // Neue Taube – Elternfelder
+  bindAC('father_inp','father_drop','M', id=>{
+    const p=findById(id);
+    if(!p) return;
+    document.getElementById('father_inp').value=ring(p);
+    document.getElementById('father_id').value=p.pigeonid;
+    document.getElementById('father_drop').classList.remove('open');
+  });
+  bindAC('mother_inp','mother_drop','F', id=>{
+    const p=findById(id);
+    if(!p) return;
+    document.getElementById('mother_inp').value=ring(p);
+    document.getElementById('mother_id').value=p.pigeonid;
+    document.getElementById('mother_drop').classList.remove('open');
+  });
+}
+
+function bindAC(inpId, dropId, filterSex, onSelect){
+  const inp=document.getElementById(inpId);
+  const drop=document.getElementById(dropId);
+  if(!inp||!drop) return;
+  inp.addEventListener('input',()=>{
+    const q=inp.value.trim().toLowerCase();
+    if(q.length<2){ drop.classList.remove('open'); drop.innerHTML=''; return; }
+    let hits=S.pigeons.filter(p=>(p.ringnumber||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q));
+    if(filterSex) hits=hits.filter(p=>sex_(p)===filterSex);
+    hits=hits.slice(0,8);
+    drop.innerHTML=hits.length ? hits.map(p=>`
+      <div class="ac-item" onclick="(${onSelect.toString()})('${p.pigeonid}')">
+        <span class="ac-ring">${escH(ring(p))}</span>
+        ${p.name?`<span>${escH(p.name)}</span>`:''}
+        <span style="color:var(--text3);font-size:11px;margin-left:auto">${p.date_year||''}</span>
+      </div>`).join('')
+    : '<div class="ac-item" style="cursor:default;color:var(--text3)">Keine Treffer</div>';
+    drop.classList.toggle('open', hits.length>0||true);
+  });
+  document.addEventListener('click', e=>{ if(!inp.contains(e.target)&&!drop.contains(e.target)) drop.classList.remove('open'); });
+}
+
+// ── UTIL ───────────────────────────────────────────────────────
+function escH(s){ if(s===null||s===undefined)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+
+// ── NACHKOMMEN ────────────────────────────────────────────────
+function showNachkommen(id){
+  S.selectedNach=id; S.tab='nachkommen';
+  document.querySelectorAll('nav button').forEach(function(b,i){
+    b.classList.toggle('active',['tauben','stammbaum','nachkommen','paarung','neu','statistik'][i]==='nachkommen');
+  });
+  render(); window.scrollTo(0,0);
+}
+
+function renderNachSearch(){
+  return '<div class="card">'
+    +'<div class="card-title serif" style="font-size:18px">🐣 Nachkommen-Suche</div>'
+    +'<div class="search-wrap" style="max-width:500px">'
+    +'<span class="search-icon">🔍</span>'
+    +'<input id="nach-inp" type="text" placeholder="Ringnummer oder Name eingeben…" autocomplete="off">'
+    +'</div>'
+    +'<div id="nach-results" style="border:1px solid var(--border);border-radius:0 0 var(--radius-sm) var(--radius-sm);overflow:hidden;max-width:500px;display:none"></div>'
+    +'</div>'
+    +'<div class="empty-state"><div class="icon">🐣</div>Suche eine Taube, um alle Kinder, Enkel und Urenkel anzuzeigen</div>';
+}
+
+function findChildren(pigeonId){
+  var p=S.pigeons.find(function(x){return x.pigeonid===pigeonId;});
+  var rn=p?p.ringnumber:'';
+  return S.pigeons.filter(function(c){
+    return c.fatherid===pigeonId||c.motherid===pigeonId||(rn&&(c.ringnumberfather===rn||c.ringnumbermother===rn));
+  });
+}
+
+function statusStyle(p){
+  if(p.died) return {label:'Verstorben',color:'#e07070',bg:'#1e0f0f'};
+  if(p.sold) return {label:'Verkauft',color:'var(--orange)',bg:'#2a1a0a'};
+  if(p.instock===false) return {label:'Nicht im Bestand',color:'#c8883a',bg:'#2a1a0a'};
+  if(sex_(p)==='M') return {label:'Täuber (aktiv)',color:'#7ab3e0',bg:'#1a2d4a'};
+  if(sex_(p)==='F') return {label:'Täubin (aktiv)',color:'#c97fd4',bg:'#2d1a3d'};
+  return {label:'Im Bestand',color:'var(--green)',bg:'color-mix(in srgb,var(--green) 10%,var(--bg3))'};
+}
+
+function birdCard(p){
+  var via=p._via?findById(p._via):null;
+  return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;cursor:pointer;transition:border-color .15s"'
+    +' onmouseover="this.style.borderColor=\'var(--green)\'" onmouseout="this.style.borderColor=\'var(--border)\'"'
+    +' onclick="selectPigeon(\''+p.pigeonid+'\')">'
+    +'<div style="font-family:monospace;font-size:11px;color:var(--green)">'+escH(ring(p))+'</div>'
+    +(p.name?'<div style="font-size:13px;font-weight:500;color:var(--text);margin-top:2px">'+escH(p.name)+'</div>':'')
+    +'<div style="font-size:11px;color:var(--text3);margin-top:3px">'
+    +[p.date_year,p.color,p.strain].filter(Boolean).map(escH).join(' · ')
+    +'</div>'
+    +(via?'<div style="font-size:10px;color:var(--text3);margin-top:3px">via <span style="font-family:monospace;color:var(--blue)">'+escH(ring(via))+'</span></div>':'')
+    +'<div style="display:flex;gap:6px;margin-top:7px">'
+    +'<span onclick="event.stopPropagation();showPedigree(\''+p.pigeonid+'\')" style="font-size:11px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px"'
+    +' onmouseover="this.style.color=\'var(--green)\'" onmouseout="this.style.color=\'var(--text3)\'">🌳 Stamm</span>'
+    +'<span onclick="event.stopPropagation();showNachkommen(\''+p.pigeonid+'\')" style="font-size:11px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px"'
+    +' onmouseover="this.style.color=\'var(--green)\'" onmouseout="this.style.color=\'var(--text3)\'">🐣 Kinder</span>'
+    +'</div></div>';
+}
+
+function renderGen(arr,gen){
+  if(!arr.length) return '<div style="color:var(--text3);font-size:13px;padding:8px 0">Keine '+gen+' in der Datenbank erfasst.</div>';
+  var groups={};
+  arr.forEach(function(p){
+    var st=statusStyle(p);
+    if(!groups[st.label]) groups[st.label]={style:st,birds:[]};
+    groups[st.label].birds.push(p);
+  });
+  return Object.values(groups).map(function(g){
+    return '<div style="margin-bottom:14px">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+      +'<span style="background:'+g.style.bg+';color:'+g.style.color+';padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500">'+g.style.label+'</span>'
+      +'<span style="font-size:12px;color:var(--text3)">'+g.birds.length+' Taube'+(g.birds.length!==1?'n':'')+'</span>'
+      +'</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px">'
+      +g.birds.map(birdCard).join('')
+      +'</div></div>';
+  }).join('');
+}
+
+function renderNachkommen(pid){
+  var root=findById(pid);
+  if(!root) return '<div style="padding:20px;color:var(--text3)">Taube nicht gefunden.</div>';
+  function dedup(arr){var seen=new Set();return arr.filter(function(p){if(seen.has(p.pigeonid))return false;seen.add(p.pigeonid);return true;});}
+  var children=findChildren(pid);
+  var gc=dedup(children.flatMap(function(c){return findChildren(c.pigeonid).map(function(g){return Object.assign({},g,{_via:c.pigeonid});});}));
+  var ggc=dedup(gc.flatMap(function(g){return findChildren(g.pigeonid).map(function(gg){return Object.assign({},gg,{_via:g.pigeonid});});}));
+  var allDesc=dedup(children.concat(gc).concat(ggc));
+  var total=allDesc.length;
+  var active=allDesc.filter(function(p){return p.instock;}).length;
+  var died=allDesc.filter(function(p){return p.died;}).length;
+  var sold=allDesc.filter(function(p){return p.sold;}).length;
+  var sx=sex_(root);
+
+  var kpis=[['Nachkommen',total,'var(--green)'],['Kinder',children.length,'var(--blue)'],['Enkel',gc.length,'var(--purple)'],['Urenkel',ggc.length,'var(--text2)'],['Im Bestand',active,'var(--green)'],['Verstorben',died,'#e07070'],['Verkauft',sold,'var(--orange)']];
+  var kpiHtml=kpis.map(function(k){
+    return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center">'
+      +'<div style="font-family:\'Playfair Display\',serif;font-size:24px;color:'+k[2]+';font-weight:600">'+k[1]+'</div>'
+      +'<div style="font-size:11px;color:var(--text3);margin-top:3px">'+k[0]+'</div></div>';
+  }).join('');
+
+  var gens=[['🐣 Kinder (1. Generation)',children,'Kinder'],['🐓 Enkel (2. Generation)',gc,'Enkel'],['🥚 Urenkel (3. Generation)',ggc,'Urenkel']];
+  var genHtml=gens.map(function(g){
+    return '<div class="card" style="margin-bottom:12px">'
+      +'<div class="card-title">'+g[0]+' <span style="color:var(--text3);font-weight:400">('+g[1].length+')</span></div>'
+      +renderGen(g[1],g[2])+'</div>';
+  }).join('');
+
+  return '<button class="back-btn" onclick="S.selectedNach=null;render()">← Nachkommen-Suche</button>'
+    +'<div class="card" style="margin-bottom:12px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">'
+    +'<div>'
+    +'<div class="serif" style="font-size:22px">'+escH(root.name||ring(root))+'</div>'
+    +'<div style="font-family:monospace;font-size:13px;color:var(--green);margin-top:4px">'
+    +escH(ring(root))+' · '+(sx==='M'?'♂ Täuber':sx==='F'?'♀ Täubin':'?')+' · Jg. '+(root.date_year||'—')
+    +'</div></div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +'<button class="btn btn-outline btn-sm" onclick="selectPigeon(\''+root.pigeonid+'\')">Details</button>'
+    +'<button class="btn btn-outline btn-sm" onclick="showPedigree(\''+root.pigeonid+'\')">🌳 Stammbaum</button>'
+    +'</div></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">'+kpiHtml+'</div>'
+    +'</div>'+genHtml;
+}
+
+function bindNachSearch(){
+  var inp=document.getElementById('nach-inp');
+  var res=document.getElementById('nach-results');
+  if(!inp||!res) return;
+  inp.addEventListener('input',function(){
+    var q=inp.value.trim();
+    if(q.length<2){res.style.display='none';res.innerHTML='';return;}
+    var hits=S.pigeons.filter(function(p){
+      return (p.ringnumber||'').toLowerCase().indexOf(q.toLowerCase())!==-1
+          ||(p.name||'').toLowerCase().indexOf(q.toLowerCase())!==-1;
+    }).slice(0,10);
+    res.style.display='block';
+    res.innerHTML=hits.length?hits.map(function(p){
+      return '<div class="ped-result" onclick="showNachkommen(\''+p.pigeonid+'\')">'
+        +'<span class="ring">'+escH(ring(p))+'</span>'
+        +(p.name?'<span style="color:var(--text)">'+escH(p.name)+'</span>':'')
+        +'<span style="color:var(--text3);font-size:12px;margin-left:auto">'+(sex_(p)==='M'?'♂':'♀')+' '+(p.date_year||'')+'</span>'
+        +'</div>';
+    }).join(''):'<div style="padding:12px;color:var(--text3);font-size:13px">Keine Treffer</div>';
+  });
+}
+
+loadData();
+</script>
+</body>
+</html>
