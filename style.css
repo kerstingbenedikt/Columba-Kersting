@@ -1,0 +1,86 @@
+/* Mindest-Tippgröße für Buttons & Tabellenzeilen */
+button, .btn, .back-btn, nav button {
+  min-height: 44px;
+}
+
+/* Tabellenzeilen besser tippbar */
+tr { min-height: 48px; }
+td { padding: 12px; }
+
+/* Kein Zoom beim Tippen in Input-Felder */
+input, select { font-size: 16px !important; }
+
+/* Stammbaum auf kleinen Screens scrollbar */
+.ped-wrap { -webkit-overflow-scrolling: touch; }
+
+/* Safe Area für iPhone-Notch/Home-Indikator */
+main {
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+}
+nav {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@media (max-width: 768px) {
+  nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    top: auto;
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+    justify-content: space-around;
+    padding: 0 0 env(safe-area-inset-bottom) 0;
+    z-index: 200;
+  }
+  main {
+    padding-bottom: calc(70px + env(safe-area-inset-bottom));
+  }
+  nav button {
+    flex: 1;
+    flex-direction: column;
+    font-size: 11px;
+    padding: 8px 4px;
+    border-bottom: none;
+    border-top: 2px solid transparent;
+    gap: 3px;
+  }
+  nav button.active {
+    border-top-color: var(--green);
+    border-bottom: none;
+  }
+}
+@media (max-width: 600px) {
+  /* Tabelle ausblenden, Karten zeigen */
+  .table-wrap table thead { display: none; }
+  .table-wrap table, 
+  .table-wrap tbody, 
+  .table-wrap tr, 
+  .table-wrap td { display: block; width: 100%; }
+  
+  .table-wrap tr {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+  }
+  .table-wrap td {
+    padding: 3px 0;
+    border: none;
+  }
+  .table-wrap td::before {
+    content: attr(data-label);
+    font-size: 10px;
+    color: var(--text3);
+    text-transform: uppercase;
+    font-weight: 500;
+    display: block;
+  }
+}
+@media (max-width: 768px) {
+  .ped-grid {
+    grid-template-columns: repeat(4, 160px); /* feste Breite, dann scrollen */
+  }
+  .ped-box {
+    font-size: 11px;
+    padding: 7px 8px;
+  }
+}
