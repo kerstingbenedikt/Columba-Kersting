@@ -1,12 +1,6 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<link rel="manifest" href="manifest.json">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Columba">
-<meta name="theme-color" content="#5B8659">
-<link rel="apple-touch-icon" href="icon-192.png">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Brieftauben-Verwaltung</title>
@@ -201,7 +195,6 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
   .header-right{display:none}
 }
 </style>
-
 </head>
 <body>
 
@@ -230,9 +223,141 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 </main>
 
 <script>
-const SUPA_URL = 'https://vwdqqdmtjztduzqrdbpc.supabase.co/rest/v1';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3ZHFxZG10anp0ZHV6cXJkYnBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NDM2NzEsImV4cCI6MjA4MDUxOTY3MX0.igi8KVrlMvc5EuHkNTS0WsQm5ySq6eK7lawASWVxdJg';
-const H = {'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation'};
+const SUPA_URL      = 'https://vwdqqdmtjztduzqrdbpc.supabase.co/rest/v1';
+const SUPA_AUTH_URL = 'https://vwdqqdmtjztduzqrdbpc.supabase.co/auth/v1';
+const SUPA_KEY      = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3ZHFxZG10anp0ZHV6cXJkYnBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NDM2NzEsImV4cCI6MjA4MDUxOTY3MX0.igi8KVrlMvc5EuHkNTS0WsQm5ySq6eK7lawASWVxdJg';
+
+// Auth-State
+let AUTH = { token: null, user: null };
+function authHeaders(){
+  const tok = AUTH.token || SUPA_KEY;
+  return {'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + tok,
+          'Content-Type': 'application/json', 'Prefer': 'return=representation'};
+}
+// H als Funktion — liefert immer aktuellen Token
+const H = authHeaders;
+
+// ── Auth-Funktionen ────────────────────────────────────────────
+async function signIn(email, pw){
+  const r = await fetch(SUPA_AUTH_URL+'/token?grant_type=password', {
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
+    body: JSON.stringify({email, password:pw})
+  });
+  const d = await r.json();
+  if(!r.ok) throw new Error(d.error_description || d.msg || 'Login fehlgeschlagen');
+  AUTH.token = d.access_token;
+  AUTH.user  = d.user;
+  // Session im localStorage speichern
+  localStorage.setItem('bv_session', JSON.stringify({token:d.access_token, refresh:d.refresh_token, user:d.user}));
+  return d;
+}
+
+async function refreshSession(refreshToken){
+  const r = await fetch(SUPA_AUTH_URL+'/token?grant_type=refresh_token', {
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
+    body: JSON.stringify({refresh_token: refreshToken})
+  });
+  if(!r.ok) return false;
+  const d = await r.json();
+  AUTH.token = d.access_token;
+  AUTH.user  = d.user;
+  localStorage.setItem('bv_session', JSON.stringify({token:d.access_token, refresh:d.refresh_token, user:d.user}));
+  return true;
+}
+
+async function signOut(){
+  try{
+    await fetch(SUPA_AUTH_URL+'/logout', {
+      method:'POST',
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+(AUTH.token||'')}
+    });
+  } catch(e){}
+  AUTH = {token:null, user:null};
+  localStorage.removeItem('bv_session');
+  renderLogin();
+}
+
+async function restoreSession(){
+  const raw = localStorage.getItem('bv_session');
+  if(!raw) return false;
+  try{
+    const s = JSON.parse(raw);
+    // Erst versuchen Token direkt zu verwenden
+    AUTH.token = s.token;
+    AUTH.user  = s.user;
+    // Refresh versuchen falls Token abgelaufen
+    const ok = await refreshSession(s.refresh);
+    return ok || !!s.token;
+  } catch(e){ return false; }
+}
+
+// ── Login-UI ───────────────────────────────────────────────────
+function renderLogin(errMsg){
+  document.body.innerHTML = `
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)">
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:40px 36px;width:340px;box-shadow:0 8px 40px #0008">
+      <div style="text-align:center;margin-bottom:28px">
+        <div style="font-size:32px;margin-bottom:8px">🕊️</div>
+        <div style="font-family:Georgia,serif;font-size:22px;font-weight:700;color:var(--text)">Brieftauben-Verwaltung</div>
+        <div style="font-size:13px;color:var(--text3);margin-top:6px">Bitte anmelden</div>
+      </div>
+      ${errMsg ? `<div style="background:#2a0f0f;color:#e07070;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:16px">⚠️ ${errMsg}</div>` : ''}
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">E-Mail</label>
+          <input id="login-email" type="email" placeholder="name@beispiel.de" autocomplete="email"
+            style="width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;outline:none"
+            onkeydown="if(event.key==='Enter')document.getElementById('login-pw').focus()">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">Passwort</label>
+          <input id="login-pw" type="password" placeholder="••••••••" autocomplete="current-password"
+            style="width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;outline:none"
+            onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button onclick="doLogin()"
+          style="background:var(--green);color:#000;font-weight:700;font-size:15px;border:none;border-radius:10px;padding:12px;cursor:pointer;margin-top:4px;transition:opacity .2s"
+          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+          Anmelden
+        </button>
+      </div>
+      <div style="text-align:center;font-size:11px;color:var(--text3);margin-top:20px">
+        Zugang nur für autorisierte Nutzer
+      </div>
+    </div>
+  </div>`;
+}
+
+async function doLogin(){
+  const email = document.getElementById('login-email').value.trim();
+  const pw    = document.getElementById('login-pw').value;
+  if(!email||!pw){ renderLogin('Bitte E-Mail und Passwort eingeben.'); return; }
+  const btn = document.querySelector('button[onclick="doLogin()"]');
+  if(btn){ btn.textContent='Anmelden…'; btn.disabled=true; }
+  try{
+    await signIn(email, pw);
+    startApp();
+  } catch(e){
+    renderLogin(e.message);
+  }
+}
+
+async function startApp(){
+  // App-HTML wiederherstellen falls Login-Screen alles überschrieben hat
+  if(!document.getElementById('main')){
+    location.reload(); return;
+  }
+  // Logout-Button im Header einblenden
+  const logoutBtn = document.getElementById('logout-btn');
+  if(logoutBtn){
+    logoutBtn.style.display='flex';
+    logoutBtn.innerHTML = `<span style="font-size:12px;color:var(--text3);margin-right:6px">${AUTH.user?.email||''}</span>
+      <button class="btn btn-outline btn-sm" onclick="signOut()">Abmelden</button>`;
+  }
+  loadData();
+}
 
 const S = {
   tab: 'tauben', pigeons: [], filtered: [],
@@ -318,17 +443,17 @@ function calcInbreedingPair(male, female, depth=5){
 
 // ── API ────────────────────────────────────────────────────────
 async function apiGet(path){
-  const r = await fetch(SUPA_URL+path,{headers:H});
+  const r = await fetch(SUPA_URL+path,{headers:H()});
   if(!r.ok){ const t=await r.text(); throw new Error(t); }
   return r.json();
 }
 async function apiPost(table, body){
-  const r = await fetch(SUPA_URL+'/'+table,{method:'POST',headers:H,body:JSON.stringify(body)});
+  const r = await fetch(SUPA_URL+'/'+table,{method:'POST',headers:H(),body:JSON.stringify(body)});
   if(!r.ok){ const t=await r.text(); throw new Error(t); }
   return r.json();
 }
 async function apiPatch(table, id, body){
-  const r = await fetch(SUPA_URL+'/'+table+'?pigeonid=eq.'+id,{method:'PATCH',headers:H,body:JSON.stringify(body)});
+  const r = await fetch(SUPA_URL+'/'+table+'?pigeonid=eq.'+id,{method:'PATCH',headers:H(),body:JSON.stringify(body)});
   if(!r.ok){ const t=await r.text(); throw new Error(t); }
   return r.json();
 }
@@ -883,7 +1008,7 @@ function renderPedSearch(){
     <div class="card-title serif" style="font-size:18px">🌳 Stammbaum-Suche</div>
     <div class="search-wrap" style="max-width:500px">
       <span class="search-icon">🔍</span>
-      <input id="ped-inp" type="text" placeholder="Ringnummer oder Name eingeben…" autocomplete="off">
+      <input id="ped-inp" type="text" placeholder="Endnr. (1), 26/1, Name+Nr (idefix 1), Text…" autocomplete="off">
     </div>
     <div id="ped-results" style="border:1px solid var(--border);border-radius:0 0 var(--radius-sm) var(--radius-sm);overflow:hidden;max-width:500px;display:none"></div>
   </div>
@@ -896,8 +1021,63 @@ function bindPedSearch(){
   if(!inp||!res) return;
   inp.addEventListener('input',()=>{
     const q=inp.value.trim();
-    if(q.length<2){ res.style.display='none'; res.innerHTML=''; return; }
-    const hits=S.pigeons.filter(p=>(p.ringnumber||'').toLowerCase().includes(q.toLowerCase())||(p.name||'').toLowerCase().includes(q.toLowerCase())).slice(0,10);
+    if(q.length<1){ res.style.display='none'; res.innerHTML=''; return; }
+    // Intelligente Suche wie im Tauben-Reiter
+    function pedSegs(rn){ return (rn||'').split(/[^\d]+/).filter(s=>s); }
+    function pedStripZ(v){ return v.replace(/^0+/,'')||'0'; }
+    const modeA = q.match(/^(\d{2,4})[\/\-](\d{1,6})$/);
+    const isNum  = /^\d+$/.test(q);
+    let hits;
+    if(modeA){
+      const p1=modeA[1],p2=modeA[2];
+      const isYear=v=>(v.length===4&&parseInt(v)>=1900)||(v.length===2);
+      const yr=isYear(p1)?p1:p2, num=isYear(p1)?p2:p1;
+      const yrFull=yr.length===2?'20'+yr:yr;
+      hits=S.pigeons.filter(p=>{
+        if(String(p.date_year)!==yrFull) return false;
+        const segs=pedSegs(p.ringnumber||p.ringnumberold||'');
+        const last=segs[segs.length-1]||'';
+        return pedStripZ(last)===pedStripZ(num);
+      }).sort((a,b)=>(ring(a)||'').localeCompare(ring(b))).slice(0,12);
+    } else if(isNum){
+      const scored=[];
+      S.pigeons.forEach(p=>{
+        const segs=pedSegs(p.ringnumber||p.ringnumberold||'');
+        const last=segs[segs.length-1]||'';
+        const lastEx=pedStripZ(last)===pedStripZ(q);
+        const nameEx=(p.name||'').split(/\s+/).some(w=>w===q);
+        const rnCont=(p.ringnumber||'').replace(/[^\d]/g,'').includes(q);
+        if(lastEx) scored.push({p,s:1});
+        else if(nameEx) scored.push({p,s:2});
+        else if(rnCont) scored.push({p,s:3});
+      });
+      scored.sort((a,b)=>a.s!==b.s?a.s-b.s:(b.p.date_year||0)-(a.p.date_year||0));
+      hits=scored.map(x=>x.p).slice(0,12);
+    } else {
+      const ql=q.toLowerCase();
+      const mixM=q.match(/^(.+?)\s+(\d{1,6})$/) || q.match(/^(\d{1,6})\s+(.+)$/);
+      if(mixM){
+        const numP=mixM[1].match(/^\d+$/)?mixM[1]:mixM[2];
+        const txtP=(mixM[1].match(/^\d+$/)?mixM[2]:mixM[1]).toLowerCase();
+        const scored=[];
+        S.pigeons.forEach(p=>{
+          const nM=((p.name||'').toLowerCase()).includes(txtP);
+          const segs=pedSegs(p.ringnumber||''); const last=segs[segs.length-1]||'';
+          const numM=pedStripZ(last)===pedStripZ(numP)||segs.some(s=>s===numP);
+          if(nM&&numM) scored.push({p,s:1});
+          else if(nM)  scored.push({p,s:2});
+          else if(numM)scored.push({p,s:3});
+        });
+        scored.sort((a,b)=>a.s!==b.s?a.s-b.s:(b.p.date_year||0)-(a.p.date_year||0));
+        hits=scored.map(x=>x.p).slice(0,12);
+      } else {
+        hits=S.pigeons.filter(p=>(p.ringnumber||'').toLowerCase().includes(ql)
+          ||(p.name||'').toLowerCase().includes(ql)
+          ||(p.color||'').toLowerCase().includes(ql)
+          ||(p.strain||'').toLowerCase().includes(ql)
+          ||(p.breeder||'').toLowerCase().includes(ql)).slice(0,12);
+      }
+    }
     res.style.display='block';
     res.innerHTML=hits.length ? hits.map(p=>`
       <div class="ped-result" onclick="showPedigree('${p.pigeonid}')">
@@ -914,12 +1094,32 @@ function renderPedigree(pid){
   const root=findById(pid);
   if(!root) return '<div style="padding:20px;color:var(--text3)">Taube nicht gefunden.</div>';
   function node(p,isRoot=false){
-    if(!p) return `<div class="ped-box empty"><div class="ped-info">Unbekannt</div></div>`;
+    if(!p) return `<div class="ped-box empty" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:11px">—<br>Unbekannt</div></div>`;
     const sx=sex_(p);
-    return `<div class="ped-box ${sx==='M'?'male':sx==='F'?'female':''} ${isRoot?'root':''}" onclick="showPedigree('${p.pigeonid}')">
-      <div class="ped-ring">${escH(ring(p))}</div>
-      ${p.name?`<div class="ped-name">${escH(p.name)}</div>`:''}
-      <div class="ped-info">${[p.date_year,p.color].filter(Boolean).map(escH).join(' · ')||'—'}</div>
+    const ib=calcInbreeding(p);
+    const tags=[];
+    if(p.color)   tags.push(escH(p.color));
+    if(p.strain)  tags.push(escH(p.strain));
+    if(p.breeder) tags.push('Z: '+escH(p.breeder));
+    const szRing = isRoot?'12px':'10px';
+    const szName = isRoot?'13px':'11px';
+    const fwName = isRoot?'700':'500';
+    // Info: beim Probanden vollständig (scrollbar), bei anderen gekürzt als Tooltip
+    const infoFull  = (p.info||'').trim();
+    const infoShort = infoFull.length>80 ? infoFull.slice(0,80)+'…' : infoFull;
+    const infoHtml  = infoFull ? (isRoot
+      ? `<div style="margin-top:5px;font-size:11px;color:var(--text2);line-height:1.5;max-height:80px;overflow-y:auto;border-top:1px solid var(--border);padding-top:4px;white-space:pre-wrap">${escH(infoFull)}</div>`
+      : `<div title="${escH(infoFull)}" style="margin-top:3px;font-size:9px;color:var(--text3);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;cursor:help;border-top:1px solid var(--border);padding-top:3px">${escH(infoShort)}</div>`)
+      : '';
+    return `<div class="ped-box ${sx==='M'?'male':sx==='F'?'female':''} ${isRoot?'root':''}" onclick="showPedigree('${p.pigeonid}')" style="width:100%;box-sizing:border-box">
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:1px">
+        <span style="font-size:9px;font-weight:700;flex-shrink:0;color:${sx==='M'?'var(--blue)':sx==='F'?'var(--purple)':'var(--text3)'}">${sx==='M'?'♂':sx==='F'?'♀':'?'}</span>
+        <div class="ped-ring" style="font-size:${szRing};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(ring(p))}</div>
+      </div>
+      ${p.name?`<div class="ped-name" style="font-size:${szName};font-weight:${fwName}">${escH(p.name)}</div>`:''}
+      ${tags.length?`<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:2px">${tags.map(t=>`<span style="background:var(--bg4);border:1px solid var(--border);border-radius:3px;padding:0 4px;font-size:9px;color:var(--text3);white-space:nowrap">${t}</span>`).join('')}</div>`:''}
+      ${infoHtml}
+      ${ib>0.01?`<div style="font-size:9px;margin-top:2px;color:${ib<0.03?'var(--green)':ib<0.1?'var(--orange)':'#e07070'}">⚠ ${(ib*100).toFixed(1)}% Inzucht</div>`:''}
     </div>`;
   }
   const f=findFather(root),mo=findMother(root);
@@ -942,6 +1142,11 @@ function renderPedigree(pid){
           <button class="btn btn-outline btn-sm" onclick="selectPigeon('${root.pigeonid}')">Details →</button>
           <button class="btn btn-outline btn-sm" onclick="showNachkommen('${root.pigeonid}')">🐣 Nachkommen</button>
           <button class="btn btn-outline btn-sm" onclick="setPaarungVogel('${root.pigeonid}')">💑 Paarungscheck</button>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--text3)">Druck:</span>
+            <button class="btn btn-outline btn-sm" onclick="printPedigree('${root.pigeonid}',4)">🖨 4 Gen.</button>
+            <button class="btn btn-outline btn-sm" onclick="printPedigree('${root.pigeonid}',5)">🖨 5 Gen.</button>
+          </div>
         </div>
       </div>
       <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap">
@@ -951,7 +1156,7 @@ function renderPedigree(pid){
         <span style="font-size:12px;color:var(--text3)">Klick → Stammbaum wechseln</span>
       </div>
       <div class="ped-wrap">
-      <div style="display:grid;grid-template-columns:160px 28px 160px 28px 160px 28px 160px;grid-template-rows:28px repeat(8,80px);min-width:940px;align-items:stretch">
+      <div style="display:grid;grid-template-columns:160px 28px 160px 28px 160px 28px 160px;grid-template-rows:28px repeat(8,95px);min-width:940px;align-items:stretch">
 
         <!-- Spalten-Header: nur über die Daten-Spalten, nicht Verbinder -->
         <div class="ped-col-hdr" style="grid-column:1">Proband</div>
@@ -1091,6 +1296,143 @@ function renderPedigree(pid){
 
       </div></div>
     </div>`;
+}
+
+// ── DRUCK / PDF ────────────────────────────────────────────────
+function printPedigree(pid, gens){
+  try{
+    gens = parseInt(gens)||4;
+    const root = findById(pid);
+    if(!root){ alert('Taube nicht gefunden'); return; }
+
+    const _esc    = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const _ring   = p => p?(p.ringnumber||p.ringnumberold||'—'):'—';
+    const _sex    = p => { if(!p) return '?'; const g=(p.gender||p.sex||'').toUpperCase(); return g==='M'||g==='MALE'||g==='COCK'?'M':g==='F'||g==='FEMALE'||g==='HEN'?'F':'?'; };
+    const _father = p => { if(!p) return null; if(p.fatherid) return S.pigeons.find(x=>x.pigeonid===p.fatherid)||null; if(p.ringnumberfather) return S.pigeons.find(x=>x.ringnumber===p.ringnumberfather)||null; return null; };
+    const _mother = p => { if(!p) return null; if(p.motherid) return S.pigeons.find(x=>x.pigeonid===p.motherid)||null; if(p.ringnumbermother) return S.pigeons.find(x=>x.ringnumber===p.ringnumbermother)||null; return null; };
+
+    // Baum aufbauen
+    function buildTree(p, gen, pos, arr){
+      if(!arr[gen]) arr[gen]=[];
+      arr[gen][pos]=p||null;
+      if(gen>=gens-1) return;
+      buildTree(_father(p), gen+1, pos*2,   arr);
+      buildTree(_mother(p), gen+1, pos*2+1, arr);
+    }
+    const tree=[];
+    buildTree(root, 0, 0, tree);
+
+    const rows   = Math.pow(2, gens-1);   // 8 (4gen) oder 16 (5gen)
+    const rowHmm = Math.floor(272/rows);  // volle Seitenhöhe nutzen
+    // Spaltenbreiten: kein Header-Overhead mehr → volle Breite für Daten
+    // Verbinder: 5mm, Rest gleichmäßig auf Datenspalten
+    const totalConn = (gens-1)*5;
+    const datWmm    = Math.floor((190 - totalConn) / gens);
+    const conWmm    = 5;
+
+    // Box-HTML — Infomenge abhängig von Generation und verfügbarem Platz
+    function box(p, gen){
+      if(!p) return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:7pt">–</div>`;
+      const sx   = _sex(p);
+      const col  = sx==='M'?'#3a7bd5':sx==='F'?'#8e44ad':'#888';
+      const tags = [p.color, p.strain, p.breeder?'Z: '+p.breeder:null].filter(Boolean);
+      const info = (p.info||'').trim();
+      const rn   = _ring(p);
+
+      // Schriftgrößen je nach Generation
+      const szRing = gen===0?'8pt':gen===1?'7.5pt':gen===2?'7pt':'6.5pt';
+      const szName = gen===0?'9pt':gen===1?'8pt':gen===2?'7.5pt':'6.5pt';
+      const szTag  = gen===0?'7pt':gen===1?'6.5pt':'6pt';
+      const szInfo = gen===0?'7.5pt':gen===1?'7pt':gen===2?'6.5pt':'6pt';
+      const showTags = gen<=3;
+      const showInfo = gen<=2 && info;  // Info nur bei Proband, Eltern, Großeltern
+
+      // Info-Feld bekommt flex:1 → füllt restliche Box-Höhe vollständig aus
+      // kein max-height, kein Zeichenlimit → voller Text
+      return `<div style="border-left:2mm solid ${col};padding:1.5mm 2mm;background:#fafafa;border-radius:.8mm;width:100%;height:100%;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column">
+        <div style="font-family:monospace;font-size:${szRing};font-weight:700;color:#1a6b1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">
+          ${sx==='M'?'♂':sx==='F'?'♀':'?'} ${_esc(rn)}</div>
+        ${p.name?`<div style="font-size:${szName};font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:.3mm;flex-shrink:0">${_esc(p.name)}</div>`:''}
+        ${showTags&&tags.length?`<div style="font-size:${szTag};color:#666;margin-top:.4mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">${tags.map(_esc).join(' · ')}</div>`:''}
+        ${showInfo?`<div style="font-size:${szInfo};color:#333;margin-top:1mm;border-top:.2mm solid #ddd;padding-top:.5mm;line-height:1.45;overflow:hidden;flex:1;word-break:break-word">${_esc(info)}</div>`:''}
+      </div>`;
+    }
+
+
+    // Grid-Template ohne Header-Zeile
+    let gtc='';
+    for(let g=0;g<gens;g++){ gtc+=datWmm+'mm'; if(g<gens-1) gtc+=' '+conWmm+'mm '; }
+    const gtr = 'repeat('+rows+','+rowHmm+'mm)';  // keine Header-Zeile!
+
+    let cells='';
+    for(let g=0;g<gens;g++){
+      const count  = Math.pow(2,g);
+      const span   = rows/count;
+      const gridCol= g*2+1;
+      for(let i=0;i<count;i++){
+        const p   = tree[g]?tree[g][i]:null;
+        const rs  = i*span+1;  // +1 (kein Header)
+        const re  = rs+span;
+        cells+=`<div style="grid-column:${gridCol};grid-row:${rs}/${re};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box">${box(p,g)}</div>`;
+      }
+      // Verbinder
+      if(g<gens-1){
+        const cc=g*2+2;
+        for(let i=0;i<count;i++){
+          const rs=i*span+1, mid=rs+span/2, re=rs+span;
+          cells+=`<div style="grid-column:${cc};grid-row:${rs}/${mid};position:relative">
+            <svg style="position:absolute;top:0;left:0;width:100%;height:100%;overflow:visible" preserveAspectRatio="none">
+              <line x1="0" y1="50%" x2="100%" y2="50%" stroke="#aaa" stroke-width=".3mm"/>
+              <line x1="0" y1="50%" x2="0" y2="100%" stroke="#aaa" stroke-width=".3mm"/>
+            </svg></div>`;
+          cells+=`<div style="grid-column:${cc};grid-row:${mid}/${re};position:relative">
+            <svg style="position:absolute;top:0;left:0;width:100%;height:100%;overflow:visible" preserveAspectRatio="none">
+              <line x1="0" y1="50%" x2="100%" y2="50%" stroke="#aaa" stroke-width=".3mm"/>
+              <line x1="0" y1="0" x2="0" y2="50%" stroke="#aaa" stroke-width=".3mm"/>
+            </svg></div>`;
+        }
+      }
+    }
+
+    const sx=_sex(root);
+    const today=new Date().toLocaleDateString('de-DE');
+
+    const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+<title>Stammbaum – ${_esc(root.name||_ring(root))}</title>
+<style>
+  @page{size:A4 portrait;margin:8mm 8mm 8mm 8mm}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
+  body{width:194mm;background:#fff;color:#111}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+</head><body>
+<div style="margin-bottom:2.5mm;border-bottom:.3mm solid #ccc;padding-bottom:2mm;display:flex;justify-content:space-between;align-items:flex-end">
+  <div>
+    <div style="font-size:12pt;font-weight:700">🕊 ${_esc(root.name||_ring(root))}</div>
+    <div style="font-size:7pt;color:#555;margin-top:.5mm">
+      ${_esc(_ring(root))} &nbsp;·&nbsp;
+      ${sx==='M'?'♂ Täuber':sx==='F'?'♀ Täubin':'?'} &nbsp;·&nbsp;
+      Jg. ${root.date_year||'—'}
+      ${root.color?' &nbsp;·&nbsp; '+_esc(root.color):''}
+      &nbsp;·&nbsp; ${gens} Generationen
+    </div>
+  </div>
+  <div style="font-size:7pt;color:#aaa">${today} · Brieftauben-Verwaltung</div>
+</div>
+<div style="display:grid;grid-template-columns:${gtc};grid-template-rows:${gtr};border:.3mm solid #ccc;width:194mm">
+  ${cells}
+</div>
+</body></html>`;
+
+    const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.target='_blank'; a.rel='noopener';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),15000);
+  } catch(e){
+    alert('Druckfehler: '+e.message+'\n'+e.stack);
+  }
 }
 
 // ── PAARUNGSCHECK ──────────────────────────────────────────────
@@ -1367,7 +1709,7 @@ function renderNachSearch(){
     +'<div class="card-title serif" style="font-size:18px">🐣 Nachkommen-Suche</div>'
     +'<div class="search-wrap" style="max-width:500px">'
     +'<span class="search-icon">🔍</span>'
-    +'<input id="nach-inp" type="text" placeholder="Ringnummer oder Name eingeben…" autocomplete="off">'
+    +'<input id="nach-inp" type="text" placeholder="Endnr. (1), 26/1, Name+Nr (idefix 1), Text…" autocomplete="off">'
     +'</div>'
     +'<div id="nach-results" style="border:1px solid var(--border);border-radius:0 0 var(--radius-sm) var(--radius-sm);overflow:hidden;max-width:500px;display:none"></div>'
     +'</div>'
@@ -1496,7 +1838,15 @@ function bindNachSearch(){
   });
 }
 
-loadData();
+// ── App-Start: Session prüfen ─────────────────────────────────
+(async function(){
+  const ok = await restoreSession();
+  if(ok){
+    startApp();
+  } else {
+    renderLogin();
+  }
+})();
 </script>
 </body>
 </html>
