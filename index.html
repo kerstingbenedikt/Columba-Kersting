@@ -67,6 +67,7 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .badge-m{background:#1a2d4a;color:#7ab3e0}
 .badge-f{background:#2d1a3d;color:#c97fd4}
 .badge-u{background:var(--bg3);color:var(--text3);border:1px solid var(--border)}
+.badge-state{background:color-mix(in srgb,var(--orange) 12%,var(--bg3));color:var(--orange);border:1px solid color-mix(in srgb,var(--orange) 25%,var(--border));padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap}
 
 /* ── Pagination ── */
 .pagination{display:flex;align-items:center;gap:6px;margin-top:12px;justify-content:flex-end;flex-wrap:wrap}
@@ -362,7 +363,8 @@ async function startApp(){
 const S = {
   tab: 'tauben', pigeons: [], filtered: [],
   page: 0, pageSize: 50,
-  search: '', sexFilter: 'all', yearFilter: 'all', inStockFilter: 'all',
+  search: '', sexFilter: 'all', yearFilter: 'all', inStockFilter: 'all', colorFilter: 'all', stateFilter: 'all', racingFilter: 'all',
+  pigeonStates: [],
   sortCol: 'ringnumber', sortDir: 1,
   selected: null, selectedPed: null,
   loading: true, error: null, _loadingMore: false,
@@ -375,6 +377,7 @@ const name_  = p => p.name || '';
 const sex_   = p => { const g = String(p.gender||'').trim().toLowerCase(); if(['m','1'].includes(g))return'M'; if(['f','2','w'].includes(g))return'F'; return '?'; };
 const year_  = p => p.date_year || '';
 const label_ = p => p.name ? `${p.name} (${ring(p)})` : ring(p);
+function pigeonStateName(p){ return (p.pigeonstates&&p.pigeonstates.name)||p.pigeonstate||''; }
 
 function findFather(p){ return p.fatherid ? S.pigeons.find(x=>x.pigeonid===p.fatherid)||null : p.ringnumberfather ? S.pigeons.find(x=>x.ringnumber===p.ringnumberfather)||null : null; }
 function findMother(p){ return p.motherid ? S.pigeons.find(x=>x.pigeonid===p.motherid)||null : p.ringnumbermother ? S.pigeons.find(x=>x.ringnumber===p.ringnumbermother)||null : null; }
@@ -474,10 +477,12 @@ function updateHeaderStats(){
 
 async function loadData(){
   S.loading=true; S._loadingMore=false; render();
+  // Status-Werte aus pigeonstates laden
+  try{ const ps=await apiGet('/pigeonstates?order=name.asc'); S.pigeonStates=ps||[]; } catch(e){ S.pigeonStates=[]; }
   const BATCH=500;
   try{
     // Erste Batch sofort laden → UI erscheint schnell
-    const first = await apiGet('/pigeons?deleted=eq.false&limit='+BATCH+'&offset=0&order=date_year.desc,number.asc');
+    const first = await apiGet('/pigeons?deleted=eq.false&select=*,pigeonstates(name)&limit='+BATCH+'&offset=0&order=date_year.desc,number.asc');
     S.pigeons = first||[];
     S.error=null;
     S.loading=false;
@@ -492,7 +497,7 @@ async function loadData(){
       updateHeaderStats();
       let offset=BATCH;
       while(true){
-        const batch = await apiGet('/pigeons?deleted=eq.false&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc');
+        const batch = await apiGet('/pigeons?deleted=eq.false&select=*,pigeonstates(name)&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc');
         if(!batch||batch.length===0) break;
         S.pigeons = S.pigeons.concat(batch);
         updateHeaderStats();
@@ -545,6 +550,87 @@ function renderTableOnly() {
   if (pg) pg.innerHTML = totalPages > 1 ? buildPagination(totalPages) : '';
 }
 
+
+function resetTaubenFilter(){
+  S.search=''; S.sexFilter='all'; S.yearFilter='all';
+  S.inStockFilter='all'; S.colorFilter='all'; S.stateFilter='all'; S.racingFilter='all';
+  S.page=0;
+  ['sex-filter','year-filter','stock-filter','color-filter','state-filter','racing-filter']
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.value='all'; });
+  const si=document.getElementById('tauben-search'); if(si) si.value='';
+  applyFilter();
+}
+
+function exportCSV(){
+  try{
+    const cols=['Ringnummer','Name','Jahrgang','Geschlecht','Farbe','Linie','Status','Züchter','Besitzer','Im Bestand'];
+    const rows=S.filtered.map(p=>[
+      ring(p), p.name||'', p.date_year||'',
+      sex_(p)==='M'?'Täuber':sex_(p)==='F'?'Täubin':'?',
+      p.color||'', p.strain||'', pigeonStateName(p)||'', p.breeder||'', p.owner||'',
+      p.instock!=null?(p.instock?'Ja':'Nein'):''
+    ]);
+    const csv=[cols,...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
+    const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='tauben-'+new Date().toISOString().slice(0,10)+'.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+  } catch(e){ alert('CSV-Fehler: '+e.message); }
+}
+
+function exportPDF(){
+  try{
+    const _esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const today=new Date().toLocaleDateString('de-DE');
+    const filterParts=[
+      S.search?'Suche: "'+S.search+'"':null,
+      S.sexFilter!=='all'?(S.sexFilter==='M'?'♂ Täuber':'♀ Täubin'):null,
+      S.yearFilter!=='all'?'Jg. '+S.yearFilter:null,
+      S.colorFilter!=='all'?'Farbe: '+S.colorFilter:null,
+      S.stateFilter!=='all'?'Status: '+S.stateFilter:null,
+      S.inStockFilter==='yes'?'Im Bestand':S.inStockFilter==='no'?'Nicht im Bestand':null,
+      S.racingFilter==='yes'?'Reisetauben':S.racingFilter==='no'?'Keine Reisetauben':null,
+    ].filter(Boolean).join(' · ');
+    const cols=['Ring','Name','Jg.','♂/♀','Farbe','Linie','Status','Züchter','Im Bestand'];
+    const rows=S.filtered.map(p=>[
+      _esc(ring(p)), _esc(p.name||''), _esc(p.date_year||''),
+      sex_(p)==='M'?'♂':sex_(p)==='F'?'♀':'?',
+      _esc(p.color||''), _esc(p.strain||''), _esc(pigeonStateName(p)),
+      _esc(p.breeder||''), p.instock!=null?(p.instock?'✓':'–'):''
+    ]);
+    const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+<title>Tauben-Liste ${today}</title>
+<style>
+  @page{size:A4 landscape;margin:8mm}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
+  body{width:281mm;color:#111;background:#fff}
+  h1{font-size:11pt;font-weight:700;margin-bottom:1mm}
+  .meta{font-size:7pt;color:#555;margin-bottom:3mm}
+  table{width:100%;border-collapse:collapse}
+  th{background:#1a1a2e;color:#fff;padding:2mm 2.5mm;text-align:left;font-size:7.5pt;white-space:nowrap}
+  td{padding:1.5mm 2.5mm;border-bottom:.2mm solid #e0e0e0;font-size:7.5pt;vertical-align:top}
+  tr:nth-child(even) td{background:#f7f7f7}
+  .footer{margin-top:3mm;font-size:6.5pt;color:#aaa;text-align:right}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body>
+<h1>🕊 Tauben-Liste</h1>
+<div class="meta">${today} &nbsp;·&nbsp; ${rows.length} Tauben${filterParts?' &nbsp;·&nbsp; '+filterParts:''}</div>
+<table>
+  <thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+  <tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>
+</table>
+<div class="footer">Brieftauben-Verwaltung · ${today}</div>
+</body></html>`;
+    const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.target='_blank'; a.rel='noopener';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),15000);
+  } catch(e){ alert('PDF-Fehler: '+e.message); }
+}
 
 function applyFilter(){
   let arr=[...S.pigeons];
@@ -681,6 +767,10 @@ function applyFilter(){
   if(S.yearFilter!=='all') arr=arr.filter(p=>String(p.date_year)===S.yearFilter);
   if(S.inStockFilter==='yes') arr=arr.filter(p=>p.instock);
   if(S.inStockFilter==='no') arr=arr.filter(p=>!p.instock);
+  if(S.colorFilter!=='all') arr=arr.filter(p=>(p.color||'')===S.colorFilter);
+  if(S.stateFilter!=='all') arr=arr.filter(p=>pigeonStateName(p)===S.stateFilter);
+  if(S.racingFilter==='yes') arr=arr.filter(p=>p.ontrip===true);
+  if(S.racingFilter==='no')  arr=arr.filter(p=>p.ontrip!==true);
 
   // Fallback-Sortierung nur wenn KEIN Scoring aktiv war
   if(!q || !((/^\d/.test(q)) || q.match(/^(\d{2,4})[\/\-\s](\d{1,6})$/))){
@@ -692,6 +782,7 @@ function applyFilter(){
       else if(S.sortCol==='year'){av=a.date_year||0;bv=b.date_year||0;}
       else if(S.sortCol==='color'){av=a.color||'';bv=b.color||'';}
       else if(S.sortCol==='strain'){av=a.strain||'';bv=b.strain||'';}
+      else if(S.sortCol==='state'){av=pigeonStateName(a);bv=pigeonStateName(b);}
       else{av='';bv='';}
       if(av<bv) return -1*S.sortDir;
       if(av>bv) return 1*S.sortDir;
@@ -744,6 +835,8 @@ function buildTableHTML(page, si){
         <th onclick="sortBy('year')">Jg.${si('year')}</th>
         <th onclick="sortBy('color')">Farbe${si('color')}</th>
         <th onclick="sortBy('strain')">Linie${si('strain')}</th>
+        <th onclick="sortBy('state')">Status${si('state')}</th>
+        <th title="Auf Reise">🏁</th>
         <th>Vater</th><th>Mutter</th>
       </tr></thead>
       <tbody>${page.map(p=>{
@@ -756,6 +849,8 @@ function buildTableHTML(page, si){
           <td>${p.date_year||'—'}</td>
           <td>${escH(p.color||'—')}</td>
           <td>${escH(p.strain||'—')}</td>
+          <td>${pigeonStateName(p)?`<span class="badge badge-state">${escH(pigeonStateName(p))}</span>`:'—'}</td>
+          <td style="text-align:center">${p.ontrip?'<span title="Auf Reise" style="color:var(--orange)">🏁</span>':'<span style="color:var(--text3)">—</span>'}</td>
           <td>${fR?`<span class="ring-sm" onclick="event.stopPropagation();${f?`selectPigeon('${f.pigeonid}')`:'void(0)'}">${escH(fR)}</span>`:'—'}</td>
           <td>${mR?`<span class="ring-sm" onclick="event.stopPropagation();${mo?`selectPigeon('${mo.pigeonid}')`:'void(0)'}">${escH(mR)}</span>`:'—'}</td>
         </tr>`;}).join('')}
@@ -799,8 +894,27 @@ function renderList(){
         <option value="yes"${S.inStockFilter==='yes'?' selected':''}>Im Bestand</option>
         <option value="no"${S.inStockFilter==='no'?' selected':''}>Nicht im Bestand</option>
       </select>
-      <button class="btn btn-outline btn-sm" onclick="resetTaubenFilter()">Filter zurücksetzen</button>
+      <button class="btn btn-outline btn-sm" onclick="resetTaubenFilter()">↺ Filter zurücksetzen</button>
       <span id="count-label" class="count-label">${S.filtered.length.toLocaleString('de')} / ${S.pigeons.length.toLocaleString('de')}</span>
+    </div>
+    <div class="toolbar" style="flex-wrap:wrap;gap:6px;padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
+      <select id="color-filter" onchange="S.colorFilter=this.value;S.page=0;applyFilter()">
+        <option value="all">🎨 Alle Farben</option>
+        ${[...new Set(S.pigeons.map(p=>p.color).filter(Boolean))].sort().map(c=>`<option value="${escH(c)}"${S.colorFilter===c?' selected':''}>${escH(c)}</option>`).join('')}
+      </select>
+      <select id="state-filter" onchange="S.stateFilter=this.value;S.page=0;applyFilter()">
+        <option value="all">📋 Alle Status</option>
+        ${(S.pigeonStates.length?S.pigeonStates.map(s=>s.name||s).filter(Boolean):[...new Set(S.pigeons.map(p=>p.pigeonstate).filter(Boolean))].sort()).map(n=>`<option value="${escH(n)}"${S.stateFilter===n?' selected':''}>${escH(n)}</option>`).join('')}
+      </select>
+      <select id="racing-filter" onchange="S.racingFilter=this.value;S.page=0;applyFilter()">
+        <option value="all">🏁 Reise: Alle</option>
+        <option value="yes"${S.racingFilter==='yes'?' selected':''}>Reisetauben</option>
+        <option value="no"${S.racingFilter==='no'?' selected':''}>Keine Reisetauben</option>
+      </select>
+      <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">📥 CSV</button>
+        <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">🖨 PDF-Liste</button>
+      </div>
     </div>
     <div id="table-wrap" class="table-wrap">${buildTableHTML(page, si)}</div>
     <div id="pagination-wrap">${totalPages>1?buildPagination(totalPages):''}</div>`;
@@ -820,7 +934,7 @@ function renderDetail(p){
     ['Inzuchtkoeff.',p.inbreedcoefficient!=null?Number(p.inbreedcoefficient).toFixed(4):null],
     ['Ber. Inzucht',ib>0?`${(ib*100).toFixed(2)} %`:null],
     ['Land',p.countrycode],['Verbandsnr.',p.associationno],
-    ['Züchter',p.breeder],['Besitzer',p.owner],['Zustand',p.pigeonstate],
+    ['Züchter',p.breeder],['Besitzer',p.owner],['Zustand',pigeonStateName(p)],
     ['Info',p.info],['Interne Info',p.internalinfo],
     ['Benutzer 1',p.userdefined1],['Benutzer 2',p.userdefined2],['Benutzer 3',p.userdefined3],
   ].filter(([,v])=>v!==null&&v!==undefined&&v!=='');
