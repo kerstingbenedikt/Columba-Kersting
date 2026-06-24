@@ -1711,7 +1711,7 @@ function renderScanUpload(){
       ondragover="event.preventDefault();this.classList.add('drag-over')"
       ondragleave="this.classList.remove('drag-over')"
       ondrop="event.preventDefault();this.classList.remove('drag-over');handleScanFile(event.dataTransfer.files[0])">
-      <input type="file" accept="image/*" capture="environment"
+      <input type="file" accept="image/*" 
         onchange="handleScanFile(this.files[0])">
       <div class="scan-drop-icon">📄</div>
       <div class="scan-drop-text">Foto hochladen oder hierher ziehen</div>
