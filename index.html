@@ -1683,31 +1683,31 @@ function renderPaarung(){
 // ── SCAN-MODUL v2 — Multi-Generationen ────────────────────────
 const EDGE_SCAN_URL = 'https://vwdqqdmtjztduzqrdbpc.supabase.co/functions/v1/scan-pedigree';
 
-// Alle Generationsschlüssel in Reihenfolge (Urgroßeltern zuerst → Proband zuletzt speichern)
 const PED_KEYS = [
-  'fff','ffm','fmf','fmm','mff','mfm','mmf','mmm', // Urgroßeltern
-  'ff','fm','mf','mm',                               // Großeltern
-  'father','mother',                                  // Eltern
-  'proband'                                           // Haupttaube
+  'fff','ffm','fmf','fmm','mff','mfm','mmf','mmm',
+  'ff','fm','mf','mm',
+  'father','mother',
+  'proband'
 ];
 const PED_LABEL = {
   proband:'Proband', father:'Vater', mother:'Mutter',
   ff:'Großvater v.', fm:'Großmutter v.', mf:'Großvater m.', mm:'Großmutter m.',
-  fff:'Urgroßvater v.v.', ffm:'Urgroßmutter v.v.', fmf:'Urgroßvater v.m.', fmm:'Urgroßmutter v.m.',
-  mff:'Urgroßvater m.v.', mfm:'Urgroßmutter m.v.', mmf:'Urgroßvater m.m.', mmm:'Urgroßmutter m.m.'
+  fff:'Urgroßvater v.v.', ffm:'Urgroßmutter v.v.',
+  fmf:'Urgroßvater v.m.', fmm:'Urgroßmutter v.m.',
+  mff:'Urgroßvater m.v.', mfm:'Urgroßmutter m.v.',
+  mmf:'Urgroßvater m.m.', mmm:'Urgroßmutter m.m.'
 };
 
 let SCAN = {
-  step: 'upload',
+  step:'upload',
   imageData:null, imagePreview:null, imageMediaType:'image/jpeg',
-  pigeons:{},   // key→{ringnumber,name,gender,color,race,strain,breeder,...}
-  matches:{},   // key→DB-Taube oder null
-  actions:{},   // key→'skip'|'update'|'new'
+  pigeons:{}, matches:{}, actions:{},
+  rawResponse:null
 };
 
 function scanReset(){
   SCAN={step:'upload',imageData:null,imagePreview:null,imageMediaType:'image/jpeg',
-        pigeons:{},matches:{},actions:{}};
+        pigeons:{},matches:{},actions:{},rawResponse:null};
 }
 
 function renderScan(){
@@ -1718,14 +1718,13 @@ function renderScan(){
   return renderScanUpload();
 }
 
-/* ── Upload ── */
 function renderScanUpload(){
   return `<div class="card">
     <div class="card-title serif" style="font-size:18px">📷 Abstammungs-Scanner</div>
     <p style="color:var(--text3);font-size:13px;margin-bottom:18px">
       Lade ein Foto eines Abstammungsscheins oder Pedigrees hoch.
-      Die KI erkennt automatisch <strong style="color:var(--text)">alle Generationen</strong> — Proband, Eltern,
-      Groß- und Urgroßeltern — und gleicht jede Taube mit der Datenbank ab.
+      Die KI erkennt automatisch <strong style="color:var(--text)">alle Generationen</strong> —
+      Proband, Eltern, Groß- und Urgroßeltern — und gleicht jede Taube mit der Datenbank ab.
     </p>
     <div class="scan-drop-zone" id="scan-drop"
       ondragover="event.preventDefault();this.classList.add('drag-over')"
@@ -1738,14 +1737,13 @@ function renderScanUpload(){
     </div>
     <div class="scan-steps">
       <div class="scan-step active"><div class="scan-step-dot">1</div><span>Foto hochladen</span></div>
-      <div class="scan-step"><div class="scan-step-dot">2</div><span>KI extrahiert alle Generationen (Gemini Vision)</span></div>
+      <div class="scan-step"><div class="scan-step-dot">2</div><span>KI extrahiert alle Generationen</span></div>
       <div class="scan-step"><div class="scan-step-dot">3</div><span>Abgleich mit Datenbank (${S.pigeons.length.toLocaleString('de')} Tauben)</span></div>
-      <div class="scan-step"><div class="scan-step-dot">4</div><span>Pro Taube: ergänzen / neu anlegen / überspringen</span></div>
+      <div class="scan-step"><div class="scan-step-dot">4</div><span>Pro Taube: ergänzen / anlegen / überspringen</span></div>
     </div>
   </div>`;
 }
 
-/* ── Analyzing ── */
 function renderScanAnalyzing(){
   return `<div class="card">
     <div class="card-title serif" style="font-size:18px">📷 Abstammungs-Scanner</div>
@@ -1763,89 +1761,95 @@ function renderScanAnalyzing(){
   </div>`;
 }
 
-/* ── Saving ── */
 function renderScanSaving(){
   return `<div class="card" style="text-align:center;padding:40px">
-    <div class="scan-dots" style="justify-content:center;display:flex;margin-bottom:14px"><span></span><span></span><span></span></div>
+    <div class="scan-dots" style="justify-content:center;display:flex;margin-bottom:14px">
+      <span></span><span></span><span></span>
+    </div>
     <div style="color:var(--text2);font-size:14px" id="scan-save-status">Speichere Tauben…</div>
   </div>`;
 }
 
-/* ── Result ── */
 function renderScanResult(){
   const keys = PED_KEYS.filter(k => SCAN.pigeons[k]?.ringnumber);
+
+  // Rohdaten anzeigen falls nichts erkannt (Debug-Hilfe)
   if(!keys.length){
+    const raw = SCAN.rawResponse ? JSON.stringify(SCAN.rawResponse, null, 2) : 'Keine Daten';
     return `<div class="card">
-      <div class="scan-error">⚠️ Keine Ringnummern erkannt. Bitte einen neuen Scan starten.</div>
-      <div class="form-actions"><button class="btn btn-outline" onclick="scanReset();render()">🔄 Neuer Scan</button></div>
+      <div class="card-title serif" style="font-size:18px;margin-bottom:12px">📷 Scan-Ergebnis</div>
+      <div class="scan-error">⚠️ Keine Ringnummern erkannt.</div>
+      <div style="margin-top:12px;background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px">
+        <div style="font-size:10px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">
+          KI-Rohantwort (zur Diagnose)
+        </div>
+        <pre style="font-size:11px;color:var(--text2);white-space:pre-wrap;overflow-x:auto;max-height:300px">${escH(raw)}</pre>
+      </div>
+      <div class="form-actions" style="margin-top:12px">
+        <button class="btn btn-outline" onclick="scanReset();render()">🔄 Neuer Scan</button>
+      </div>
     </div>`;
   }
 
-  const found  = keys.filter(k=>SCAN.matches[k]).length;
-  const newOnes= keys.filter(k=>!SCAN.matches[k]).length;
+  const found   = keys.filter(k=> SCAN.matches[k]).length;
+  const newOnes = keys.filter(k=>!SCAN.matches[k]).length;
 
   const rows = keys.map(k => {
     const p   = SCAN.pigeons[k];
     const m   = SCAN.matches[k];
-    const act = SCAN.actions[k] || (m ? 'update' : 'new');
+    const act = SCAN.actions[k] || (m?'update':'new');
     const sx  = p.gender==='M'?'♂':p.gender==='F'?'♀':'?';
 
-    // Status-Badge
     const badge = m
-      ? `<span class="badge" style="background:rgba(91,134,89,.15);color:var(--green);border:1px solid rgba(91,134,89,.3)">✅ in DB</span>`
-      : `<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25)">🆕 neu</span>`;
+      ? `<span class="badge" style="background:rgba(91,134,89,.15);color:var(--green);border:1px solid rgba(91,134,89,.3);white-space:nowrap">✅ in DB</span>`
+      : `<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25);white-space:nowrap">🆕 neu</span>`;
 
-    // Aktion-Selector
     const actSel = m
       ? `<select onchange="SCAN.actions['${k}']=this.value;render()"
-           style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:4px 8px;font-size:12px;cursor:pointer">
+           style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:4px 8px;font-size:12px;cursor:pointer;width:100%">
            <option value="update" ${act==='update'?'selected':''}>📋 Ergänzen</option>
            <option value="skip"   ${act==='skip'  ?'selected':''}>⏭ Überspringen</option>
          </select>`
       : `<select onchange="SCAN.actions['${k}']=this.value;render()"
-           style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:4px 8px;font-size:12px;cursor:pointer">
+           style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:4px 8px;font-size:12px;cursor:pointer;width:100%">
            <option value="new"  ${act==='new' ?'selected':''}>＋ Neu anlegen</option>
            <option value="skip" ${act==='skip'?'selected':''}>⏭ Überspringen</option>
          </select>`;
 
-    // Diff-Vorschau bei Update
     let diffPreview = '';
     if(m && act==='update'){
       const FLDS=[
         {k:'name',l:'Name'},{k:'color',l:'Farbe'},{k:'race',l:'Rasse'},
         {k:'strain',l:'Linie'},{k:'breeder',l:'Züchter'},
-        {k:'ringnumberfather',l:'Vater-Ring'},{k:'ringnumbermother',l:'Mutter-Ring'}
+        {k:'ringnumberfather',l:'Vater'},{k:'ringnumbermother',l:'Mutter'}
       ];
-      const diffs=FLDS.filter(f=>p[f.k]&&String(p[f.k])!==String(m[f.k]||''));
+      const diffs = FLDS.filter(f=>p[f.k]&&String(p[f.k])!==String(m[f.k]||''));
       if(diffs.length){
-        diffPreview=`<div style="margin-top:6px;font-size:11px;color:var(--text3)">
-          ${diffs.map(f=>`<span style="margin-right:8px">
-            <span style="color:var(--text3)">${f.l}:</span>
-            ${m[f.k]?`<span style="text-decoration:line-through;margin-right:3px">${escH(m[f.k])}</span>`:''}
-            <span style="color:var(--green)">${escH(p[f.k])}</span>
-          </span>`).join('')}
-        </div>`;
+        diffPreview = `<div style="margin-top:5px;font-size:11px">` +
+          diffs.map(f=>`<span style="margin-right:6px;color:var(--text3)">${f.l}: ` +
+            (m[f.k]?`<span style="text-decoration:line-through;opacity:.6">${escH(m[f.k])}</span> `:'') +
+            `<span style="color:var(--green)">${escH(p[f.k])}</span></span>`).join('') +
+          `</div>`;
       } else {
-        diffPreview=`<div style="margin-top:4px;font-size:11px;color:var(--text3)">Keine neuen Felder</div>`;
+        diffPreview = `<div style="margin-top:4px;font-size:11px;color:var(--text3)">Keine neuen Felder erkannt</div>`;
       }
     }
 
     return `<tr>
-      <td style="color:var(--text3);font-size:12px;font-weight:500;white-space:nowrap">${PED_LABEL[k]}</td>
-      <td>
-        <div style="font-family:monospace;font-size:12px;color:var(--green)">${escH(p.ringnumber||'')}</div>
-        ${p.name?`<div style="font-size:12px;color:var(--text)">${escH(p.name)}</div>`:''}
-        <div style="font-size:11px;color:var(--text3)">${[sx,p.date_year,p.color,p.race].filter(Boolean).join(' · ')}</div>
-        ${p.strain?`<div style="font-size:11px;color:var(--text3)">Linie: ${escH(p.strain)}</div>`:''}
+      <td style="color:var(--text3);font-size:11px;font-weight:500;white-space:nowrap;padding:8px 10px">${PED_LABEL[k]}</td>
+      <td style="padding:8px 10px">
+        <div style="font-family:monospace;font-size:12px;color:var(--green);font-weight:600">${escH(p.ringnumber)}</div>
+        ${p.name?`<div style="font-size:12px;color:var(--text);margin-top:2px">${escH(p.name)}</div>`:''}
+        <div style="font-size:11px;color:var(--text3);margin-top:1px">${[sx,p.date_year,p.color,p.race,p.strain].filter(Boolean).join(' · ')}</div>
         ${p.breeder?`<div style="font-size:11px;color:var(--text3)">Züchter: ${escH(p.breeder)}</div>`:''}
         ${diffPreview}
       </td>
-      <td>${badge}</td>
-      <td>${actSel}</td>
+      <td style="padding:8px 10px">${badge}</td>
+      <td style="padding:8px 10px">${actSel}</td>
     </tr>`;
   }).join('');
 
-  const toProcess = keys.filter(k=>SCAN.actions[k]!=='skip'&&(SCAN.actions[k]||true)).length;
+  const toSave = keys.filter(k=>(SCAN.actions[k]||'x')!=='skip').length;
 
   return `<div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">
@@ -1859,38 +1863,34 @@ function renderScanResult(){
     </div>
     ${SCAN.imagePreview?`<img id="scan-img" src="${SCAN.imagePreview}" class="scan-preview" style="display:none" alt="Scan">`:''}
 
-    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-      <div style="background:rgba(91,134,89,.12);border:1px solid rgba(91,134,89,.3);border-radius:var(--radius-sm);padding:8px 14px;font-size:13px">
-        <strong style="color:var(--green)">${found}</strong> <span style="color:var(--text2)">bereits in DB</span>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="background:rgba(91,134,89,.12);border:1px solid rgba(91,134,89,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
+        <strong style="color:var(--green)">${found}</strong> <span style="color:var(--text2)">in DB</span>
       </div>
-      <div style="background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25);border-radius:var(--radius-sm);padding:8px 14px;font-size:13px">
-        <strong style="color:#7ab3e0">${newOnes}</strong> <span style="color:var(--text2)">neu erkannt</span>
+      <div style="background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
+        <strong style="color:#7ab3e0">${newOnes}</strong> <span style="color:var(--text2)">neu</span>
       </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;font-size:13px">
-        <strong style="color:var(--text)">${keys.length}</strong> <span style="color:var(--text2)">Tauben gesamt</span>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
+        <strong style="color:var(--text)">${keys.length}</strong> <span style="color:var(--text2)">Tauben erkannt</span>
       </div>
-    </div>
-
-    <div style="font-size:13px;color:var(--text2);margin-bottom:10px">
-      Wähle pro Taube die gewünschte Aktion. Eltern-Verknüpfungen werden automatisch gesetzt.
     </div>
 
     <div class="table-wrap">
-      <table style="font-size:13px;width:100%;border-collapse:collapse">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr>
           <th style="width:110px">Generation</th>
           <th>Taube</th>
-          <th style="width:90px">Status</th>
+          <th style="width:80px">Status</th>
           <th style="width:130px">Aktion</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
 
-    <div class="form-actions" style="margin-top:16px">
+    <div class="form-actions" style="margin-top:14px">
       <button class="btn btn-outline" onclick="scanReset();render()">Abbrechen</button>
-      <button class="btn" onclick="executeScanSave()">
-        ✅ Ausführen (${keys.filter(k=>(SCAN.actions[k]||'x')!=='skip').length} Tauben)
+      <button class="btn" onclick="executeScanSave()" ${toSave===0?'disabled':''}>
+        ✅ Ausführen (${toSave} Tauben)
       </button>
     </div>
   </div>`;
@@ -1912,7 +1912,7 @@ function handleScanFile(file){
   reader.readAsDataURL(file);
 }
 
-/* ── KI-Analyse ── */
+/* ── KI-Analyse via Edge Function ── */
 async function runScanAI(){
   const setS = t => { const el=document.getElementById('scan-status'); if(el) el.textContent=t; };
   try {
@@ -1929,28 +1929,71 @@ async function runScanAI(){
     const json = await resp.json();
     if(!resp.ok||!json.ok) throw new Error(json.error||`HTTP ${resp.status}`);
 
-    // Ergebnis in SCAN.pigeons speichern
-    const d = json.data||{};
-    PED_KEYS.forEach(k => { if(d[k]?.ringnumber) SCAN.pigeons[k]=d[k]; });
+    const d = json.data || {};
+    SCAN.rawResponse = d; // für Debug
+
+    // Robustes Parsen: unterstützt proband/father/... UND flaches Format
+    const norm = s => String(s||'').trim().toLowerCase().replace(/[\s\-.]/g,'');
+
+    if(d.proband || d.father || d.mother || d.ff){
+      // Neues verschachteltes Format
+      PED_KEYS.forEach(k => {
+        if(d[k] && (d[k].ringnumber||d[k].ring)){
+          SCAN.pigeons[k] = {
+            ringnumber: d[k].ringnumber||d[k].ring||null,
+            name:       d[k].name||null,
+            date_year:  d[k].date_year||d[k].year||d[k].vintage||null,
+            gender:     d[k].gender||d[k].sex||null,
+            color:      d[k].color||d[k].colour||d[k].farbe||null,
+            race:       d[k].race||d[k].rasse||null,
+            strain:     d[k].strain||d[k].linie||d[k].stamm||null,
+            breeder:    d[k].breeder||d[k].zuchter||d[k].züchter||null,
+            owner:      d[k].owner||d[k].besitzer||null,
+            countrycode:d[k].countrycode||d[k].country||null,
+            associationno:d[k].associationno||null,
+            ringnumberfather:d[k].ringnumberfather||d[k].father_ring||null,
+            ringnumbermother:d[k].ringnumbermother||d[k].mother_ring||null,
+          };
+        }
+      });
+    } else if(d.ringnumber||d.ring){
+      // Altes flaches Format — als Proband behandeln
+      SCAN.pigeons['proband'] = {
+        ringnumber: d.ringnumber||d.ring,
+        name: d.name||null,
+        date_year: d.date_year||d.year||null,
+        gender: d.gender||null,
+        color: d.color||null,
+        race: d.race||null,
+        strain: d.strain||null,
+        breeder: d.breeder||null,
+        owner: d.owner||null,
+        countrycode: d.countrycode||null,
+        associationno: d.associationno||null,
+        ringnumberfather: d.ringnumberfather||null,
+        ringnumbermother: d.ringnumbermother||null,
+      };
+      if(d.ringnumberfather) SCAN.pigeons['father']={ ringnumber:d.ringnumberfather };
+      if(d.ringnumbermother) SCAN.pigeons['mother']={ ringnumber:d.ringnumbermother };
+    }
 
     setS('Abgleich mit Datenbank…');
-    // DB-Abgleich für alle gefundenen Tauben
-    const norm = s => String(s||'').trim().toLowerCase().replace(/[\s\-.]/g,'');
     PED_KEYS.forEach(k => {
       const p = SCAN.pigeons[k];
       if(!p) return;
       SCAN.matches[k] = S.pigeons.find(x =>
         norm(x.ringnumber)===norm(p.ringnumber) ||
-        norm(x.ringnumberold)===norm(p.ringnumber)
+        norm(x.ringnumberold||'')===norm(p.ringnumber)
       ) || null;
-      // Standard-Aktion setzen
       SCAN.actions[k] = SCAN.matches[k] ? 'update' : 'new';
     });
 
     SCAN.step = 'result';
     render();
+
   } catch(err){
-    SCAN.pigeons = { proband:{ _error:err.message, ringnumber:'' } };
+    SCAN.rawResponse = {error: err.message};
+    SCAN.pigeons = {};
     SCAN.step = 'result';
     render();
   }
@@ -1958,26 +2001,23 @@ async function runScanAI(){
 
 /* ── Speichern ── */
 async function executeScanSave(){
-  SCAN.step = 'saving';
-  render();
+  SCAN.step = 'saving'; render();
   const setS = t => { const el=document.getElementById('scan-save-status'); if(el) el.textContent=t; };
 
-  // UUID-Map aufbauen: ringnumber → pigeonid (für Elternverknüpfung)
-  const uuidMap = {}; // ringnumber → uuid
-  S.pigeons.forEach(p => { if(p.ringnumber) uuidMap[p.ringnumber]=p.pigeonid; });
+  // UUID-Map: ringnumber → pigeonid
+  const uuidMap = {};
+  S.pigeons.forEach(p => { if(p.ringnumber) uuidMap[p.ringnumber.trim()]=p.pigeonid; });
 
-  // Eltern-Beziehungen aus dem Scan-Baum ableiten
   const parentMap = {
-    proband:  { f:'father',   m:'mother'   },
-    father:   { f:'ff',       m:'fm'       },
-    mother:   { f:'mf',       m:'mm'       },
-    ff:       { f:'fff',      m:'ffm'      },
-    fm:       { f:'fmf',      m:'fmm'      },
-    mf:       { f:'mff',      m:'mfm'      },
-    mm:       { f:'mmf',      m:'mmm'      },
+    proband:{f:'father',m:'mother'},
+    father: {f:'ff',   m:'fm'},
+    mother: {f:'mf',   m:'mm'},
+    ff:     {f:'fff',  m:'ffm'},
+    fm:     {f:'fmf',  m:'fmm'},
+    mf:     {f:'mff',  m:'mfm'},
+    mm:     {f:'mmf',  m:'mmm'},
   };
 
-  // Urgroßeltern → Großeltern → Eltern → Proband
   for(const k of PED_KEYS){
     const p   = SCAN.pigeons[k];
     const act = SCAN.actions[k];
@@ -1985,69 +2025,60 @@ async function executeScanSave(){
 
     setS(`Verarbeite: ${p.ringnumber}…`);
 
-    // Eltern-UUIDs nachschlagen
-    const par = parentMap[k];
+    // Eltern-UUIDs
     let fatherid=null, motherid=null;
+    const par = parentMap[k];
     if(par){
-      const fKey=par.f, mKey=par.m;
-      const fP=SCAN.pigeons[fKey], mP=SCAN.pigeons[mKey];
-      if(fP?.ringnumber) fatherid = uuidMap[fP.ringnumber] || null;
-      if(mP?.ringnumber) motherid = uuidMap[mP.ringnumber] || null;
+      const fRing = SCAN.pigeons[par.f]?.ringnumber;
+      const mRing = SCAN.pigeons[par.m]?.ringnumber;
+      if(fRing) fatherid = uuidMap[fRing.trim()]||null;
+      if(mRing) motherid = uuidMap[mRing.trim()]||null;
     }
-    // Auch aus ringnumberfather/mother des Scans
-    if(!fatherid && p.ringnumberfather) fatherid = uuidMap[p.ringnumberfather]||null;
-    if(!motherid && p.ringnumbermother) motherid = uuidMap[p.ringnumbermother]||null;
+    if(!fatherid && p.ringnumberfather) fatherid=uuidMap[p.ringnumberfather.trim()]||null;
+    if(!motherid && p.ringnumbermother) motherid=uuidMap[p.ringnumbermother.trim()]||null;
 
-    const row = {
-      ringnumber:       p.ringnumber||null,
-      name:             p.name||null,
-      date_year:        p.date_year?Number(p.date_year):null,
-      gender:           p.gender||null,
-      color:            p.color||null,
-      race:             p.race||null,
-      strain:           p.strain||null,
-      breeder:          p.breeder||null,
-      owner:            p.owner||null,
-      countrycode:      p.countrycode||null,
-      associationno:    p.associationno||null,
-      ringnumberfather: p.ringnumberfather||null,
-      ringnumbermother: p.ringnumbermother||null,
-      fatherid, motherid,
-    };
-    // Null-Felder entfernen
-    Object.keys(row).forEach(k2=>{ if(row[k2]===null) delete row[k2]; });
+    const row = {};
+    if(p.ringnumber)       row.ringnumber=p.ringnumber;
+    if(p.name)             row.name=p.name;
+    if(p.date_year)        row.date_year=Number(p.date_year);
+    if(p.gender)           row.gender=p.gender;
+    if(p.color)            row.color=p.color;
+    if(p.race)             row.race=p.race;
+    if(p.strain)           row.strain=p.strain;
+    if(p.breeder)          row.breeder=p.breeder;
+    if(p.owner)            row.owner=p.owner;
+    if(p.countrycode)      row.countrycode=p.countrycode;
+    if(p.associationno)    row.associationno=p.associationno;
+    if(p.ringnumberfather) row.ringnumberfather=p.ringnumberfather;
+    if(p.ringnumbermother) row.ringnumbermother=p.ringnumbermother;
+    if(fatherid)           row.fatherid=fatherid;
+    if(motherid)           row.motherid=motherid;
 
     try {
       if(act==='new'){
         const newId = crypto.randomUUID();
-        row.pigeonid = newId;
-        row.deleted  = false;
-        row.instock  = true;
+        row.pigeonid=newId; row.deleted=false; row.instock=true;
         await apiPost('pigeons', row);
-        uuidMap[p.ringnumber] = newId;
+        uuidMap[p.ringnumber.trim()] = newId;
       } else if(act==='update'){
         const m = SCAN.matches[k];
-        // Nur Felder die leer sind oder sich geändert haben
         const updates={};
-        Object.keys(row).forEach(f2=>{
-          if(f2==='pigeonid') return;
-          if(row[f2]!==undefined && String(row[f2])!==String(m[f2]||'')) updates[f2]=row[f2];
+        Object.keys(row).forEach(f=>{
+          if(row[f]!==undefined && String(row[f])!==String(m[f]||'')) updates[f]=row[f];
         });
-        if(Object.keys(updates).length) await apiPatch('pigeons', m.pigeonid, updates);
-        uuidMap[p.ringnumber] = m.pigeonid;
+        if(Object.keys(updates).length) await apiPatch('pigeons',m.pigeonid,updates);
+        uuidMap[p.ringnumber.trim()] = m.pigeonid;
       }
     } catch(e){ console.warn('Fehler bei '+p.ringnumber+':', e.message); }
   }
 
   setS('Lade Datenbank neu…');
   await loadData();
-
-  // Zum Probanden navigieren
   const probandRing = SCAN.pigeons['proband']?.ringnumber;
   scanReset();
   if(probandRing){
     const found = S.pigeons.find(p=>p.ringnumber===probandRing);
-    if(found) { selectPigeon(found.pigeonid); return; }
+    if(found){ selectPigeon(found.pigeonid); return; }
   }
   showTab('tauben');
 }
