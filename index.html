@@ -1141,7 +1141,7 @@ async function saveEdit(id){
   const g=id=>document.getElementById(id);
   const val=id=>{const el=g(id);return el?el.value.trim():'';};
   const row={
-    ringnumber:     val('e_ringnumber'),
+    ringnumber:     canonicalizeRingnumber(val('e_ringnumber')),
     ringnumberold:  val('e_ringnumberold'),
     name:           val('e_name'),
     date_year:      val('e_date_year')?Number(val('e_date_year')):null,
@@ -1151,7 +1151,7 @@ async function saveEdit(id){
     strain:         val('e_strain'),
     breeder:        val('e_breeder'),
     owner:          val('e_owner'),
-    countrycode:    val('e_countrycode'),
+    countrycode:    normCountry(val('e_countrycode'))||val('e_countrycode'),
     associationno:  val('e_associationno'),
     birthday:       val('e_birthday')||null,
     died:           val('e_died')||null,
@@ -1763,14 +1763,93 @@ function renderScanSaving(){
   </div>`;
 }
 
-// Ringnummer normalisieren für DB-Vergleich
+// Ringnummer normalisieren für DB-Vergleich (reiner String-Fallback)
 function normRing(s){ return String(s||'').trim().toLowerCase().replace(/[\s\-\.]/g,''); }
 
-// Taube in DB suchen (normalisiert)
-function findInDb(ringnumber){
-  if(!ringnumber) return null;
-  const n = normRing(ringnumber);
-  return S.pigeons.find(x => normRing(x.ringnumber)===n || normRing(x.ringnumberold||'')===n) || null;
+// ── Länderkürzel-Aliase ──────────────────────────────────────────
+// Verschiedene Schreibweisen, die auf Abstammungsscheinen/Ringen für dasselbe
+// Land vorkommen (alt/neu, mit/ohne Vereinszusatz), werden auf einen
+// einheitlichen Code normalisiert, z.B. "B" und "BE" -> "BE".
+const COUNTRY_ALIASES = {
+  'B':'BE', 'BEL':'BE',
+  'D':'DE', 'DEU':'DE', 'GER':'DE',
+  'NL':'NL', 'HOL':'NL',
+  'F':'FR', 'FRA':'FR',
+  'GB':'GB', 'UK':'GB', 'ENG':'GB',
+  'A':'AT', 'AUT':'AT',
+  'CH':'CH', 'SUI':'CH', 'SWZ':'CH',
+  'I':'IT', 'ITA':'IT',
+  'E':'ES', 'ESP':'ES',
+  'P':'PT', 'POR':'PT',
+  'DK':'DK', 'DEN':'DK',
+  'PL':'PL', 'POL':'PL',
+  'CZ':'CZ', 'TCH':'CZ',
+  'L':'LU', 'LUX':'LU',
+};
+function normCountry(cc){
+  const c = String(cc||'').trim().toUpperCase().replace(/[^A-Z]/g,'');
+  if(!c) return '';
+  return COUNTRY_ALIASES[c] || c;
+}
+
+// Ringnummer in Bestandteile zerlegen: Länderkürzel (Buchstaben am Anfang) +
+// numerische Gruppen. Die LETZTE Zahlengruppe gilt als Endnummer/Laufnummer
+// (hier sind führende Nullen irrelevant — "001" === "1"). Alle übrigen
+// Zahlengruppen (Verbandsnr., Jahrgang, …) bleiben wörtlich erhalten, da bei
+// ihnen eine führende Null Teil der eigentlichen Nummer sein kann.
+function parseRingParts(rn){
+  const s = String(rn||'').trim();
+  if(!s) return {cc:'', mid:[], end:'', endNum:NaN};
+  const m = s.match(/^([A-Za-z]{1,3})\b/);
+  const cc = m ? normCountry(m[1]) : '';
+  const rest = m ? s.slice(m[0].length) : s;
+  const groups = rest.split(/[^\d]+/).filter(Boolean);
+  const end = groups.length ? groups[groups.length-1] : '';
+  const mid = groups.slice(0,-1);
+  return { cc, mid, end, endNum: end ? parseInt(end,10) : NaN };
+}
+
+// Vereinheitlichten Vergleichs-Key für eine Taube/Ringnummer erzeugen.
+// Akzeptiert entweder einen rohen Ringnummer-String ODER ein Tauben-Objekt
+// (dann wird ein ggf. vorhandenes countrycode-Feld bevorzugt berücksichtigt).
+// Erkennt die Funktion keine verwertbare Struktur, wird auf die alte reine
+// String-Normalisierung zurückgefallen, damit nichts verloren geht.
+function ringKey(rnOrObj){
+  let rn = rnOrObj, ccField = null;
+  if(rnOrObj && typeof rnOrObj === 'object'){
+    rn = rnOrObj.ringnumber || rnOrObj.ringnumberold || '';
+    ccField = rnOrObj.countrycode || null;
+  }
+  const parsed = parseRingParts(rn);
+  const cc = normCountry(ccField || parsed.cc);
+  if(!cc || isNaN(parsed.endNum)){
+    const plain = normRing(rn);
+    return plain ? `raw:${plain}` : '';
+  }
+  return `${cc}|${parsed.mid.join('-')}|${parsed.endNum}`;
+}
+
+// Ringnummer in einer einheitlichen Schreibweise zurückgeben (Länderkürzel
+// auf den kanonischen Alias gemappt, Rest unverändert) — sorgt dafür, dass
+// neu gespeicherte/aktualisierte Ringnummern konsistent aussehen.
+function canonicalizeRingnumber(rn){
+  const s = String(rn||'').trim();
+  if(!s) return s;
+  const m = s.match(/^([A-Za-z]{1,3})\b(.*)$/);
+  if(!m) return s;
+  const cc = normCountry(m[1]);
+  if(!cc) return s;
+  let rest = m[2];
+  if(rest && !/^[\s\-\.]/.test(rest)) rest = '-'+rest;
+  return cc+rest;
+}
+
+// Taube in DB suchen (über vereinheitlichten Ringnummer-Key, s.o.)
+function findInDb(ringnumberOrObj){
+  if(!ringnumberOrObj) return null;
+  const key = ringKey(ringnumberOrObj);
+  if(!key) return null;
+  return S.pigeons.find(x => ringKey(x)===key) || null;
 }
 
 function renderScanResult(){
@@ -1962,7 +2041,7 @@ async function runScanAI(){
     PED_KEYS.forEach(k => {
       const p = SCAN.pigeons[k];
       if(!p?.ringnumber) return;
-      SCAN.matches[k] = findInDb(p.ringnumber);
+      SCAN.matches[k] = findInDb(p);
       SCAN.actions[k] = SCAN.matches[k] ? 'update' : 'new';
     });
 
@@ -1980,9 +2059,9 @@ async function executeScanSave(){
   SCAN.step = 'saving'; render();
   const setS = t => { const el=document.getElementById('scan-save-status'); if(el) el.textContent=t; };
 
-  // UUID-Map aufbauen (normalisiert)
+  // UUID-Map aufbauen (über vereinheitlichten Ringnummer-Key)
   const uuidMap = {};
-  S.pigeons.forEach(p => { if(p.ringnumber) uuidMap[normRing(p.ringnumber)]=p.pigeonid; });
+  S.pigeons.forEach(p => { const k=ringKey(p); if(k) uuidMap[k]=p.pigeonid; });
 
   for(const k of PED_KEYS){
     const p   = SCAN.pigeons[k];
@@ -1997,17 +2076,17 @@ async function executeScanSave(){
     if(par){
       const fRing = SCAN.pigeons[par.f]?.ringnumber;
       const mRing = SCAN.pigeons[par.m]?.ringnumber;
-      if(fRing) fatherid = uuidMap[normRing(fRing)]||null;
-      if(mRing) motherid = uuidMap[normRing(mRing)]||null;
+      if(fRing) fatherid = uuidMap[ringKey({ringnumber:fRing})]||null;
+      if(mRing) motherid = uuidMap[ringKey({ringnumber:mRing})]||null;
     }
     // Fallback: ringnumberfather/mother direkt suchen
-    if(!fatherid && p.ringnumberfather) fatherid = uuidMap[normRing(p.ringnumberfather)]||null;
-    if(!motherid && p.ringnumbermother) motherid = uuidMap[normRing(p.ringnumbermother)]||null;
+    if(!fatherid && p.ringnumberfather) fatherid = uuidMap[ringKey({ringnumber:p.ringnumberfather})]||null;
+    if(!motherid && p.ringnumbermother) motherid = uuidMap[ringKey({ringnumber:p.ringnumbermother})]||null;
 
     // Zeile aufbauen (nur gefüllte Felder)
     const row = {};
     const setIf = (key,val) => { if(val!==null&&val!==undefined&&val!=='') row[key]=val; };
-    setIf('ringnumber',     p.ringnumber);
+    setIf('ringnumber',     canonicalizeRingnumber(p.ringnumber));
     setIf('name',           p.name);
     setIf('date_year',      p.date_year ? Number(p.date_year) : null);
     setIf('gender',         p.gender);
@@ -2016,7 +2095,7 @@ async function executeScanSave(){
     setIf('strain',         p.strain);
     setIf('breeder',        p.breeder);
     setIf('owner',          p.owner);
-    setIf('countrycode',    p.countrycode);
+    setIf('countrycode',    normCountry(p.countrycode) || p.countrycode);
     setIf('associationno',  p.associationno);
     setIf('ringnumberfather',p.ringnumberfather);
     setIf('ringnumbermother',p.ringnumbermother);
@@ -2029,7 +2108,7 @@ async function executeScanSave(){
         const newId = crypto.randomUUID();
         row.pigeonid=newId; row.deleted=false; row.instock=true;
         await apiPost('pigeons', row);
-        uuidMap[normRing(p.ringnumber)] = newId;
+        uuidMap[ringKey(p)] = newId;
       } else if(act==='update'){
         const m = SCAN.matches[k];
         const updates={};
@@ -2037,7 +2116,7 @@ async function executeScanSave(){
           if(row[f]!==undefined && String(row[f])!==String(m[f]||'')) updates[f]=row[f];
         });
         if(Object.keys(updates).length) await apiPatch('pigeons',m.pigeonid,updates);
-        uuidMap[normRing(p.ringnumber)] = m.pigeonid;
+        uuidMap[ringKey(p)] = m.pigeonid;
       }
     } catch(e){ console.warn(`Fehler bei ${p.ringnumber}:`, e.message); }
   }
@@ -2047,7 +2126,7 @@ async function executeScanSave(){
   const probandRing = SCAN.pigeons['proband']?.ringnumber;
   scanReset();
   if(probandRing){
-    const found = S.pigeons.find(p=>normRing(p.ringnumber)===normRing(probandRing));
+    const found = S.pigeons.find(p=>ringKey(p)===ringKey({ringnumber:probandRing}));
     if(found){ showPedigree(found.pigeonid); return; }
   }
   showTab('stammbaum');
@@ -2153,12 +2232,25 @@ async function submitNeu(e){
   const fd=new FormData(e.target);
   const row={};
   for(const [k,v] of fd.entries()){ if(v!=='') row[k]=v; }
+  if(row.ringnumber) row.ringnumber = canonicalizeRingnumber(row.ringnumber);
+  if(row.countrycode) row.countrycode = normCountry(row.countrycode)||row.countrycode;
   if(!row.pigeonid) row.pigeonid=crypto.randomUUID();
   if(row.date_year) row.date_year=Number(row.date_year);
   row.deleted=false; row.instock=true;
   if(row.ontrip) row.ontrip=(row.ontrip==='true');
   if(!row.pigeonstateid) delete row.pigeonstateid;
   const msg=document.getElementById('form-msg');
+  // Duplikat-Check: existiert bereits eine Taube mit derselben Ringnummer
+  // (länderkürzel-alias- und führende-Nullen-tolerant)?
+  const dup = findInDb(row);
+  if(dup){
+    const proceed = confirm(
+      `⚠️ Es gibt bereits eine Taube mit dieser Ringnummer in der Datenbank:\n` +
+      `${dup.ringnumber}${dup.name?' ('+dup.name+')':''}\n\n` +
+      `Trotzdem als NEUE, separate Taube anlegen?`
+    );
+    if(!proceed) return;
+  }
   msg.style.display='block';
   msg.className='form-msg';
   msg.textContent='Speichern…';
