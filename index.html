@@ -1101,7 +1101,7 @@ function renderDetailEdit(p){
             <option value="true"  ${p.ontrip===true?'selected':''}>Ja — Reisetaube ✈</option>
           </select>
         </div>
-        <div class="form-field" style="grid-column:1/-1"><label>Info</label><input id="e_info" value="${fv(p,'info')}"></div>
+        <div class="form-field" style="grid-column:1/-1"><label>Info</label><textarea id="e_info" rows="3" style="width:100%;resize:vertical">${fv(p,'info')}</textarea></div>
         <div class="form-field" style="grid-column:1/-1"><label>Interne Info</label><input id="e_internalinfo" value="${fv(p,'internalinfo')}"></div>
       </div>
       <div class="section-label">Eltern</div>
@@ -1821,7 +1821,8 @@ function renderScanResult(){
     if(m && act==='update'){
       const FLDS=[{k:'name',l:'Name'},{k:'color',l:'Farbe'},{k:'race',l:'Rasse'},
                   {k:'strain',l:'Linie'},{k:'breeder',l:'Züchter'},
-                  {k:'ringnumberfather',l:'Vater'},{k:'ringnumbermother',l:'Mutter'}];
+                  {k:'ringnumberfather',l:'Vater'},{k:'ringnumbermother',l:'Mutter'},
+                  {k:'info',l:'Info'}];
       const diffs=FLDS.filter(f=>p[f.k]&&String(p[f.k])!==String(m[f.k]||''));
       diffHtml = diffs.length
         ? `<div style="margin-top:5px;font-size:11px;line-height:1.6">`+
@@ -1838,6 +1839,7 @@ function renderScanResult(){
         ${p.name?`<div style="font-size:12px;color:var(--text);margin-top:1px">${escH(p.name)}</div>`:''}
         <div style="font-size:11px;color:var(--text3);margin-top:1px">${[sx,p.date_year,p.color,p.race,p.strain].filter(Boolean).join(' · ')}</div>
         ${p.breeder?`<div style="font-size:11px;color:var(--text3)">Z: ${escH(p.breeder)}</div>`:''}
+        ${p.info?`<div style="font-size:11px;color:var(--text3);margin-top:3px;max-width:380px;white-space:pre-wrap">📝 ${escH(p.info.length>180?p.info.slice(0,180)+'…':p.info)}</div>`:''}
         ${diffHtml}
       </td>
       <td style="padding:8px 10px;vertical-align:top">${badge}</td>
@@ -1916,6 +1918,7 @@ function normalizePigeonData(d){
     associationno:    d.associationno||d.verband||null,
     ringnumberfather: d.ringnumberfather||d.father_ring||d.father?.ringnumber||null,
     ringnumbermother: d.ringnumbermother||d.mother_ring||d.mother?.ringnumber||null,
+    info:             d.info||d.notes||d.notizen||d._raw_info||null,
   };
 }
 
@@ -2017,6 +2020,7 @@ async function executeScanSave(){
     setIf('associationno',  p.associationno);
     setIf('ringnumberfather',p.ringnumberfather);
     setIf('ringnumbermother',p.ringnumbermother);
+    setIf('info',            p.info);
     if(fatherid) row.fatherid = fatherid;
     if(motherid) row.motherid = motherid;
 
@@ -2111,6 +2115,11 @@ function renderNeu(){
           <label>Züchter</label>
           <input name="breeder" list="neu-dl-breeders" placeholder="Name des Züchters" autocomplete="off">
           <datalist id="neu-dl-breeders">${[...new Set(S.pigeons.map(p=>p.breeder).filter(Boolean))].sort().map(b=>`<option value="${escH(b)}">`).join('')}</datalist>
+        </div>
+        <div class="form-field">
+          <label>Besitzer</label>
+          <input name="owner" list="neu-dl-owners" placeholder="Name des Besitzers" autocomplete="off">
+          <datalist id="neu-dl-owners">${[...new Set(S.pigeons.map(p=>p.owner).filter(Boolean))].sort().map(o=>`<option value="${escH(o)}">`).join('')}</datalist>
         </div>
         <div class="form-field">
           <label>Status</label>
