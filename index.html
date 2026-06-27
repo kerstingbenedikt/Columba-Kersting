@@ -467,6 +467,11 @@ async function apiPatch(table, id, body){
   if(!r.ok){ const t=await r.text(); throw new Error(t); }
   return r.json();
 }
+async function apiDelete(table, id){
+  const r = await fetch(SUPA_URL+'/'+table+'?pigeonid=eq.'+id,{method:'DELETE',headers:H()});
+  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  return true;
+}
 
 function updateHeaderStats(){
   const instock = S.pigeons.filter(p=>p.instock).length;
@@ -1123,11 +1128,30 @@ function renderDetailEdit(p){
           </div>
         </div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:20px">
-        <button class="btn" onclick="saveEdit('${p.pigeonid}')">💾 Speichern</button>
-        <button class="btn btn-outline" onclick="cancelEdit('${p.pigeonid}')">Abbrechen</button>
+      <div style="display:flex;gap:8px;margin-top:20px;justify-content:space-between">
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="saveEdit('${p.pigeonid}')">💾 Speichern</button>
+          <button class="btn btn-outline" onclick="cancelEdit('${p.pigeonid}')">Abbrechen</button>
+        </div>
+        <button class="btn btn-outline" style="color:#d9534f;border-color:#d9534f" onclick="deletePigeon('${p.pigeonid}')">🗑 Taube löschen</button>
       </div>
     </div>`;
+}
+
+async function deletePigeon(id){
+  const p = findById(id);
+  if(!p) return;
+  const label = (p.ringnumber||p.pigeonid) + (p.name?' · '+p.name:'');
+  if(!confirm(`Taube "${label}" wirklich löschen?\n\nSie wird aus der Liste entfernt (Soft-Delete). Verknüpfungen als Vater/Mutter anderer Tauben bleiben über die Ringnummer-Textfelder erhalten, falls vorhanden.`)) return;
+  try {
+    await apiPatch('pigeons', id, {deleted:true, instock:false});
+    S.pigeons = S.pigeons.filter(x=>x.pigeonid!==id);
+    if(S.selected && S.selected.pigeonid===id) S.selected=null;
+    applyFilter();
+    render();
+  } catch(e){
+    alert('Fehler beim Löschen: '+e.message);
+  }
 }
 
 function cancelEdit(id){
@@ -1741,12 +1765,12 @@ function fixGenderSlotMismatches(){
 
 let SCAN = {
   step:'upload', imageData:null, imagePreview:null, imageMediaType:'image/jpeg',
-  pigeons:{}, matches:{}, actions:{}, rawResponse:null
+  pigeons:{}, matches:{}, actions:{}, rawResponse:null, expandedKey:null
 };
 
 function scanReset(){
   SCAN={step:'upload',imageData:null,imagePreview:null,imageMediaType:'image/jpeg',
-        pigeons:{},matches:{},actions:{},rawResponse:null};
+        pigeons:{},matches:{},actions:{},rawResponse:null,expandedKey:null};
 }
 
 function renderScan(){
@@ -1815,6 +1839,69 @@ function findInDb(ringnumber){
   if(!ringnumber) return null;
   const n = normRing(ringnumber);
   return S.pigeons.find(x => normRing(x.ringnumber)===n || normRing(x.ringnumberold||'')===n) || null;
+}
+
+function toggleScanEdit(k){ SCAN.expandedKey = (SCAN.expandedKey===k) ? null : k; render(); }
+
+function updateScanField(k, field, value){
+  if(!SCAN.pigeons[k]) return;
+  SCAN.pigeons[k][field] = value;
+  if(field==='ringnumber'){
+    // Bei geänderter Ringnummer DB-Treffer neu bestimmen
+    SCAN.matches[k] = findInDb(value);
+    if(SCAN.actions[k]!=='skip') SCAN.actions[k] = SCAN.matches[k] ? 'update' : 'new';
+  }
+  if(field==='gender'){
+    // Manuelle Korrektur entkräftet die Mismatch-Warnung
+    delete SCAN.pigeons[k]._genderMismatch;
+  }
+}
+
+function renderScanEditPanel(k, p){
+  const colors  = [...new Set(S.pigeons.map(x=>x.color).filter(Boolean))].sort();
+  const races   = [...new Set(S.pigeons.map(x=>x.race).filter(Boolean))].sort();
+  const strains = [...new Set(S.pigeons.map(x=>x.strain).filter(Boolean))].sort();
+  const breeders= [...new Set(S.pigeons.map(x=>x.breeder).filter(Boolean))].sort();
+
+  const txt = (label, field, type='text') => `
+    <div class="form-field">
+      <label>${escH(label)}</label>
+      <input type="${type}" value="${escH(p[field]!=null?p[field]:'')}"
+        oninput="updateScanField('${k}','${field}',this.value)">
+    </div>`;
+  const sel = (label, field, opts) => `
+    <div class="form-field">
+      <label>${escH(label)}</label>
+      <input value="${escH(p[field]!=null?p[field]:'')}" list="scanedit-${k}-${field}" autocomplete="off"
+        oninput="updateScanField('${k}','${field}',this.value)">
+      <datalist id="scanedit-${k}-${field}">${opts.map(o=>`<option value="${escH(o)}">`).join('')}</datalist>
+    </div>`;
+
+  return `<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Korrigiere hier die von der KI erkannten Felder dieser einen Taube — die Änderung gilt nur lokal, bis du auf "Tauben speichern" klickst.</div>
+    <div class="scan-result-grid">
+      ${txt('Ringnummer','ringnumber')}
+      ${txt('Name','name')}
+      ${txt('Jahrgang','date_year','number')}
+      <div class="form-field">
+        <label>Geschlecht</label>
+        <select onchange="updateScanField('${k}','gender',this.value)">
+          <option value="" ${!p.gender?'selected':''}>—</option>
+          <option value="M" ${p.gender==='M'?'selected':''}>♂ Männlich</option>
+          <option value="F" ${p.gender==='F'?'selected':''}>♀ Weiblich</option>
+        </select>
+      </div>
+      ${sel('Farbe','color',colors)}
+      ${sel('Rasse','race',races)}
+      ${sel('Linie / Stamm','strain',strains)}
+      ${sel('Züchter','breeder',breeders)}
+      ${txt('Verbandsnr.','associationno')}
+      ${txt('Land','countrycode')}
+    </div>
+    <div class="form-field" style="margin-top:8px">
+      <label>Info</label>
+      <textarea rows="3" style="width:100%;resize:vertical" oninput="updateScanField('${k}','info',this.value)">${escH(p.info||'')}</textarea>
+    </div>
+    <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="toggleScanEdit('${k}')">✓ Fertig</button>`;
 }
 
 function renderScanResult(){
@@ -1891,8 +1978,11 @@ function renderScanResult(){
         ${diffHtml}
       </td>
       <td style="padding:8px 10px;vertical-align:top">${badge}</td>
-      <td style="padding:8px 10px;vertical-align:top">${actSel}</td>
-    </tr>`;
+      <td style="padding:8px 10px;vertical-align:top">
+        ${actSel}
+        <button class="btn btn-outline btn-sm" style="margin-top:6px;width:100%" onclick="toggleScanEdit('${k}')">${SCAN.expandedKey===k?'▲ Schließen':'✏️ Bearbeiten'}</button>
+      </td>
+    </tr>${SCAN.expandedKey===k ? `<tr><td colspan="4" style="background:var(--bg3);padding:14px 16px">${renderScanEditPanel(k,p)}</td></tr>` : ''}`;
   }).join('');
 
   const toSave = keys.filter(k=>(SCAN.actions[k]??'x')!=='skip').length;
