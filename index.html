@@ -12,7 +12,7 @@
   --green:#5B8659;--green2:#4a6e48;--green3:#3d5c3b;
   --text:#E8EAF0;--text2:#9BA3AF;--text3:#6B7280;
   --border:#2A3347;--border2:#3A4560;
-  --blue:#4A90D9;--purple:#a855f7;--orange:#e8893a;
+  --blue:#4A90D9;--purple:#a855f7;--orange:#e8893a;--amber:#d4a843;
   --radius:10px;--radius-sm:6px;
 }
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh}
@@ -215,6 +215,7 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
   <button onclick="showTab('paarung')">💑 Paarungscheck</button>
   <button onclick="showTab('neu')">＋ Neue Taube</button>
   <button onclick="showTab('scan')">📷 Scan</button>
+  <button onclick="showTab('import')">📥 Import</button>
   <button onclick="showTab('nachkommen')">🐣 Nachkommen</button>
   <button onclick="showTab('statistik')">📊 Statistik</button>
 </nav>
@@ -849,6 +850,27 @@ function exportPDF(){
 .diff-old{color:var(--text3);text-decoration:line-through;margin-right:6px;font-size:12px}
 .scan-error{background:rgba(192,80,77,.12);border:1px solid rgba(192,80,77,.3);color:#e07070;border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;margin:12px 0}
 
+
+/* ── IMPORT-MODUL ─────────────────────────────────────────────── */
+.imp-drop{border:2px dashed var(--border2);border-radius:var(--radius);padding:36px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--bg3);position:relative;overflow:hidden}
+.imp-drop:hover,.imp-drop.drag-over{border-color:var(--green);background:var(--bg4)}
+.imp-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.imp-table-wrap{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--border);max-height:340px;overflow-y:auto}
+.imp-table{width:100%;border-collapse:collapse;font-size:12px}
+.imp-table th{background:var(--bg3);color:var(--text3);font-weight:500;padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:2}
+.imp-table td{padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle;white-space:nowrap}
+.imp-table tr:last-child td{border-bottom:none}
+.imp-badge-new{background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25);border-radius:20px;padding:1px 8px;font-size:11px;white-space:nowrap}
+.imp-badge-dup{background:rgba(212,168,67,.12);color:var(--amber);border:1px solid rgba(212,168,67,.3);border-radius:20px;padding:1px 8px;font-size:11px;white-space:nowrap}
+.imp-badge-err{background:rgba(192,80,77,.12);color:#e07070;border:1px solid rgba(192,80,77,.3);border-radius:20px;padding:1px 8px;font-size:11px;white-space:nowrap}
+.imp-badge-ok{background:rgba(91,134,89,.15);color:var(--green);border:1px solid rgba(91,134,89,.3);border-radius:20px;padding:1px 8px;font-size:11px;white-space:nowrap}
+.imp-progress{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin:8px 0}
+.imp-progress-bar{height:100%;background:var(--green);border-radius:3px;transition:width .3s}
+.imp-col-map{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:14px}
+.imp-col-map label{font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
+.imp-col-map select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 8px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer}
+.imp-col-map select:focus{border-color:var(--green)}
+
 </style></head><body>
 <h1>🕊 Tauben-Liste</h1>
 <div class="meta">${today} &nbsp;·&nbsp; ${rows.length} Tauben${filterInfo?' &nbsp;·&nbsp; Filter: '+filterInfo:''}</div>
@@ -1035,7 +1057,7 @@ function sortBy(col){ S.sortCol===col ? S.sortDir*=-1 : (S.sortCol=col,S.sortDir
 // ── Navigation ─────────────────────────────────────────────────
 function showTab(t){
   S.tab=t; S.selected=null;
-  document.querySelectorAll('nav button').forEach((b,i)=>b.classList.toggle('active',['tauben','stammbaum','paarung','neu','scan','nachkommen','statistik'][i]===t));
+  document.querySelectorAll('nav button').forEach((b,i)=>b.classList.toggle('active',['tauben','stammbaum','paarung','neu','scan','import','nachkommen','statistik'][i]===t));
   render();
 }
 function selectPigeon(id){ S.selected=findById(id); S.tab='tauben'; document.querySelectorAll('nav button').forEach((b,i)=>b.classList.toggle('active',i===0)); render(); window.scrollTo(0,0); }
@@ -1051,6 +1073,7 @@ function render(){
   else if(S.tab==='paarung')    m.innerHTML=renderPaarung();
   else if(S.tab==='neu')        m.innerHTML=renderNeu();
   else if(S.tab==='scan')       m.innerHTML=renderScan();
+  else if(S.tab==='import')     m.innerHTML=renderImport();
   else                          m.innerHTML=renderStats();
   bindAutocomplete();
   bindPedSearch();
@@ -2789,6 +2812,476 @@ async function cleanupRingnumbers(){
   applyFilter();
   render();
   alert(`✅ ${ok} Taube(n) bereinigt.${fail?` ⚠️ ${fail} fehlgeschlagen (siehe Konsole).`:''}`);
+}
+
+
+
+// ── IMPORT-MODUL ─────────────────────────────────────────────────
+// Spalten-Felder die wir kennen und importieren
+const IMP_FIELDS = [
+  {key:'ringnumber',   label:'Ringnummer'},
+  {key:'date_year',    label:'Jahrgang'},
+  {key:'associationno',label:'Vereinsnr.'},
+  {key:'endnumber',    label:'Endnummer'},
+  {key:'countrycode',  label:'Länderkennz.'},
+  {key:'name',         label:'Name'},
+  {key:'color',        label:'Farbe'},
+  {key:'gender',       label:'Geschlecht'},
+  {key:'strain',       label:'Linie'},
+  {key:'breeder',      label:'Züchter'},
+  {key:'owner',        label:'Besitzer'},
+  {key:'ringnumberfather', label:'Vater-Ringnr.'},
+  {key:'ringnumbermother', label:'Mutter-Ringnr.'},
+  {key:'info',         label:'Info'},
+  {key:'_ignore',      label:'— ignorieren —'},
+];
+
+// Auto-Mapping: Spaltennamen → Felder
+const IMP_AUTO = {
+  'vereinnummer':'associationno','vereinsnummer':'associationno','verband':'associationno',
+  'jahrgang':'date_year','year':'date_year','jg':'date_year',
+  'endnummer':'endnumber','endnr':'endnumber','nr':'endnumber','laufnummer':'endnumber',
+  'farbe':'color','farbe2':'color','color':'color','colour':'color',
+  'geschlecht':'gender','sex':'gender','gender':'gender',
+  'name':'name','bezeichnung':'name','kurzname':'name',
+  'linie':'strain','linien':'strain','stamm':'strain','strain':'strain',
+  'züchter':'breeder','zuchter':'breeder','breeder':'breeder',
+  'besitzer':'owner','owner':'owner','eigentümer':'owner',
+  'vater':'ringnumberfather','father':'ringnumberfather','ringnummervater':'ringnumberfather',
+  'mutter':'ringnumbermother','mother':'ringnumbermother','ringnummermutter':'ringnumbermother',
+  'info':'info','notiz':'info','notizen':'info','bemerkung':'info',
+  'land':'countrycode','länderkennz':'countrycode','country':'countrycode',
+};
+
+let IMP = {
+  step: 'upload',   // upload | map | preview | importing | done
+  raw: [],          // parsed CSV rows as objects
+  headers: [],      // original column headers
+  colMap: {},       // header → IMP_FIELDS.key
+  rows: [],         // processed rows ready for import
+  stats: { new:0, dup:0, err:0, done:0 },
+  log: [],
+};
+
+function impReset(){ IMP={step:'upload',raw:[],headers:[],colMap:{},rows:[],stats:{new:0,dup:0,err:0,done:0},log:[]}; }
+
+function renderImport(){
+  if(IMP.step==='upload')    return renderImpUpload();
+  if(IMP.step==='map')       return renderImpMap();
+  if(IMP.step==='preview')   return renderImpPreview();
+  if(IMP.step==='importing') return renderImpProgress();
+  if(IMP.step==='done')      return renderImpDone();
+  return renderImpUpload();
+}
+
+/* ── Upload ── */
+function renderImpUpload(){
+  return `<div class="card">
+    <div class="card-title serif" style="font-size:18px">📥 Tauben-Import</div>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:18px">
+      Importiere Tauben aus einer Excel- oder CSV-Datei. Die Spalten werden automatisch erkannt.
+      Duplikate (gleiche Ringnummer) werden übersprungen oder zusammengeführt.
+    </p>
+    <div class="imp-drop" id="imp-drop"
+      ondragover="event.preventDefault();this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="event.preventDefault();this.classList.remove('drag-over');handleImpFile(event.dataTransfer.files[0])">
+      <input type="file" accept=".csv,.xlsx,.xls,.tsv,.txt" onchange="handleImpFile(this.files[0])">
+      <div style="font-size:40px;margin-bottom:10px">📊</div>
+      <div style="font-size:15px;color:var(--text2);font-weight:500;margin-bottom:4px">Excel- oder CSV-Datei hochladen</div>
+      <div style="font-size:12px;color:var(--text3)">.xlsx · .xls · .csv · .tsv · max. 10 MB</div>
+    </div>
+    <div style="margin-top:14px;background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;font-size:12px;color:var(--text3)">
+      <strong style="color:var(--text2)">Erwartete Spalten (flexibel):</strong>
+      Vereinsnr. · Jahrgang · Endnummer · Farbe · Geschlecht · Name · Linie · Vater · Mutter · Info
+      <br>Die Spalten können in beliebiger Reihenfolge stehen — du kannst das Mapping im nächsten Schritt anpassen.
+    </div>
+  </div>`;
+}
+
+/* ── Datei verarbeiten ── */
+async function handleImpFile(file){
+  if(!file) return;
+  if(file.size > 10*1024*1024){ alert('Datei zu groß (max. 10 MB)'); return; }
+
+  const name = file.name.toLowerCase();
+  try {
+    if(name.endsWith('.xlsx') || name.endsWith('.xls')){
+      await parseExcel(file);
+    } else {
+      await parseCsv(file);
+    }
+  } catch(e){
+    alert('Fehler beim Lesen der Datei: '+e.message);
+  }
+}
+
+/* ── CSV Parser ── */
+async function parseCsv(file){
+  const text = await file.text();
+  // Trennzeichen erkennen: Tab > Semikolon > Komma
+  const firstLine = text.split('\n')[0]||'';
+  const sep = firstLine.includes('\t') ? '\t' : firstLine.includes(';') ? ';' : ',';
+
+  const lines = text.split('\n').map(l=>l.replace(/\r$/,''));
+  // Headerzeile finden (erste Zeile mit >= 3 nicht-leeren Spalten)
+  let headerIdx = 0;
+  for(let i=0;i<Math.min(5,lines.length);i++){
+    const cols = lines[i].split(sep).filter(x=>x.trim());
+    if(cols.length>=3){ headerIdx=i; break; }
+  }
+  const headers = lines[headerIdx].split(sep).map(h=>h.trim().replace(/^"|"$/g,''));
+  const rows = [];
+  for(let i=headerIdx+1;i<lines.length;i++){
+    const line = lines[i].trim();
+    if(!line) continue;
+    const vals = line.split(sep).map(v=>v.trim().replace(/^"|"$/g,''));
+    const row = {};
+    headers.forEach((h,j)=>{ row[h] = vals[j]||''; });
+    rows.push(row);
+  }
+  IMP.headers = headers;
+  IMP.raw = rows;
+  autoMapColumns();
+  IMP.step = 'map';
+  render();
+}
+
+/* ── Excel Parser (SheetJS via CDN) ── */
+async function parseExcel(file){
+  // Lade SheetJS dynamisch
+  if(!window.XLSX){
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload=res; s.onerror=rej;
+      document.head.appendChild(s);
+    });
+  }
+  const buf = await file.arrayBuffer();
+  const wb  = XLSX.read(buf, {type:'array'});
+  const ws  = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(ws, {defval:'', raw:false});
+  if(!raw.length){ alert('Keine Daten in der Datei gefunden.'); return; }
+  IMP.headers = Object.keys(raw[0]);
+  IMP.raw = raw.map(r=>{ const o={}; IMP.headers.forEach(h=>o[h]=String(r[h]||'').trim()); return o; });
+  autoMapColumns();
+  IMP.step = 'map';
+  render();
+}
+
+/* ── Auto-Mapping ── */
+function autoMapColumns(){
+  IMP.colMap = {};
+  IMP.headers.forEach(h => {
+    const key = h.toLowerCase().trim()
+      .replace(/[äÄ]/g,'a').replace(/[öÖ]/g,'o').replace(/[üÜ]/g,'u').replace(/[^a-z0-9]/g,'');
+    IMP.colMap[h] = IMP_AUTO[key] || '_ignore';
+  });
+}
+
+/* ── Mapping UI ── */
+function renderImpMap(){
+  const opts = IMP_FIELDS.map(f=>`<option value="${f.key}">${f.label}</option>`).join('');
+  const colSelects = IMP.headers.map(h=>`
+    <div>
+      <label>${escH(h)}</label>
+      <select onchange="IMP.colMap['${escH(h)}']=this.value">
+        ${IMP_FIELDS.map(f=>`<option value="${f.key}" ${IMP.colMap[h]===f.key?'selected':''}>${f.label}</option>`).join('')}
+      </select>
+    </div>`).join('');
+
+  const preview = IMP.raw.slice(0,3).map(r=>`
+    <tr>${IMP.headers.map(h=>`<td>${escH(String(r[h]||'').substring(0,20))}</td>`).join('')}</tr>`).join('');
+
+  return `<div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="card-title serif" style="font-size:18px;margin:0">📥 Spalten zuordnen</div>
+      <button class="btn btn-outline btn-sm" onclick="impReset();render()">🔄 Neue Datei</button>
+    </div>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:14px">
+      ${IMP.raw.length} Zeilen erkannt · ${IMP.headers.length} Spalten · Bitte Zuordnung prüfen:
+    </p>
+    <div class="imp-col-map">${colSelects}</div>
+    <div style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Vorschau (erste 3 Zeilen)</div>
+    <div class="imp-table-wrap" style="max-height:160px;margin-bottom:14px">
+      <table class="imp-table">
+        <thead><tr>${IMP.headers.map(h=>`<th>${escH(h)}</th>`).join('')}</tr></thead>
+        <tbody>${preview}</tbody>
+      </table>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="impReset();render()">Abbrechen</button>
+      <button class="btn" onclick="buildImpRows()">Weiter → Vorschau</button>
+    </div>
+  </div>`;
+}
+
+/* ── Zeilen aufbereiten ── */
+function buildImpRows(){
+  // Spaltenwerte nach Mapping lesen
+  function val(row, fieldKey){
+    const h = IMP.headers.find(h=>IMP.colMap[h]===fieldKey);
+    return h ? String(row[h]||'').trim() : '';
+  }
+
+  IMP.rows = IMP.raw.map((raw,idx) => {
+    const vereinsnr  = val(raw,'associationno');
+    const jahrgang   = val(raw,'date_year');
+    const endnr      = val(raw,'endnumber');
+    const land       = val(raw,'countrycode') || 'DE';
+    const color      = val(raw,'color');
+    const genderRaw  = val(raw,'gender');
+    const name       = val(raw,'name');
+    const strain     = val(raw,'strain');
+    const breeder    = val(raw,'breeder');
+    const owner      = val(raw,'owner');
+    const info       = val(raw,'info');
+    const fatherRaw  = val(raw,'ringnumberfather');
+    const motherRaw  = val(raw,'ringnumbermother');
+    let   ringRaw    = val(raw,'ringnumber');
+
+    // Ringnummer aus Komponenten bauen falls keine direkte Ringnummer-Spalte
+    if(!ringRaw && vereinsnr && jahrgang && endnr){
+      const cc = normCountryCode(land) || 'DE';
+      const yy = String(jahrgang).slice(-2).padStart(2,'0');
+      if(cc==='DE'){
+        ringRaw = `DE-${vereinsnr.padStart(5,'0')}-${yy}-${endnr}`;
+      } else {
+        ringRaw = `${cc}-${yy}-${endnr}`;
+      }
+    }
+
+    if(!ringRaw) return { _idx:idx, _status:'err', _msg:'Keine Ringnummer', raw };
+
+    const parsed = parseRingComponents(ringRaw) || {};
+    const ringnumber = parsed.ringnumber || fmtRingnumber(ringRaw) || ringRaw;
+
+    // Geschlecht normalisieren
+    let gender = null;
+    const gn = String(genderRaw).trim();
+    if(['m','1','männlich','tauber','täuber','cock','male'].includes(gn.toLowerCase())) gender='M';
+    else if(['f','2','w','weiblich','taubin','täubin','hen','female'].includes(gn.toLowerCase())) gender='F';
+    else if(gn==='2') gender='F';
+
+    // Duplikat prüfen
+    const dup = findInDb(ringnumber);
+
+    // Eltern-UUIDs nachschlagen
+    let fatherid=null, motherid=null, ringnumberfather=null, ringnumbermother=null;
+    if(fatherRaw){
+      const fp = findInDb(fatherRaw);
+      if(fp){ fatherid=fp.pigeonid; ringnumberfather=ring(fp); }
+      else ringnumberfather = fmtRingnumber(fatherRaw)||fatherRaw;
+    }
+    if(motherRaw){
+      const mp = findInDb(motherRaw);
+      if(mp){ motherid=mp.pigeonid; ringnumbermother=ring(mp); }
+      else ringnumbermother = fmtRingnumber(motherRaw)||motherRaw;
+    }
+
+    const row = {
+      ringnumber,
+      countrycode:   parsed.countrycode   || normCountryCode(land) || null,
+      associationno: parsed.associationno || vereinsnr || null,
+      date_year:     parsed.date_year     || (jahrgang?Number(jahrgang):null),
+      endnumber:     parsed.endnumber     || (endnr?Number(endnr):null),
+      gender, name:name||null, color:color||null, strain:strain||null,
+      breeder:breeder||null, owner:owner||null, info:info||null,
+      fatherid, motherid, ringnumberfather, ringnumbermother,
+      instock:true, deleted:false,
+    };
+    // Null-Felder entfernen
+    Object.keys(row).forEach(k=>{ if(row[k]===null||row[k]===''||row[k]===undefined) delete row[k]; });
+
+    return {
+      _idx: idx,
+      _status: dup ? 'dup' : 'new',
+      _dup: dup || null,
+      _msg: dup ? `Bereits vorhanden: ${ring(dup)}` : 'Neu',
+      _action: dup ? 'skip' : 'import',
+      row,
+    };
+  });
+
+  IMP.step = 'preview';
+  render();
+}
+
+/* ── Vorschau ── */
+function renderImpPreview(){
+  const total   = IMP.rows.length;
+  const newOnes = IMP.rows.filter(r=>r._status==='new').length;
+  const dups    = IMP.rows.filter(r=>r._status==='dup').length;
+  const errs    = IMP.rows.filter(r=>r._status==='err').length;
+  const toImport= IMP.rows.filter(r=>r._action==='import').length;
+
+  const rows = IMP.rows.map((r,i) => {
+    const badge = r._status==='new'
+      ? `<span class="imp-badge-new">🆕 Neu</span>`
+      : r._status==='dup'
+      ? `<span class="imp-badge-dup">⚠️ Duplikat</span>`
+      : `<span class="imp-badge-err">❌ Fehler</span>`;
+
+    const actSel = r._status==='err' ? '—' :
+      `<select onchange="IMP.rows[${i}]._action=this.value"
+         style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:3px 7px;font-size:11px;cursor:pointer">
+         ${r._status==='new'
+           ? `<option value="import" ${r._action==='import'?'selected':''}>✅ Importieren</option>
+              <option value="skip"   ${r._action==='skip'  ?'selected':''}>⏭ Überspringen</option>`
+           : `<option value="skip"   ${r._action==='skip'  ?'selected':''}>⏭ Überspringen</option>
+              <option value="update" ${r._action==='update'?'selected':''}>📋 Ergänzen</option>
+              <option value="import" ${r._action==='import'?'selected':''}>♻️ Ersetzen</option>`
+         }
+       </select>`;
+
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px;color:var(--green)">${escH(r.row?.ringnumber||'—')}</td>
+      <td>${escH(r.row?.name||'—')}</td>
+      <td>${escH(r.row?.date_year||'—')}</td>
+      <td>${escH(r.row?.color||'—')}</td>
+      <td>${r.row?.gender==='M'?'♂':r.row?.gender==='F'?'♀':'—'}</td>
+      <td>${escH(r.row?.strain||'—')}</td>
+      <td>${badge}</td>
+      <td>${actSel}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      <div class="card-title serif" style="font-size:18px;margin:0">📥 Import-Vorschau</div>
+      <button class="btn btn-outline btn-sm" onclick="IMP.step='map';render()">← Spalten anpassen</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
+        <strong style="color:#7ab3e0">${newOnes}</strong> <span style="color:var(--text2)">Neue Tauben</span>
+      </div>
+      <div style="background:rgba(212,168,67,.1);border:1px solid rgba(212,168,67,.25);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
+        <strong style="color:var(--amber)">${dups}</strong> <span style="color:var(--text2)">Duplikate</span>
+      </div>
+      ${errs?`<div style="background:rgba(192,80,77,.1);border:1px solid rgba(192,80,77,.25);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
+        <strong style="color:#e07070">${errs}</strong> <span style="color:var(--text2)">Fehler</span>
+      </div>`:''}
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
+        <strong style="color:var(--green)">${toImport}</strong> <span style="color:var(--text2)">werden importiert</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn btn-outline btn-sm" onclick="IMP.rows.forEach(r=>{if(r._status==='new')r._action='import';});render()">Alle Neuen ✅</button>
+      <button class="btn btn-outline btn-sm" onclick="IMP.rows.forEach(r=>{if(r._status==='dup')r._action='update';});render()">Alle Duplikate ergänzen 📋</button>
+      <button class="btn btn-outline btn-sm" onclick="IMP.rows.forEach(r=>r._action='skip');render()">Alle überspringen ⏭</button>
+    </div>
+    <div class="imp-table-wrap">
+      <table class="imp-table">
+        <thead><tr>
+          <th>Ringnummer</th><th>Name</th><th>Jg.</th><th>Farbe</th><th>G.</th><th>Linie</th><th>Status</th><th>Aktion</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="form-actions" style="margin-top:14px">
+      <button class="btn btn-outline" onclick="impReset();render()">Abbrechen</button>
+      <button class="btn" onclick="runImport()" ${toImport===0?'disabled':''}>
+        📥 Import starten (${toImport} Tauben)
+      </button>
+    </div>
+  </div>`;
+}
+
+/* ── Import-Fortschritt ── */
+function renderImpProgress(){
+  const total = IMP.rows.filter(r=>r._action!=='skip').length;
+  const pct   = total ? Math.round(IMP.stats.done/total*100) : 0;
+  return `<div class="card">
+    <div class="card-title serif" style="font-size:18px">📥 Import läuft…</div>
+    <div class="imp-progress"><div class="imp-progress-bar" style="width:${pct}%"></div></div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:8px">${IMP.stats.done} von ${total} · ${pct}%</div>
+    <div style="font-size:12px;color:var(--text3)" id="imp-cur-status">Verarbeite…</div>
+  </div>`;
+}
+
+/* ── Import ausführen ── */
+async function runImport(){
+  const toProcess = IMP.rows.filter(r=>r._action!=='skip' && r._status!=='err');
+  IMP.stats = {new:0, dup:0, err:0, done:0};
+  IMP.log   = [];
+  IMP.step  = 'importing';
+  render();
+
+  const setS = t => { const el=document.getElementById('imp-cur-status'); if(el) el.textContent=t; };
+  const updProg = () => {
+    const total = toProcess.length;
+    const pct = total ? Math.round(IMP.stats.done/total*100) : 0;
+    const bar = document.querySelector('.imp-progress-bar');
+    if(bar) bar.style.width=pct+'%';
+    const lbl = document.querySelector('.imp-progress + div');
+    if(lbl) lbl.textContent=`${IMP.stats.done} von ${total} · ${pct}%`;
+  };
+
+  for(const r of toProcess){
+    setS(`Verarbeite: ${r.row?.ringnumber||'?'}…`);
+    try {
+      if(r._action==='import' && r._status==='new'){
+        const newId = crypto.randomUUID();
+        await apiPost('pigeons', {...r.row, pigeonid:newId});
+        IMP.stats.new++;
+      } else if((r._action==='update'||r._action==='import') && r._dup){
+        // Nur Felder ergänzen die in DB leer sind (bei update) oder alle überschreiben (import)
+        const updates = {};
+        Object.keys(r.row).forEach(k=>{
+          if(['pigeonid','deleted'].includes(k)) return;
+          if(r._action==='update'){
+            // Nur setzen wenn DB-Feld leer
+            if(!r._dup[k] && r.row[k]) updates[k]=r.row[k];
+          } else {
+            // Alle überschreiben
+            if(r.row[k]) updates[k]=r.row[k];
+          }
+        });
+        if(Object.keys(updates).length) await apiPatch('pigeons', r._dup.pigeonid, updates);
+        IMP.stats.dup++;
+      }
+    } catch(e){
+      IMP.stats.err++;
+      IMP.log.push({ring:r.row?.ringnumber, err:e.message});
+    }
+    IMP.stats.done++;
+    updProg();
+  }
+
+  setS('Lade Datenbank neu…');
+  await loadData();
+  IMP.step = 'done';
+  render();
+}
+
+/* ── Ergebnis ── */
+function renderImpDone(){
+  return `<div class="card" style="text-align:center;padding:32px">
+    <div style="font-size:48px;margin-bottom:14px">✅</div>
+    <div class="serif" style="font-size:22px;margin-bottom:8px">Import abgeschlossen</div>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:16px 0">
+      <div style="background:rgba(91,134,89,.12);border:1px solid rgba(91,134,89,.3);border-radius:var(--radius-sm);padding:10px 20px">
+        <div style="font-size:24px;font-weight:600;color:var(--green)">${IMP.stats.new}</div>
+        <div style="font-size:12px;color:var(--text3)">Neu importiert</div>
+      </div>
+      <div style="background:rgba(212,168,67,.1);border:1px solid rgba(212,168,67,.25);border-radius:var(--radius-sm);padding:10px 20px">
+        <div style="font-size:24px;font-weight:600;color:var(--amber)">${IMP.stats.dup}</div>
+        <div style="font-size:12px;color:var(--text3)">Ergänzt/Aktualisiert</div>
+      </div>
+      ${IMP.stats.err?`<div style="background:rgba(192,80,77,.1);border:1px solid rgba(192,80,77,.25);border-radius:var(--radius-sm);padding:10px 20px">
+        <div style="font-size:24px;font-weight:600;color:#e07070">${IMP.stats.err}</div>
+        <div style="font-size:12px;color:var(--text3)">Fehler</div>
+      </div>`:''}
+    </div>
+    ${IMP.log.length?`<div style="text-align:left;background:var(--bg3);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:#e07070;margin:12px 0">
+      ${IMP.log.map(l=>`<div>${escH(l.ring||'?')}: ${escH(l.err)}</div>`).join('')}
+    </div>`:''}
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
+      <button class="btn btn-outline" onclick="impReset();render()">📥 Weiterer Import</button>
+      <button class="btn" onclick="showTab('tauben')">🐦 Zur Tauben-Liste</button>
+    </div>
+  </div>`;
 }
 
 
