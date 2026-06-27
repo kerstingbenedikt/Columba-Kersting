@@ -374,6 +374,7 @@ const S = {
   loading: true, error: null, _loadingMore: false,
   paarungM: null, paarungF: null, selectedNach: null,
   neuMode: 'full',
+  bulkMode: false, bulkSelected: new Set(), bulkField: 'gender', bulkValue: '1',
   columns: (() => {
     try {
       const saved = JSON.parse(localStorage.getItem('taubenCols')||'null');
@@ -541,6 +542,27 @@ const COLUMN_DEFS = [
     val:p=>p.owner||'', cell:p=>escH(p.owner||'—') },
 ];
 const COLUMN_BY_KEY = Object.fromEntries(COLUMN_DEFS.map(c=>[c.key,c]));
+
+// ── Massenbearbeitungs-Registry ──────────────────────────────────
+// type:'select'  -> feste Optionsliste (options() liefert [{v,l}])
+// type:'bool'    -> Ja/Nein
+// type:'text'    -> Freitext (optional mit Datalist)
+const BULK_FIELDS = [
+  { key:'gender', label:'Geschlecht', type:'select',
+    options:()=>[{v:'',l:'— leer —'},{v:'1',l:'♂ Täuber'},{v:'2',l:'♀ Täubin'}] },
+  { key:'pigeonstateid', label:'Status', type:'select',
+    options:()=>[{v:'',l:'— leer —'}].concat(S.pigeonStates.map(s=>({v:s.pigeonstateid,l:s.name}))) },
+  { key:'instock', label:'Im Bestand', type:'bool' },
+  { key:'ontrip',  label:'Reisetaube', type:'bool' },
+  { key:'sold',    label:'Verkauft',   type:'bool' },
+  { key:'died',    label:'Verstorben', type:'bool' },
+  { key:'color',   label:'Farbe',      type:'text', list:'dl-colors' },
+  { key:'strain',  label:'Linie / Stamm', type:'text', list:'dl-strains' },
+  { key:'breeder', label:'Züchter',    type:'text' },
+  { key:'owner',   label:'Besitzer',   type:'text' },
+];
+const BULK_FIELD_BY_KEY = Object.fromEntries(BULK_FIELDS.map(f=>[f.key,f]));
+
 
 function activeColumns(){
   return S.columns.map(k=>COLUMN_BY_KEY[k]).filter(Boolean);
@@ -752,6 +774,9 @@ function renderTableOnly() {
   // Pagination
   const pg = document.getElementById('pagination-wrap');
   if (pg) pg.innerHTML = totalPages > 1 ? buildPagination(totalPages) : '';
+
+  // Massenbearbeitung: gefilterte Anzahl + Auswahl-Status nachziehen
+  if (S.bulkMode) updateBulkSelectionUI();
 }
 
 
@@ -763,6 +788,133 @@ function resetTaubenFilter(){
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.value='all'; });
   const si=document.getElementById('tauben-search'); if(si) si.value='';
   applyFilter();
+}
+
+// ── MASSENBEARBEITUNG ────────────────────────────────────────────
+function toggleBulkMode(){
+  S.bulkMode=!S.bulkMode;
+  if(!S.bulkMode) S.bulkSelected.clear();
+  render();
+}
+
+function toggleBulkRow(id){
+  if(S.bulkSelected.has(id)) S.bulkSelected.delete(id); else S.bulkSelected.add(id);
+  renderTableOnly();
+  updateBulkSelectionUI();
+}
+
+function toggleBulkPage(checked){
+  const start=S.page*S.pageSize, end=start+S.pageSize;
+  S.filtered.slice(start,end).forEach(p=>{ checked ? S.bulkSelected.add(p.pigeonid) : S.bulkSelected.delete(p.pigeonid); });
+  renderTableOnly();
+  updateBulkSelectionUI();
+}
+
+function selectAllFiltered(){
+  S.filtered.forEach(p=>S.bulkSelected.add(p.pigeonid));
+  renderTableOnly();
+  updateBulkSelectionUI();
+}
+
+function clearBulkSelection(){
+  S.bulkSelected.clear();
+  renderTableOnly();
+  updateBulkSelectionUI();
+}
+
+function updateBulkSelectionUI(){
+  const c=document.getElementById('bulk-count'); if(c) c.textContent=S.bulkSelected.size;
+  const t=document.getElementById('bulk-total-filtered'); if(t) t.textContent=S.filtered.length;
+  const btn=document.getElementById('bulk-apply-btn'); if(btn) btn.disabled = S.bulkSelected.size===0;
+}
+
+function renderBulkValueInput(){
+  const f = BULK_FIELD_BY_KEY[S.bulkField] || BULK_FIELDS[0];
+  if(f.type==='select'){
+    return `<select id="bulk-value-input" onchange="S.bulkValue=this.value">
+      ${f.options().map(o=>`<option value="${escH(o.v)}" ${String(S.bulkValue)===String(o.v)?'selected':''}>${escH(o.l)}</option>`).join('')}
+    </select>`;
+  }
+  if(f.type==='bool'){
+    return `<select id="bulk-value-input" onchange="S.bulkValue=this.value">
+      <option value="true" ${S.bulkValue==='true'?'selected':''}>Ja</option>
+      <option value="false" ${S.bulkValue==='false'?'selected':''}>Nein</option>
+    </select>`;
+  }
+  // text
+  const listAttr = f.list ? ` list="${f.list}"` : '';
+  return `<input id="bulk-value-input" type="text" value="${escH(S.bulkValue||'')}" placeholder="Neuer Wert (leer = Feld löschen)…"${listAttr} oninput="S.bulkValue=this.value">`;
+}
+
+function bulkFieldChanged(key){
+  S.bulkField = key;
+  const f = BULK_FIELD_BY_KEY[key];
+  S.bulkValue = f.type==='bool' ? 'true' : f.type==='select' ? ((f.options()[0]||{}).v||'') : '';
+  const w=document.getElementById('bulk-value-wrap');
+  if(w) w.innerHTML = renderBulkValueInput();
+}
+
+function renderBulkBar(){
+  if(!S.bulkMode) return '';
+  const selCount = S.bulkSelected.size;
+  return `<div class="bulk-bar">
+    <div class="bulk-bar-row">
+      <strong id="bulk-count">${selCount}</strong>&nbsp;ausgewählt
+      <button class="btn btn-outline btn-sm" onclick="selectAllFiltered()">Alle <span id="bulk-total-filtered">${S.filtered.length}</span> gefilterten auswählen</button>
+      <button class="btn btn-outline btn-sm" onclick="clearBulkSelection()">Auswahl aufheben</button>
+      <span style="margin-left:auto;color:var(--text3);font-size:12px">🧩 Wert für alle ausgewählten Tauben setzen</span>
+    </div>
+    <div class="bulk-bar-row" style="margin-top:8px">
+      <select id="bulk-field-sel" onchange="bulkFieldChanged(this.value)">
+        ${BULK_FIELDS.map(f=>`<option value="${f.key}" ${f.key===S.bulkField?'selected':''}>${escH(f.label)}</option>`).join('')}
+      </select>
+      <span id="bulk-value-wrap">${renderBulkValueInput()}</span>
+      <button class="btn btn-sm" id="bulk-apply-btn" onclick="applyBulkEdit()" ${selCount===0?'disabled':''}>✓ Anwenden</button>
+    </div>
+    <div id="bulk-progress" style="display:none;margin-top:8px"></div>
+  </div>`;
+}
+
+async function applyBulkEdit(){
+  const ids=[...S.bulkSelected];
+  if(!ids.length) return;
+  const f = BULK_FIELD_BY_KEY[S.bulkField];
+  if(!f) return;
+
+  let value = S.bulkValue;
+  if(f.type==='bool') value = value==='true';
+  else if(value==='' || value===undefined) value = null;
+
+  let label;
+  if(f.type==='select'){ const opt=f.options().find(o=>String(o.v)===String(value)); label = opt ? opt.l : '— leer —'; }
+  else if(f.type==='bool'){ label = value ? 'Ja' : 'Nein'; }
+  else { label = value || '— leer —'; }
+
+  if(!confirm(`${ids.length} Taube(n) aktualisieren?\n\nFeld: ${f.label}\nNeuer Wert: ${label}\n\nDas kann nicht automatisch zurückgenommen werden.`)) return;
+
+  const applyBtn=document.getElementById('bulk-apply-btn'); if(applyBtn) applyBtn.disabled=true;
+  const prog=document.getElementById('bulk-progress');
+  if(prog){ prog.style.display='block'; prog.innerHTML=`<div class="imp-progress"><div class="imp-progress-bar" style="width:0%"></div></div><div style="font-size:12px;color:var(--text3)">0 / ${ids.length}</div>`; }
+
+  let done=0, err=0; const errMsgs=[];
+  for(const id of ids){
+    try{
+      await apiPatch('pigeons', id, {[f.key]: value});
+      const idx=S.pigeons.findIndex(p=>p.pigeonid===id);
+      if(idx!==-1) S.pigeons[idx][f.key]=value;
+    } catch(e){ err++; errMsgs.push(e.message); }
+    done++;
+    if(prog){
+      const pct=Math.round(done/ids.length*100);
+      const bar=prog.querySelector('.imp-progress-bar'); if(bar) bar.style.width=pct+'%';
+      const lbl=prog.querySelector('.imp-progress + div'); if(lbl) lbl.textContent=`${done} / ${ids.length}`;
+    }
+  }
+
+  S.bulkSelected.clear();
+  applyFilter();
+  const bar=document.getElementById('bulk-bar'); if(bar) bar.innerHTML=renderBulkBar();
+  alert(err ? `Fertig: ${done-err} aktualisiert, ${err} Fehler.` : `✅ ${done} Taube(n) aktualisiert.`);
 }
 
 function exportCSV(){
@@ -870,6 +1022,15 @@ function exportPDF(){
 .imp-col-map label{font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
 .imp-col-map select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 8px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer}
 .imp-col-map select:focus{border-color:var(--green)}
+
+/* ── MASSENBEARBEITUNG ────────────────────────────────────────── */
+.bulk-bar{background:var(--bg3);border:1px solid var(--green2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px}
+.bulk-bar-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
+.bulk-bar-row select,.bulk-bar-row input[type=text]{background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 9px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none}
+.bulk-bar-row select:focus,.bulk-bar-row input[type=text]:focus{border-color:var(--green)}
+th.bulk-th,td.bulk-td{width:30px;padding-left:10px!important;padding-right:0!important}
+tr.bulk-row-selected td{background:color-mix(in srgb,var(--green) 10%,var(--bg3))}
+
 
 </style></head><body>
 <h1>🕊 Tauben-Liste</h1>
@@ -1083,15 +1244,24 @@ function render(){
 // ── LISTE ──────────────────────────────────────────────────────
 function buildTableHTML(page, si){
   const cols = activeColumns();
+  const allOnPageSelected = S.bulkMode && page.length>0 && page.every(p=>S.bulkSelected.has(p.pigeonid));
+  const headCb = S.bulkMode ? `<th class="bulk-th"><input type="checkbox" id="bulk-select-all" ${allOnPageSelected?'checked':''} onclick="event.stopPropagation()" onchange="toggleBulkPage(this.checked)"></th>` : '';
   return `<table>
       <thead><tr>
+        ${headCb}
         ${cols.map(c=>c.sortKey
           ? `<th onclick="sortBy('${c.sortKey}')">${escH(c.label)}${si(c.sortKey)}</th>`
           : `<th>${escH(c.label)}</th>`).join('')}
       </tr></thead>
-      <tbody>${page.map(p=>`<tr onclick="selectPigeon('${p.pigeonid}')">
+      <tbody>${page.map(p=>{
+        const sel = S.bulkMode && S.bulkSelected.has(p.pigeonid);
+        const rowClick = S.bulkMode ? `toggleBulkRow('${p.pigeonid}')` : `selectPigeon('${p.pigeonid}')`;
+        const rowCb = S.bulkMode ? `<td class="bulk-td"><input type="checkbox" ${sel?'checked':''} onclick="event.stopPropagation()" onchange="toggleBulkRow('${p.pigeonid}')"></td>` : '';
+        return `<tr onclick="${rowClick}" class="${sel?'bulk-row-selected':''}">
+          ${rowCb}
           ${cols.map(c=>`<td>${(c.cell||(x=>escH(c.val(x))))(p)}</td>`).join('')}
-        </tr>`).join('')}
+        </tr>`;
+      }).join('')}
       </tbody>
     </table>`;
 }
@@ -1151,11 +1321,13 @@ function renderList(){
       </select>
       <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
         ${renderColumnPicker()}
+        <button class="btn ${S.bulkMode?'':'btn-outline'} btn-sm" onclick="toggleBulkMode()">${S.bulkMode?'✕ Massenbearbeitung beenden':'🧩 Massenbearbeitung'}</button>
         <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben in der DB einheitlich formatieren">🧹 Ringnummern bereinigen</button>
         <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">📥 CSV</button>
         <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">🖨 PDF-Liste</button>
       </div>
     </div>
+    <div id="bulk-bar">${renderBulkBar()}</div>
     <div id="table-wrap" class="table-wrap">${buildTableHTML(page, si)}</div>
     <div id="pagination-wrap">${totalPages>1?buildPagination(totalPages):''}</div>`;
 }
