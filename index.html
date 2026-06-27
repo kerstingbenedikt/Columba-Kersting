@@ -1139,10 +1139,10 @@ function renderDetailEdit(p){
         </div>
         <div class="form-field"><label>Land</label><input id="e_countrycode" value="${fv(p,'countrycode')}"></div>
         <div class="form-field"><label>Verbandsnr.</label><input id="e_associationno" value="${fv(p,'associationno')}"></div>
-        <div class="form-field"><label>Geburtstag</label><input id="e_birthday" value="${fv(p,'birthday')}"></div>
-        <div class="form-field"><label>Verstorben</label><input id="e_died" value="${fv(p,'died')}"></div>
-        <div class="form-field"><label>Gekauft</label><input id="e_bought" value="${fv(p,'bought')}"></div>
-        <div class="form-field"><label>Verkauft</label><input id="e_sold" value="${fv(p,'sold')}"></div>
+        <div class="form-field"><label>Geburtstag</label><input id="e_birthday" type="date" value="${fv(p,'birthday')}"></div>
+        <div class="form-field"><label>Verstorben</label><input id="e_died" type="date" value="${fv(p,'died')}"></div>
+        <div class="form-field"><label>Gekauft</label><input id="e_bought" type="date" value="${fv(p,'bought')}"></div>
+        <div class="form-field"><label>Verkauft</label><input id="e_sold" type="date" value="${fv(p,'sold')}"></div>
         <div class="form-field"><label>Im Bestand</label>
           <select id="e_instock">
             <option value="true" ${p.instock!==false?'selected':''}>Ja</option>
