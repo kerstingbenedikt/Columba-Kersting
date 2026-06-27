@@ -373,7 +373,55 @@ const S = {
 };
 
 // ── Feldhelfer ─────────────────────────────────────────────────
-const ring   = p => p.ringnumber || p.ringnumberold || p.pigeonid || '?';
+
+// Ringnummern einheitlich formatieren für die ANZEIGE (Übersicht, Listen, Pedigree).
+// Rührt die gespeicherten Rohdaten NICHT an — Suche/Matching arbeitet weiterhin
+// auf den unveränderten Originalfeldern.
+//
+// Deutsch (kein Länderkürzel ODER explizit "DE", 3 Zahlen-Segmente): Vereinsnr-Jahrgang-Endnummer
+//   -> "DE-" Präfix, Vereinsnr auf 5, Jahrgang auf 2, Endnummer auf 3 Stellen aufgefüllt
+// BE/NL/FR/... (mit Länderkürzel): nur laufende Nummer -> Länderkürzel-Jahrgang-Seriennr.
+//   -> Länderkürzel-Aliase vereinheitlicht (z.B. "B" -> "BE"), Jahrgang auf 2 Stellen, Rest unverändert
+const COUNTRY_ALIAS = { B:'BE', BEL:'BE', NED:'NL', GER:'DE', GERMANY:'DE', GE:'DE', DV:'DE' };
+
+function fmtRingnumber(raw){
+  let s = String(raw||'').trim();
+  if(!s) return '';
+  // Anhängende Geschlechts-Marker aus Stammbaum-Scans entfernen (z.B. "... 373 V" / "... 373 W")
+  s = s.replace(/[\s\/]+[VW]$/i, '').trim();
+  // Trenner vereinheitlichen
+  s = s.replace(/[\s_\/]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  if(!s) return '';
+
+  const m = s.match(/^([A-Za-z]{1,3})-?(.*)$/);
+  let country = '', rest = s;
+  if(m && m[1] && m[2]){ country = m[1].toUpperCase(); rest = m[2]; }
+  if(country) country = COUNTRY_ALIAS[country] || country;
+  if(!country) country = 'DE'; // bare Format ohne Länderkürzel = Deutschland
+
+  let segs = rest.split('-').filter(Boolean);
+  if(!segs.length) return `${country}-${rest}`;
+
+  if(country==='DE'){
+    if(segs.length===3){
+      // Vereinsnr/Jahrgang bleiben fest auf 5/2 Stellen, Endnummer OHNE führende Nullen
+      const endnr = segs[2].replace(/^0+(?=\d)/, '');
+      return `DE-${segs[0].padStart(5,'0')}-${segs[1].padStart(2,'0')}-${endnr}`;
+    }
+    return `DE-${segs.join('-')}`; // unbekannte Segmentanzahl, nur Präfix vereinheitlichen
+  }
+  // BE/NL/... : erstes Segment ist der Jahrgang -> 2-stellig auffüllen, Seriennr. unverändert
+  segs[0] = segs[0].padStart(2,'0');
+  return `${country}-${segs.join('-')}`;
+}
+
+function normCountryCode(raw){
+  const s = String(raw||'').trim().toUpperCase();
+  if(!s) return '';
+  return COUNTRY_ALIAS[s] || s;
+}
+
+const ring   = p => fmtRingnumber(p.ringnumber || p.ringnumberold) || p.pigeonid || '?';
 const name_  = p => p.name || '';
 const sex_   = p => { const g = String(p.gender||'').trim().toLowerCase(); if(['m','1'].includes(g))return'M'; if(['f','2','w'].includes(g))return'F'; return '?'; };
 function pigeonStateName(p){
@@ -957,6 +1005,7 @@ function renderList(){
         <option value="no"${S.racingFilter==='no'?' selected':''}>Keine Reisetauben</option>
       </select>
       <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben in der DB einheitlich formatieren">🧹 Ringnummern bereinigen</button>
         <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">📥 CSV</button>
         <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">🖨 PDF-Liste</button>
       </div>
@@ -1165,8 +1214,8 @@ async function saveEdit(id){
   const g=id=>document.getElementById(id);
   const val=id=>{const el=g(id);return el?el.value.trim():'';};
   const row={
-    ringnumber:     val('e_ringnumber'),
-    ringnumberold:  val('e_ringnumberold'),
+    ringnumber:     fmtRingnumber(val('e_ringnumber')) || val('e_ringnumber'),
+    ringnumberold:  fmtRingnumber(val('e_ringnumberold')) || val('e_ringnumberold'),
     name:           val('e_name'),
     date_year:      val('e_date_year')?Number(val('e_date_year')):null,
     gender:         val('e_gender')||null,
@@ -1175,7 +1224,7 @@ async function saveEdit(id){
     strain:         val('e_strain'),
     breeder:        val('e_breeder'),
     owner:          val('e_owner'),
-    countrycode:    val('e_countrycode'),
+    countrycode:    normCountryCode(val('e_countrycode')),
     associationno:  val('e_associationno'),
     birthday:       val('e_birthday')||null,
     died:           val('e_died')||null,
@@ -2100,6 +2149,14 @@ async function runScanAI(){
     fixGenderSlotMismatches();
     PED_KEYS.forEach(k => {
       const p = SCAN.pigeons[k];
+      if(!p) return;
+      if(p.ringnumber)       p.ringnumber       = fmtRingnumber(p.ringnumber) || p.ringnumber;
+      if(p.ringnumberfather) p.ringnumberfather = fmtRingnumber(p.ringnumberfather) || p.ringnumberfather;
+      if(p.ringnumbermother) p.ringnumbermother = fmtRingnumber(p.ringnumbermother) || p.ringnumbermother;
+      if(p.countrycode)      p.countrycode      = normCountryCode(p.countrycode);
+    });
+    PED_KEYS.forEach(k => {
+      const p = SCAN.pigeons[k];
       if(!p?.ringnumber) return;
       SCAN.matches[k] = findInDb(p.ringnumber);
       SCAN.actions[k] = p._genderMismatch ? 'skip' : (SCAN.matches[k] ? 'update' : 'new');
@@ -2146,7 +2203,7 @@ async function executeScanSave(){
     // Zeile aufbauen (nur gefüllte Felder)
     const row = {};
     const setIf = (key,val) => { if(val!==null&&val!==undefined&&val!=='') row[key]=val; };
-    setIf('ringnumber',     p.ringnumber);
+    setIf('ringnumber',     fmtRingnumber(p.ringnumber) || p.ringnumber);
     setIf('name',           p.name);
     setIf('date_year',      p.date_year ? Number(p.date_year) : null);
     setIf('gender',         p.gender);
@@ -2155,10 +2212,10 @@ async function executeScanSave(){
     setIf('strain',         p.strain);
     setIf('breeder',        p.breeder);
     setIf('owner',          p.owner);
-    setIf('countrycode',    p.countrycode);
+    setIf('countrycode',    normCountryCode(p.countrycode));
     setIf('associationno',  p.associationno);
-    setIf('ringnumberfather',p.ringnumberfather);
-    setIf('ringnumbermother',p.ringnumbermother);
+    setIf('ringnumberfather',fmtRingnumber(p.ringnumberfather) || p.ringnumberfather);
+    setIf('ringnumbermother',fmtRingnumber(p.ringnumbermother) || p.ringnumbermother);
     setIf('info',            p.info);
     if(fatherid) row.fatherid = fatherid;
     if(motherid) row.motherid = motherid;
@@ -2287,11 +2344,60 @@ function renderNeu(){
   </div>`;
 }
 
+async function cleanupRingnumbers(){
+  // Welche Tauben hätten nach Bereinigung eine andere ringnumber/ringnumberold?
+  const changes = [];
+  S.pigeons.forEach(p => {
+    const newRing = fmtRingnumber(p.ringnumber);
+    const newOld  = fmtRingnumber(p.ringnumberold);
+    const newFa   = fmtRingnumber(p.ringnumberfather);
+    const newMo   = fmtRingnumber(p.ringnumbermother);
+    const newCC   = normCountryCode(p.countrycode);
+    const updates = {};
+    if(newRing && newRing!==p.ringnumber) updates.ringnumber = newRing;
+    if(newOld  && newOld!==p.ringnumberold) updates.ringnumberold = newOld;
+    if(newFa   && newFa!==p.ringnumberfather) updates.ringnumberfather = newFa;
+    if(newMo   && newMo!==p.ringnumbermother) updates.ringnumbermother = newMo;
+    if(newCC   && newCC!==p.countrycode) updates.countrycode = newCC;
+    if(Object.keys(updates).length) changes.push({p, updates});
+  });
+
+  if(!changes.length){
+    alert('Alle Ringnummern sind bereits einheitlich formatiert — nichts zu tun.');
+    return;
+  }
+
+  const preview = changes.slice(0,8).map(c =>
+    `${c.p.ringnumber||'—'} → ${c.updates.ringnumber||c.p.ringnumber}`
+  ).join('\n') + (changes.length>8 ? `\n… und ${changes.length-8} weitere` : '');
+
+  if(!confirm(`${changes.length} Taube(n) werden in der Datenbank umformatiert:\n\n${preview}\n\nFortfahren?`)) return;
+
+  let ok=0, fail=0;
+  for(const c of changes){
+    try {
+      await apiPatch('pigeons', c.p.pigeonid, c.updates);
+      Object.assign(c.p, c.updates);
+      ok++;
+    } catch(e){
+      fail++;
+      console.error('Bereinigung fehlgeschlagen für', c.p.pigeonid, e.message);
+    }
+  }
+  applyFilter();
+  render();
+  alert(`✅ ${ok} Taube(n) bereinigt.${fail?` ⚠️ ${fail} fehlgeschlagen (siehe Konsole).`:''}`);
+}
+
 async function submitNeu(e){
   e.preventDefault();
   const fd=new FormData(e.target);
   const row={};
   for(const [k,v] of fd.entries()){ if(v!=='') row[k]=v; }
+  ['ringnumber','ringnumberold','ringnumberfather','ringnumbermother'].forEach(k=>{
+    if(row[k]) row[k] = fmtRingnumber(row[k]) || row[k];
+  });
+  if(row.countrycode) row.countrycode = normCountryCode(row.countrycode);
   if(!row.pigeonid) row.pigeonid=crypto.randomUUID();
   if(row.date_year) row.date_year=Number(row.date_year);
   row.deleted=false; row.instock=true;
