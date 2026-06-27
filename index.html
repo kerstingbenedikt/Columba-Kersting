@@ -360,6 +360,8 @@ async function startApp(){
   loadData();
 }
 
+const DEFAULT_COLUMNS = ['ringnumber','name','year','gender','color','strain','status','instock','father','mother','breeder','owner'];
+
 const S = {
   tab: 'tauben', pigeons: [], filtered: [],
   page: 0, pageSize: 50,
@@ -369,7 +371,15 @@ const S = {
   sortCol: 'ringnumber', sortDir: 1,
   selected: null, selectedPed: null,
   loading: true, error: null, _loadingMore: false,
-  paarungM: null, paarungF: null, selectedNach: null
+  paarungM: null, paarungF: null, selectedNach: null,
+  neuMode: 'full',
+  columns: (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('taubenCols')||'null');
+      if(Array.isArray(saved) && saved.length) return saved;
+    } catch(e){}
+    return [...DEFAULT_COLUMNS];
+  })()
 };
 
 // ── Feldhelfer ─────────────────────────────────────────────────
@@ -421,6 +431,37 @@ function normCountryCode(raw){
   return COUNTRY_ALIAS[s] || s;
 }
 
+// Zerlegt eine eingegebene Ringnummer in Vereinsnr./Jahrgang/Land/Endnummer,
+// damit diese bei der Schnellerfassung automatisch gesetzt werden können.
+function yearFromYY(yy){
+  const s = String(yy||'').trim();
+  const n = parseInt(s,10);
+  if(isNaN(n)) return null;
+  if(s.length>=4) return n;          // bereits 4-stellig: 2025, 2026 etc.
+  return n<=50 ? 2000+n : 1900+n;   // zweistellig: 25→2025, 26→2026
+}
+function parseRingComponents(raw){
+  const formatted = fmtRingnumber(raw);
+  if(!formatted) return null;
+  const segs = formatted.split('-');
+  if(segs.length<3) return null;
+  const country = segs[0];
+  if(country==='DE' && segs.length===4){
+    return {
+      ringnumber: formatted, countrycode: 'DE',
+      associationno: segs[1], date_year: yearFromYY(segs[2]), endnumber: segs[3]
+    };
+  }
+  if(segs.length===3){
+    return {
+      ringnumber: formatted, countrycode: country,
+      associationno: null, date_year: yearFromYY(segs[1]), endnumber: segs[2]
+    };
+  }
+  return { ringnumber: formatted, countrycode: country||null, associationno:null, date_year:null, endnumber:null };
+}
+
+
 const ring   = p => fmtRingnumber(p.ringnumber || p.ringnumberold) || p.pigeonid || '?';
 const name_  = p => p.name || '';
 const sex_   = p => { const g = String(p.gender||'').trim().toLowerCase(); if(['m','1'].includes(g))return'M'; if(['f','2','w'].includes(g))return'F'; return '?'; };
@@ -433,6 +474,108 @@ function pigeonStateName(p){
 }
 const year_  = p => p.date_year || '';
 const label_ = p => p.name ? `${p.name} (${ring(p)})` : ring(p);
+
+// Ringnummer in Segmente für die Sortierung zerlegen: alles bis auf das letzte
+// Segment (Endnummer/Seriennr.) wird als String verglichen, das letzte Segment
+// numerisch — damit z.B. bei gleichem Jahrgang "...26-2" vor "...26-15" kommt.
+function ringSortParts(p){
+  const r = String(ring(p)||'');
+  const segs = r.split('-');
+  if(!segs.length) return [r];
+  return segs.map((s,i) => i===segs.length-1 ? (parseInt(s,10) || 0) : s);
+}
+function compareSortParts(a,b){
+  const len = Math.max(a.length, b.length);
+  for(let i=0; i<len; i++){
+    const av=a[i], bv=b[i];
+    if(av===undefined) return -1;
+    if(bv===undefined) return 1;
+    if(typeof av==='number' && typeof bv==='number'){
+      if(av!==bv) return av-bv;
+    } else {
+      const as=String(av), bs=String(bv);
+      if(as!==bs) return as<bs?-1:1;
+    }
+  }
+  return 0;
+}
+
+// ── Spalten-Registry ──────────────────────────────────────────
+// Eine einzige Quelle der Wahrheit für Übersicht, CSV-Export und PDF-Liste.
+// val()    = Klartext (CSV/PDF)
+// cell()   = HTML für die Live-Tabelle (Links, Badges etc.), fällt auf val() zurück
+// sortVal()= Vergleichswert für die Sortierung, fällt auf val() zurück
+// sortKey  = interner Key für die bestehende sortBy()/applyFilter()-Logik
+const COLUMN_DEFS = [
+  { key:'ringnumber', label:'Ringnummer', sortKey:'ringnumber',
+    val:p=>ring(p), sortVal:p=>ringSortParts(p),
+    cell:p=>`<span class="ring">${escH(ring(p))}</span>` },
+  { key:'name', label:'Name', sortKey:'name',
+    val:p=>p.name||'',
+    cell:p=>escH(p.name||'')||'<span style="color:var(--text3)">—</span>' },
+  { key:'year', label:'Jahrgang', sortKey:'year',
+    val:p=>p.date_year||'', sortVal:p=>p.date_year||0,
+    cell:p=>p.date_year||'—' },
+  { key:'gender', label:'Geschlecht', sortKey:'gender',
+    val:p=>sex_(p)==='M'?'Täuber':sex_(p)==='F'?'Täubin':'',
+    cell:p=>{const sx=sex_(p); return sx==='M'?'<span class="badge badge-m">♂</span>':sx==='F'?'<span class="badge badge-f">♀</span>':'<span class="badge badge-u">?</span>';} },
+  { key:'color', label:'Farbe', sortKey:'color',
+    val:p=>p.color||'', cell:p=>escH(p.color||'—') },
+  { key:'strain', label:'Linie', sortKey:'strain',
+    val:p=>p.strain||'', cell:p=>escH(p.strain||'—') },
+  { key:'status', label:'Status',
+    val:p=>pigeonStateName(p), cell:p=>escH(pigeonStateName(p)||'—') },
+  { key:'instock', label:'Im Bestand',
+    val:p=>p.instock!=null?(p.instock?'Ja':'Nein'):'', sortVal:p=>p.instock?1:0,
+    cell:p=>p.instock?'<span style="color:var(--green)">✓ Ja</span>':'<span style="color:var(--text3)">Nein</span>' },
+  { key:'father', label:'Vater',
+    val:p=>{const f=findFather(p); return f?ring(f):(p.ringnumberfather||'');},
+    cell:p=>{const f=findFather(p); const r=f?ring(f):(p.ringnumberfather||''); return r?`<span class="ring-sm" onclick="event.stopPropagation();${f?`selectPigeon('${f.pigeonid}')`:'void(0)'}">${escH(r)}</span>`:'—';} },
+  { key:'mother', label:'Mutter',
+    val:p=>{const m=findMother(p); return m?ring(m):(p.ringnumbermother||'');},
+    cell:p=>{const m=findMother(p); const r=m?ring(m):(p.ringnumbermother||''); return r?`<span class="ring-sm" onclick="event.stopPropagation();${m?`selectPigeon('${m.pigeonid}')`:'void(0)'}">${escH(r)}</span>`:'—';} },
+  { key:'breeder', label:'Züchter',
+    val:p=>p.breeder||'', cell:p=>escH(p.breeder||'—') },
+  { key:'owner', label:'Besitzer',
+    val:p=>p.owner||'', cell:p=>escH(p.owner||'—') },
+];
+const COLUMN_BY_KEY = Object.fromEntries(COLUMN_DEFS.map(c=>[c.key,c]));
+
+function activeColumns(){
+  return S.columns.map(k=>COLUMN_BY_KEY[k]).filter(Boolean);
+}
+function toggleColumn(key){
+  const i = S.columns.indexOf(key);
+  if(i>=0){ if(S.columns.length<=1) return; S.columns.splice(i,1); }
+  else S.columns.push(key);
+  try{ localStorage.setItem('taubenCols', JSON.stringify(S.columns)); }catch(e){}
+  applyFilter();
+}
+function resetColumns(){
+  S.columns = [...DEFAULT_COLUMNS];
+  try{ localStorage.setItem('taubenCols', JSON.stringify(S.columns)); }catch(e){}
+  applyFilter();
+}
+function renderColumnPicker(){
+  return `<div style="position:relative;display:inline-block">
+    <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();const m=document.getElementById('col-picker-menu');m.style.display=m.style.display==='block'?'none':'block'">☰ Spalten</button>
+    <div id="col-picker-menu" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;z-index:50;min-width:200px;box-shadow:0 6px 20px rgba(0,0,0,.3)" onclick="event.stopPropagation()">
+      ${COLUMN_DEFS.map(c=>`
+        <label style="display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:13px;cursor:pointer">
+          <input type="checkbox" ${S.columns.includes(c.key)?'checked':''} onchange="toggleColumn('${c.key}')">
+          ${escH(c.label)}
+        </label>`).join('')}
+      <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
+        <button class="btn btn-outline btn-sm" style="width:100%" onclick="resetColumns()">↺ Standard wiederherstellen</button>
+      </div>
+    </div>
+  </div>`;
+}
+document.addEventListener('click', (e)=>{
+  const m=document.getElementById('col-picker-menu');
+  if(m && m.style.display==='block' && !e.target.closest('#col-picker-menu') && !e.target.closest('button')) m.style.display='none';
+});
+
 
 function findFather(p){ return p.fatherid ? S.pigeons.find(x=>x.pigeonid===p.fatherid)||null : p.ringnumberfather ? S.pigeons.find(x=>x.ringnumber===p.ringnumberfather)||null : null; }
 function findMother(p){ return p.motherid ? S.pigeons.find(x=>x.pigeonid===p.motherid)||null : p.ringnumbermother ? S.pigeons.find(x=>x.ringnumber===p.ringnumbermother)||null : null; }
@@ -622,13 +765,10 @@ function resetTaubenFilter(){
 }
 
 function exportCSV(){
-  const cols = ['Ringnummer','Name','Jahrgang','Geschlecht','Farbe','Linie','Status','Züchter','Besitzer','Im Bestand'];
-  const rows = S.filtered.map(p=>[
-    ring(p), p.name||'', p.date_year||'', sex_(p)==='M'?'Täuber':sex_(p)==='F'?'Täubin':'',
-    p.color||'', p.strain||'', p.pigeonstate||'', p.breeder||'', p.owner||'',
-    p.instock!=null?(p.instock?'Ja':'Nein'):''
-  ]);
-  const csv = [cols, ...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
+  const cols = activeColumns();
+  const header = cols.map(c=>c.label);
+  const rows = S.filtered.map(p=>cols.map(c=>c.val(p)));
+  const csv = [header, ...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
   const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -639,12 +779,9 @@ function exportCSV(){
 
 function exportPDF(){
   const esc = s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const cols = ['Ring','Name','Jg.','♂/♀','Farbe','Linie','Status','Züchter'];
-  const rows = S.filtered.map(p=>[
-    esc(ring(p)), esc(p.name||''), esc(p.date_year||''),
-    sex_(p)==='M'?'♂':sex_(p)==='F'?'♀':'?',
-    esc(p.color||''), esc(p.strain||''), esc(p.pigeonstate||''), esc(p.breeder||'')
-  ]);
+  const cols = activeColumns();
+  const header = cols.map(c=>c.label);
+  const rows = S.filtered.map(p=>cols.map(c=>esc(c.val(p))));
   // Aktive Filter als Text
   const filterInfo = [
     S.search?'Suche: "'+S.search+'"':null,
@@ -716,7 +853,7 @@ function exportPDF(){
 <h1>🕊 Tauben-Liste</h1>
 <div class="meta">${today} &nbsp;·&nbsp; ${rows.length} Tauben${filterInfo?' &nbsp;·&nbsp; Filter: '+filterInfo:''}</div>
 <table>
-  <thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+  <thead><tr>${header.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
   <tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>
 </table>
 <div class="footer">Brieftauben-Verwaltung · ${today}</div>
@@ -872,17 +1009,15 @@ function applyFilter(){
   // Fallback-Sortierung nur wenn KEIN Scoring aktiv war
   if(!q || !((/^\d/.test(q)) || q.match(/^(\d{2,4})[\/\-\s](\d{1,6})$/))){
     arr.sort((a,b)=>{
-      let av,bv;
-      if(S.sortCol==='ringnumber'){av=ring(a);bv=ring(b);}
-      else if(S.sortCol==='name'){av=a.name||'';bv=b.name||'';}
-      else if(S.sortCol==='gender'){av=sex_(a);bv=sex_(b);}
-      else if(S.sortCol==='year'){av=a.date_year||0;bv=b.date_year||0;}
-      else if(S.sortCol==='color'){av=a.color||'';bv=b.color||'';}
-      else if(S.sortCol==='strain'){av=a.strain||'';bv=b.strain||'';}
-      else{av='';bv='';}
-      if(av<bv) return -1*S.sortDir;
-      if(av>bv) return 1*S.sortDir;
-      return 0;
+      const col = COLUMN_BY_KEY[S.sortCol] || COLUMN_DEFS.find(c=>c.sortKey===S.sortCol);
+      if(!col) return 0;
+      const av=(col.sortVal||col.val)(a), bv=(col.sortVal||col.val)(b);
+      let cmp;
+      if(Array.isArray(av) && Array.isArray(bv)) cmp = compareSortParts(av,bv);
+      else if(av<bv) cmp=-1;
+      else if(av>bv) cmp=1;
+      else cmp=0;
+      return cmp*S.sortDir;
     });
   }
 
@@ -924,29 +1059,16 @@ function render(){
 
 // ── LISTE ──────────────────────────────────────────────────────
 function buildTableHTML(page, si){
+  const cols = activeColumns();
   return `<table>
       <thead><tr>
-        <th onclick="sortBy('ringnumber')">Ringnummer${si('ringnumber')}</th>
-        <th onclick="sortBy('name')">Name${si('name')}</th>
-        <th onclick="sortBy('gender')">Gesch.${si('gender')}</th>
-        <th onclick="sortBy('year')">Jg.${si('year')}</th>
-        <th onclick="sortBy('color')">Farbe${si('color')}</th>
-        <th onclick="sortBy('strain')">Linie${si('strain')}</th>
-        <th>Vater</th><th>Mutter</th>
+        ${cols.map(c=>c.sortKey
+          ? `<th onclick="sortBy('${c.sortKey}')">${escH(c.label)}${si(c.sortKey)}</th>`
+          : `<th>${escH(c.label)}</th>`).join('')}
       </tr></thead>
-      <tbody>${page.map(p=>{
-        const f=findFather(p),mo=findMother(p),sx=sex_(p);
-        const fR=f?ring(f):(p.ringnumberfather||''), mR=mo?ring(mo):(p.ringnumbermother||'');
-        return `<tr onclick="selectPigeon('${p.pigeonid}')">
-          <td><span class="ring">${escH(ring(p))}</span></td>
-          <td>${escH(p.name||'')||'<span style="color:var(--text3)">—</span>'}</td>
-          <td>${sx==='M'?'<span class="badge badge-m">♂</span>':sx==='F'?'<span class="badge badge-f">♀</span>':'<span class="badge badge-u">?</span>'}</td>
-          <td>${p.date_year||'—'}</td>
-          <td>${escH(p.color||'—')}</td>
-          <td>${escH(p.strain||'—')}</td>
-          <td>${fR?`<span class="ring-sm" onclick="event.stopPropagation();${f?`selectPigeon('${f.pigeonid}')`:'void(0)'}">${escH(fR)}</span>`:'—'}</td>
-          <td>${mR?`<span class="ring-sm" onclick="event.stopPropagation();${mo?`selectPigeon('${mo.pigeonid}')`:'void(0)'}">${escH(mR)}</span>`:'—'}</td>
-        </tr>`;}).join('')}
+      <tbody>${page.map(p=>`<tr onclick="selectPigeon('${p.pigeonid}')">
+          ${cols.map(c=>`<td>${(c.cell||(x=>escH(c.val(x))))(p)}</td>`).join('')}
+        </tr>`).join('')}
       </tbody>
     </table>`;
 }
@@ -1005,6 +1127,7 @@ function renderList(){
         <option value="no"${S.racingFilter==='no'?' selected':''}>Keine Reisetauben</option>
       </select>
       <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+        ${renderColumnPicker()}
         <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben in der DB einheitlich formatieren">🧹 Ringnummern bereinigen</button>
         <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">📥 CSV</button>
         <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">🖨 PDF-Liste</button>
@@ -1032,18 +1155,40 @@ function renderDetail(p){
     ['Info',p.info],['Interne Info',p.internalinfo],
     ['Benutzer 1',p.userdefined1],['Benutzer 2',p.userdefined2],['Benutzer 3',p.userdefined3],
   ].filter(([,v])=>v!==null&&v!==undefined&&v!=='');
+  // Status-Name aus pigeonstates
+  const stateName = p.pigeonstate || (p.pigeonstateid ? (S.pigeonStates.find(s=>s.pigeonstateid===p.pigeonstateid)||{}).name||'' : '');
+
+  // Kernfelder oben (ohne Info/InternalInfo — die kommen separat)
+  const coreFields=[
+    ['Ringnummer',p.ringnumber],['Alte Ringnr.',p.ringnumberold],
+    ['Jahrgang',p.date_year],['Farbe',p.color],['Rasse',p.race],
+    ['Linie/Stamm',p.strain],['Züchter',p.breeder],['Besitzer',p.owner],
+    ['Land',p.countrycode],['Verbandsnr.',p.associationno],
+    ['Geburtstag',p.birthday],['Verstorben',p.died],
+    ['Gekauft',p.bought],['Verkauft',p.sold],
+    ['Im Bestand',p.instock!=null?(p.instock?'Ja':'Nein'):null],
+    ['Reisetaube',p.ontrip!=null?(p.ontrip?'Ja ✈':'Nein'):null],
+    ['Status',stateName||null],
+    ['Inzuchtkoeff.',p.inbreedcoefficient!=null?Number(p.inbreedcoefficient).toFixed(4):null],
+    ['Ber. Inzucht',ib>0?`${(ib*100).toFixed(2)} %`:null],
+    ['Benutzer 1',p.userdefined1],['Benutzer 2',p.userdefined2],['Benutzer 3',p.userdefined3],
+  ].filter(([,v])=>v!==null&&v!==undefined&&v!=='');
+
   return `
     <button class="back-btn" onclick="S.selected=null;render()">← Zurück zur Liste</button>
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+      <!-- Header: Name + Aktionsbuttons -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
         <div>
           <div class="detail-name">${escH(p.name||ring(p))}</div>
           <div class="detail-ring">🏷 ${escH(ring(p))}</div>
-          <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:4px">
             ${sx==='M'?'<span class="badge badge-m">♂ Täuber</span>':sx==='F'?'<span class="badge badge-f">♀ Täubin</span>':''}
             ${p.date_year?`<span class="badge badge-u">Jg. ${p.date_year}</span>`:''}
             ${p.color?`<span class="badge badge-u">${escH(p.color)}</span>`:''}
             ${p.strain?`<span class="badge badge-u">${escH(p.strain)}</span>`:''}
+            ${stateName?`<span class="badge" style="background:rgba(212,168,67,.12);color:var(--amber);border:1px solid rgba(212,168,67,.25)">${escH(stateName)}</span>`:''}
+            ${p.ontrip?'<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25)">✈ Reisetaube</span>':''}
             ${p.instock===false?'<span class="badge" style="background:#2a1a0a;color:#c8883a">Nicht im Bestand</span>':''}
           </div>
         </div>
@@ -1054,9 +1199,11 @@ function renderDetail(p){
           <button class="btn btn-outline btn-sm" onclick="setPaarungVogel('${p.pigeonid}')">💑 Paarungscheck</button>
         </div>
       </div>
+
+      <!-- Eltern direkt oben -->
       ${(fR||mR)?`
       <div class="section-label">Eltern</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px">
         <div class="parent-card male ${!f?'unknown':''}" onclick="${f?`selectPigeon('${f.pigeonid}')`:'void(0)'}">
           <div style="font-size:10px;color:var(--blue);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Vater</div>
           <div class="ped-ring">${escH(fR||'Unbekannt')}</div>
@@ -1070,9 +1217,19 @@ function renderDetail(p){
                 <div style="font-size:11px;color:var(--text3);margin-top:2px">${[mo.date_year,mo.color].filter(Boolean).map(escH).join(' · ')}</div>`:''}
         </div>
       </div>`:''}
-      <div class="section-label">Details</div>
+
+      <!-- Info-Felder prominent -->
+      ${p.info?`
+      <div class="section-label" style="margin-top:14px">Info</div>
+      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${escH(p.info)}</div>`:''}
+      ${p.internalinfo?`
+      <div class="section-label" style="margin-top:10px">Interne Info</div>
+      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${escH(p.internalinfo)}</div>`:''}
+
+      <!-- Alle weiteren Felder -->
+      <div class="section-label" style="margin-top:14px">Details</div>
       <div class="field-grid">
-        ${fields.map(([l,v])=>`<div class="field-item"><label>${escH(l)}</label><span>${escH(String(v))}</span></div>`).join('')}
+        ${coreFields.map(([l,v])=>`<div class="field-item"><label>${escH(l)}</label><span>${escH(String(v))}</span></div>`).join('')}
       </div>
     </div>`;
 }
@@ -2250,98 +2407,343 @@ async function executeScanSave(){
 }
 
 // ── NEUE TAUBE ─────────────────────────────────────────────────
+let QUICK = { ringnumber:'', duplicateMatch:null, lastCreated:null };
+
+function setNeuMode(mode){ S.neuMode=mode; QUICK={ringnumber:'',duplicateMatch:null,lastCreated:null}; render(); }
+
 function renderNeu(){
   return `<div class="card">
     <div class="card-title serif" style="font-size:18px">＋ Neue Taube erfassen</div>
     <div id="form-msg" style="display:none"></div>
-    <form id="neu-form" onsubmit="submitNeu(event)">
-      <div class="form-grid">
-        <div class="form-field">
-          <label>Ringnummer *</label>
-          <input name="ringnumber" required placeholder="z. B. DE-04987-26-001">
+
+    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Ringnummer</div>
+    <div class="form-grid" style="margin-bottom:6px">
+      <div class="form-field form-full">
+        <label>Ringnummer *</label>
+        <input id="neu_ring" placeholder="z. B. DE-06559-26-170 oder B-22-6106458" autocomplete="off" oninput="neuRingChanged(this.value)">
+      </div>
+    </div>
+    <div id="neu-ring-preview" style="margin-bottom:16px"></div>
+
+    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Eltern</div>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-field">
+        <label>Vater</label>
+        <div class="autocomplete-wrap">
+          <input id="neu_father_inp" placeholder="Ringnummer oder Name suchen…" autocomplete="off">
+          <div class="autocomplete-drop" id="neu_father_drop"></div>
+          <input type="hidden" id="neu_father_id">
         </div>
-        <div class="form-field">
-          <label>Name</label>
-          <input name="name" placeholder="Kurzbezeichnung">
+      </div>
+      <div class="form-field">
+        <label>Mutter</label>
+        <div class="autocomplete-wrap">
+          <input id="neu_mother_inp" placeholder="Ringnummer oder Name suchen…" autocomplete="off">
+          <div class="autocomplete-drop" id="neu_mother_drop"></div>
+          <input type="hidden" id="neu_mother_id">
         </div>
-        <div class="form-field">
-          <label>Jahrgang</label>
-          <input name="date_year" type="number" min="2000" max="2100" placeholder="${new Date().getFullYear()}">
-        </div>
-        <div class="form-field">
-          <label>Geschlecht</label>
-          <select name="gender">
-            <option value="">— wählen —</option>
-            <option value="M">♂ Täuber</option>
-            <option value="F">♀ Täubin</option>
-          </select>
-        </div>
-        <div class="form-field">
-          <label>Farbe</label>
-          <input name="color" list="neu-dl-colors" placeholder="z. B. blau, gescheckt" autocomplete="off">
-          <datalist id="neu-dl-colors">${[...new Set(S.pigeons.map(p=>p.color).filter(Boolean))].sort().map(c=>`<option value="${escH(c)}">`).join('')}</datalist>
-        </div>
-        <div class="form-field">
-          <label>Rasse</label>
-          <input name="race" list="neu-dl-races" placeholder="z. B. Brieftaube" autocomplete="off">
-          <datalist id="neu-dl-races">${[...new Set(S.pigeons.map(p=>p.race).filter(Boolean))].sort().map(r=>`<option value="${escH(r)}">`).join('')}</datalist>
-        </div>
-        <div class="form-field">
-          <label>Linie / Stamm</label>
-          <input name="strain" list="neu-dl-strains" placeholder="z. B. Janssen, van Loon" autocomplete="off">
-          <datalist id="neu-dl-strains">${[...new Set(S.pigeons.map(p=>p.strain).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}">`).join('')}</datalist>
-        </div>
-        <div class="form-field">
-          <label>Vater-Ringnummer</label>
-          <div class="autocomplete-wrap">
-            <input id="father_inp" name="ringnumberfather" placeholder="Ringnummer oder Name suchen…" autocomplete="off">
-            <div class="autocomplete-drop" id="father_drop"></div>
-            <input type="hidden" id="father_id" name="fatherid">
-          </div>
-        </div>
-        <div class="form-field">
-          <label>Mutter-Ringnummer</label>
-          <div class="autocomplete-wrap">
-            <input id="mother_inp" name="ringnumbermother" placeholder="Ringnummer oder Name suchen…" autocomplete="off">
-            <div class="autocomplete-drop" id="mother_drop"></div>
-            <input type="hidden" id="mother_id" name="motherid">
-          </div>
-        </div>
-        <div class="form-field">
-          <label>Züchter</label>
-          <input name="breeder" list="neu-dl-breeders" placeholder="Name des Züchters" autocomplete="off">
-          <datalist id="neu-dl-breeders">${[...new Set(S.pigeons.map(p=>p.breeder).filter(Boolean))].sort().map(b=>`<option value="${escH(b)}">`).join('')}</datalist>
-        </div>
-        <div class="form-field">
-          <label>Besitzer</label>
-          <input name="owner" list="neu-dl-owners" placeholder="Name des Besitzers" autocomplete="off">
-          <datalist id="neu-dl-owners">${[...new Set(S.pigeons.map(p=>p.owner).filter(Boolean))].sort().map(o=>`<option value="${escH(o)}">`).join('')}</datalist>
-        </div>
-        <div class="form-field">
-          <label>Status</label>
-          <select name="pigeonstateid">
-            <option value="">— kein Status —</option>
-            ${S.pigeonStates.map(s=>`<option value="${escH(s.pigeonstateid)}">${escH(s.name)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-field">
-          <label>Reisetaube</label>
-          <select name="ontrip">
-            <option value="false">Nein — Heimtaube</option>
-            <option value="true">Ja — Reisetaube</option>
-          </select>
-        </div>
-        <div class="form-field form-full">
-          <label>Notizen</label>
-          <textarea name="info" placeholder="Zuchtwert, Beobachtungen, Herkunft…"></textarea>
+      </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Status & Bestand</div>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-field">
+        <label>Status</label>
+        <select id="neu_pigeonstateid">
+          <option value="">— kein Status —</option>
+          ${S.pigeonStates.map(s=>`<option value="${escH(s.pigeonstateid)}">${escH(s.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Im Bestand</label>
+        <select id="neu_instock">
+          <option value="true">Ja</option>
+          <option value="false">Nein</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Reisetaube ✈</label>
+        <select id="neu_ontrip">
+          <option value="false">Nein — Heimtaube</option>
+          <option value="true">Ja — Reisetaube</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Angaben zur Taube</div>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-field">
+        <label>Name / Kurzbezeichnung</label>
+        <input id="neu_name" placeholder="Spitzname oder Bezeichnung">
+      </div>
+      <div class="form-field">
+        <label>Geschlecht</label>
+        <select id="neu_gender">
+          <option value="">— wählen —</option>
+          <option value="M">♂ Täuber</option>
+          <option value="F">♀ Täubin</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Farbe</label>
+        <input id="neu_color" list="neu-dl-colors" placeholder="z. B. blau, gescheckt" autocomplete="off">
+        <datalist id="neu-dl-colors">${[...new Set(S.pigeons.map(p=>p.color).filter(Boolean))].sort().map(c=>`<option value="${escH(c)}">`).join('')}</datalist>
+      </div>
+      <div class="form-field">
+        <label>Rasse</label>
+        <input id="neu_race" list="neu-dl-races" placeholder="z. B. Brieftaube" autocomplete="off">
+        <datalist id="neu-dl-races">${[...new Set(S.pigeons.map(p=>p.race).filter(Boolean))].sort().map(r=>`<option value="${escH(r)}">`).join('')}</datalist>
+      </div>
+      <div class="form-field">
+        <label>Linie / Stamm</label>
+        <input id="neu_strain" list="neu-dl-strains" placeholder="z. B. Janssen, van Loon" autocomplete="off">
+        <datalist id="neu-dl-strains">${[...new Set(S.pigeons.map(p=>p.strain).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}">`).join('')}</datalist>
+      </div>
+      <div class="form-field">
+        <label>Züchter</label>
+        <input id="neu_breeder" list="neu-dl-breeders" placeholder="Name des Züchters" autocomplete="off">
+        <datalist id="neu-dl-breeders">${[...new Set(S.pigeons.map(p=>p.breeder).filter(Boolean))].sort().map(b=>`<option value="${escH(b)}">`).join('')}</datalist>
+      </div>
+      <div class="form-field">
+        <label>Besitzer</label>
+        <input id="neu_owner" list="neu-dl-owners" placeholder="Name des Besitzers" autocomplete="off">
+        <datalist id="neu-dl-owners">${[...new Set(S.pigeons.map(p=>p.owner).filter(Boolean))].sort().map(o=>`<option value="${escH(o)}">`).join('')}</datalist>
+      </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Informationen</div>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-field form-full">
+        <label>Info / Notizen</label>
+        <textarea id="neu_info" placeholder="Erfolge, Herkunft, Abstammungsbeschreibung…" rows="3"></textarea>
+      </div>
+      <div class="form-field form-full">
+        <label>Interne Info</label>
+        <textarea id="neu_internalinfo" placeholder="Interne Notizen…" rows="2"></textarea>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="button" class="btn btn-outline" onclick="neuFormReset()">Zurücksetzen</button>
+      <button type="button" class="btn" id="neu-submit-btn" onclick="submitNeu()">🕊 Taube speichern</button>
+    </div>
+  </div>`;
+}
+
+let NEU = { ringnumber:'', parsed:null, dupMatch:null };
+
+function neuFormReset(){
+  NEU = { ringnumber:'', parsed:null, dupMatch:null };
+  ['neu_ring','neu_name','neu_color','neu_race','neu_strain','neu_breeder','neu_owner',
+   'neu_father_inp','neu_mother_inp','neu_info','neu_internalinfo']
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['neu_gender','neu_pigeonstateid','neu_instock','neu_ontrip','neu_father_id','neu_mother_id']
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=el.tagName==='SELECT'?(el.options[0]?.value||''):''; });
+  const prev=document.getElementById('neu-ring-preview');
+  if(prev) prev.innerHTML='';
+  const msg=document.getElementById('form-msg');
+  if(msg) msg.style.display='none';
+}
+
+function neuRingChanged(val){
+  NEU.ringnumber = val;
+  const prev = document.getElementById('neu-ring-preview');
+  const btn  = document.getElementById('neu-submit-btn');
+  if(!val.trim()){ if(prev) prev.innerHTML=''; if(btn) btn.disabled=false; return; }
+  const dup = findInDb(val);
+  NEU.dupMatch = dup;
+  if(dup){
+    if(prev) prev.innerHTML=`<div style="background:rgba(192,80,77,.12);border:1px solid rgba(192,80,77,.3);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:#e07070;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      ⚠️ Bereits vorhanden: <strong>${escH(ring(dup))}</strong>${dup.name?' · '+escH(dup.name):''}
+      <button class="btn btn-outline btn-sm" onclick="selectPigeon('${dup.pigeonid}')">Öffnen →</button>
+    </div>`;
+    if(btn) btn.disabled=true;
+    return;
+  }
+  const parsed = parseRingComponents(val);
+  NEU.parsed = parsed;
+  if(parsed){
+    if(prev) prev.innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;background:var(--bg3);border-radius:var(--radius-sm);padding:10px 14px">
+      <div><span style="color:var(--text3);font-size:11px;display:block;margin-bottom:2px">Erkannt</span><strong>${escH(parsed.ringnumber)}</strong></div>
+      <div><span style="color:var(--text3);font-size:11px;display:block;margin-bottom:2px">Land</span>${escH(parsed.countrycode||'—')}</div>
+      ${parsed.associationno?`<div><span style="color:var(--text3);font-size:11px;display:block;margin-bottom:2px">Vereinsnr.</span>${escH(parsed.associationno)}</div>`:''}
+      <div><span style="color:var(--text3);font-size:11px;display:block;margin-bottom:2px">Jahrgang</span><strong style="color:var(--green)">${parsed.date_year||'—'}</strong></div>
+    </div>`;
+  } else {
+    if(prev) prev.innerHTML=`<div style="color:var(--text3);font-size:12px;padding:8px 14px;background:var(--bg3);border-radius:var(--radius-sm)">Format nicht eindeutig erkannt — Jahrgang bitte manuell prüfen.</div>`;
+  }
+  if(btn) btn.disabled=false;
+}
+
+async function submitNeu(){
+  const rawRing = document.getElementById('neu_ring')?.value?.trim();
+  if(!rawRing){ alert('Bitte eine Ringnummer eingeben.'); return; }
+  if(NEU.dupMatch){ alert('Diese Ringnummer ist bereits vorhanden: '+ring(NEU.dupMatch)); return; }
+  const parsed = parseRingComponents(rawRing);
+  const g  = id => document.getElementById(id)?.value?.trim()||null;
+  const gs = id => document.getElementById(id)?.value||null;
+  const row = { pigeonid: crypto.randomUUID(), deleted:false };
+  row.ringnumber    = parsed?.ringnumber || fmtRingnumber(rawRing) || rawRing;
+  row.countrycode   = parsed?.countrycode   || null;
+  row.associationno = parsed?.associationno || null;
+  row.date_year     = parsed?.date_year     || null;
+  if(g('neu_name'))          row.name          = g('neu_name');
+  const gnd=gs('neu_gender'); if(gnd) row.gender=gnd;
+  if(g('neu_color'))         row.color         = g('neu_color');
+  if(g('neu_race'))          row.race          = g('neu_race');
+  if(g('neu_strain'))        row.strain        = g('neu_strain');
+  if(g('neu_breeder'))       row.breeder       = g('neu_breeder');
+  if(g('neu_owner'))         row.owner         = g('neu_owner');
+  if(g('neu_father_id'))     row.fatherid      = g('neu_father_id');
+  if(g('neu_mother_id'))     row.motherid      = g('neu_mother_id');
+  if(g('neu_info'))          row.info          = g('neu_info');
+  if(g('neu_internalinfo'))  row.internalinfo  = g('neu_internalinfo');
+  const stId=gs('neu_pigeonstateid'); if(stId) row.pigeonstateid=stId;
+  row.instock = gs('neu_instock') !== 'false';
+  row.ontrip  = gs('neu_ontrip') === 'true';
+  // Eltern-Ringnummer aus Textfeld als Fallback
+  const fInp=g('neu_father_inp');
+  if(!row.fatherid && fInp){ const fp=findInDb(fInp); if(fp){row.fatherid=fp.pigeonid;row.ringnumberfather=ring(fp);}else{row.ringnumberfather=fmtRingnumber(fInp)||fInp;} }
+  const mInp=g('neu_mother_inp');
+  if(!row.motherid && mInp){ const mp=findInDb(mInp); if(mp){row.motherid=mp.pigeonid;row.ringnumbermother=ring(mp);}else{row.ringnumbermother=fmtRingnumber(mInp)||mInp;} }
+  const msg=document.getElementById('form-msg');
+  if(msg){msg.style.display='block';msg.className='form-msg';msg.textContent='Speichern…';}
+  try{
+    await apiPost('pigeons',row);
+    await loadData();
+    const saved=S.pigeons.find(p=>p.pigeonid===row.pigeonid);
+    if(saved){ selectPigeon(saved.pigeonid); return; }
+    if(msg){msg.className='form-msg ok';msg.textContent='✅ Gespeichert!';}
+  } catch(err){
+    if(msg){msg.className='form-msg err';msg.textContent='❌ Fehler: '+err.message;}
+  }
+}
+
+function renderNeuQuick(){
+  if(QUICK.lastCreated){
+    const p = QUICK.lastCreated;
+    const f = p.fatherid ? findById(p.fatherid) : null;
+    const m = p.motherid ? findById(p.motherid) : null;
+    return `<div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="font-size:28px">✅</div>
+        <div class="card-title serif" style="margin:0;font-size:18px">Taube angelegt — bitte kurz prüfen</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px">
+        <div style="font-family:monospace;font-size:18px;color:var(--green);font-weight:700">${escH(ring(p))}</div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:10px;font-size:13px">
+          <div><span style="color:var(--text3)">Land</span><br>${escH(p.countrycode||'—')}</div>
+          ${p.associationno?`<div><span style="color:var(--text3)">Vereinsnr.</span><br>${escH(p.associationno)}</div>`:''}
+          <div><span style="color:var(--text3)">Jahrgang</span><br>${p.date_year||'—'}</div>
+          <div><span style="color:var(--text3)">Vater</span><br>${f?`<a onclick="selectPigeon('${f.pigeonid}')" style="cursor:pointer;color:var(--green)">${escH(ring(f))}</a>`:'—'}</div>
+          <div><span style="color:var(--text3)">Mutter</span><br>${m?`<a onclick="selectPigeon('${m.pigeonid}')" style="cursor:pointer;color:var(--green)">${escH(ring(m))}</a>`:'—'}</div>
         </div>
       </div>
       <div class="form-actions">
-        <button type="button" class="btn btn-outline" onclick="document.getElementById('neu-form').reset()">Zurücksetzen</button>
-        <button type="submit" class="btn">🕊 Taube speichern</button>
+        <button class="btn btn-outline" onclick="selectPigeon('${p.pigeonid}')">✏️ Jetzt vervollständigen</button>
+        <button class="btn" onclick="QUICK={ringnumber:'',duplicateMatch:null,lastCreated:null};render();setTimeout(()=>document.getElementById('q_ring')?.focus(),50)">➡️ Weiter zur nächsten Taube</button>
       </div>
-    </form>
+    </div>`;
+  }
+
+  return `<div class="card">
+    <div class="card-title serif" style="font-size:18px">⚡ Schnellerfassung</div>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:18px">
+      Ringnummer eingeben — Vereinsnummer, Jahrgang und Länderkennzeichen werden automatisch erkannt.
+      Eltern sind optional, aber empfohlen; alles Weitere (Name, Farbe, Linie, Züchter …) lässt sich
+      später jederzeit über "✏️ Jetzt vervollständigen" nachpflegen.
+    </p>
+    <div class="form-grid">
+      <div class="form-field form-full">
+        <label>Ringnummer *</label>
+        <input id="q_ring" placeholder="z. B. DE-06559-26-170" autocomplete="off"
+          value="${escH(QUICK.ringnumber)}" oninput="quickRingChanged(this.value)">
+      </div>
+      <div class="form-field form-full" id="q-preview">${renderQuickPreview()}</div>
+      <div class="form-field">
+        <label>Vater (Ringnummer)</label>
+        <div class="autocomplete-wrap">
+          <input id="q_father_inp" placeholder="Ringnummer oder Name suchen…" autocomplete="off">
+          <div class="autocomplete-drop" id="q_father_drop"></div>
+          <input type="hidden" id="q_father_id">
+        </div>
+      </div>
+      <div class="form-field">
+        <label>Mutter (Ringnummer)</label>
+        <div class="autocomplete-wrap">
+          <input id="q_mother_inp" placeholder="Ringnummer oder Name suchen…" autocomplete="off">
+          <div class="autocomplete-drop" id="q_mother_drop"></div>
+          <input type="hidden" id="q_mother_id">
+        </div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="QUICK={ringnumber:'',duplicateMatch:null,lastCreated:null};render()">Zurücksetzen</button>
+      <button class="btn" id="q-submit-btn" onclick="submitQuick()" ${(!QUICK.ringnumber.trim()||QUICK.duplicateMatch)?'disabled':''}>🕊 Anlegen &amp; weiter</button>
+    </div>
   </div>`;
+}
+
+function renderQuickPreview(){
+  const raw = QUICK.ringnumber;
+  if(!raw || !raw.trim()) return '<div style="color:var(--text3);font-size:13px">Ringnummer eingeben, um Vereinsnr./Jahrgang/Land automatisch zu erkennen…</div>';
+  const dup = findInDb(raw);
+  QUICK.duplicateMatch = dup;
+  if(dup){
+    return `<div style="background:rgba(192,80,77,.12);border:1px solid rgba(192,80,77,.3);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:#e07070;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      ⚠️ Diese Ringnummer ist bereits angelegt: <strong>${escH(ring(dup))}</strong>${dup.name?' · '+escH(dup.name):''}
+      <button class="btn btn-outline btn-sm" onclick="selectPigeon('${dup.pigeonid}')">Öffnen →</button>
+    </div>`;
+  }
+  const parsed = parseRingComponents(raw);
+  if(!parsed) return '<div style="color:var(--text3);font-size:13px">Format nicht erkannt — bitte Ringnummer prüfen.</div>';
+  return `<div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px;background:var(--bg3);border-radius:var(--radius-sm);padding:10px 14px">
+    <div><span style="color:var(--text3)">Erkannt als</span><br><strong>${escH(parsed.ringnumber)}</strong></div>
+    <div><span style="color:var(--text3)">Land</span><br>${escH(parsed.countrycode||'—')}</div>
+    ${parsed.associationno?`<div><span style="color:var(--text3)">Vereinsnr.</span><br>${escH(parsed.associationno)}</div>`:''}
+    <div><span style="color:var(--text3)">Jahrgang</span><br>${parsed.date_year||'—'}</div>
+  </div>`;
+}
+
+function quickRingChanged(val){
+  QUICK.ringnumber = val;
+  const prev = document.getElementById('q-preview');
+  if(prev) prev.innerHTML = renderQuickPreview();
+  const btn = document.getElementById('q-submit-btn');
+  if(btn) btn.disabled = !val.trim() || !!QUICK.duplicateMatch;
+}
+
+async function submitQuick(){
+  const raw = document.getElementById('q_ring')?.value || QUICK.ringnumber;
+  const parsed = parseRingComponents(raw);
+  if(!raw || !raw.trim() || !parsed){ alert('Bitte eine gültige Ringnummer eingeben.'); return; }
+  const dup = findInDb(raw);
+  if(dup){ alert('Diese Ringnummer ist bereits angelegt: '+ring(dup)); return; }
+
+  const fatherId = document.getElementById('q_father_id')?.value || null;
+  const motherId = document.getElementById('q_mother_id')?.value || null;
+
+  const row = {
+    pigeonid: crypto.randomUUID(),
+    ringnumber: parsed.ringnumber,
+    countrycode: parsed.countrycode,
+    associationno: parsed.associationno,
+    date_year: parsed.date_year,
+    fatherid: fatherId || null,
+    motherid: motherId || null,
+    deleted: false,
+    instock: true
+  };
+
+  try {
+    await apiPost('pigeons', row);
+    S.pigeons.push(row);
+    QUICK = { ringnumber:'', duplicateMatch:null, lastCreated:row };
+    applyFilter();
+    render();
+  } catch(e){
+    alert('Fehler beim Anlegen: '+e.message);
+  }
 }
 
 async function cleanupRingnumbers(){
@@ -2389,35 +2791,6 @@ async function cleanupRingnumbers(){
   alert(`✅ ${ok} Taube(n) bereinigt.${fail?` ⚠️ ${fail} fehlgeschlagen (siehe Konsole).`:''}`);
 }
 
-async function submitNeu(e){
-  e.preventDefault();
-  const fd=new FormData(e.target);
-  const row={};
-  for(const [k,v] of fd.entries()){ if(v!=='') row[k]=v; }
-  ['ringnumber','ringnumberold','ringnumberfather','ringnumbermother'].forEach(k=>{
-    if(row[k]) row[k] = fmtRingnumber(row[k]) || row[k];
-  });
-  if(row.countrycode) row.countrycode = normCountryCode(row.countrycode);
-  if(!row.pigeonid) row.pigeonid=crypto.randomUUID();
-  if(row.date_year) row.date_year=Number(row.date_year);
-  row.deleted=false; row.instock=true;
-  if(row.ontrip) row.ontrip=(row.ontrip==='true');
-  if(!row.pigeonstateid) delete row.pigeonstateid;
-  const msg=document.getElementById('form-msg');
-  msg.style.display='block';
-  msg.className='form-msg';
-  msg.textContent='Speichern…';
-  try{
-    await apiPost('pigeons',row);
-    msg.className='form-msg ok';
-    msg.textContent='✅ Taube erfolgreich gespeichert!';
-    e.target.reset();
-    await loadData();
-  } catch(err){
-    msg.className='form-msg err';
-    msg.textContent='❌ Fehler: '+err.message;
-  }
-}
 
 // ── STATISTIK ──────────────────────────────────────────────────
 function renderStats(){
@@ -2477,19 +2850,30 @@ function bindAutocomplete(){
     if(drop) drop.classList.remove('open');
   });
   // Neue Taube – Elternfelder
-  bindAC('father_inp','father_drop','M', id=>{
-    const p=findById(id);
-    if(!p) return;
-    document.getElementById('father_inp').value=ring(p);
-    document.getElementById('father_id').value=p.pigeonid;
-    document.getElementById('father_drop').classList.remove('open');
+  bindAC('neu_father_inp','neu_father_drop','M', id=>{
+    const p=findById(id); if(!p) return;
+    document.getElementById('neu_father_inp').value=ring(p);
+    document.getElementById('neu_father_id').value=p.pigeonid;
+    document.getElementById('neu_father_drop').classList.remove('open');
   });
-  bindAC('mother_inp','mother_drop','F', id=>{
-    const p=findById(id);
-    if(!p) return;
-    document.getElementById('mother_inp').value=ring(p);
-    document.getElementById('mother_id').value=p.pigeonid;
-    document.getElementById('mother_drop').classList.remove('open');
+  bindAC('neu_mother_inp','neu_mother_drop','F', id=>{
+    const p=findById(id); if(!p) return;
+    document.getElementById('neu_mother_inp').value=ring(p);
+    document.getElementById('neu_mother_id').value=p.pigeonid;
+    document.getElementById('neu_mother_drop').classList.remove('open');
+  });
+  // Schnellerfassung – Elternfelder
+  bindAC('q_father_inp','q_father_drop','M', id=>{
+    const p=findById(id); if(!p) return;
+    document.getElementById('q_father_inp').value=ring(p);
+    document.getElementById('q_father_id').value=p.pigeonid;
+    document.getElementById('q_father_drop').classList.remove('open');
+  });
+  bindAC('q_mother_inp','q_mother_drop','F', id=>{
+    const p=findById(id); if(!p) return;
+    document.getElementById('q_mother_inp').value=ring(p);
+    document.getElementById('q_mother_id').value=p.pigeonid;
+    document.getElementById('q_mother_drop').classList.remove('open');
   });
 }
 
