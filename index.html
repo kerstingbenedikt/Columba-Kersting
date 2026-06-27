@@ -2061,7 +2061,15 @@ function renderScanSaving(){
 }
 
 // Ringnummer normalisieren für DB-Vergleich
-function normRing(s){ return String(s||'').trim().toLowerCase().replace(/[\s\-\.]/g,''); }
+function normRing(s){
+  s = String(s||'').trim();
+  if(!s) return '';
+  // Pro Segment (durch Leerzeichen/Bindestrich/Punkt getrennt) führende Nullen
+  // bei rein numerischen Teilen entfernen, damit "004" und "4" als gleich gelten.
+  return s.split(/[\s\-\.]+/).filter(Boolean).map(function(seg){
+    return /^\d+$/.test(seg) ? seg.replace(/^0+(?=\d)/,'') : seg.toLowerCase();
+  }).join('');
+}
 
 // Taube in DB suchen (normalisiert)
 function findInDb(ringnumber){
