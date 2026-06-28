@@ -2436,7 +2436,7 @@ async function runScanAI(){
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'Authorization':'Bearer '+(AUTH.token||SUPA_KEY),
+        'Authorization':'Bearer '+SUPA_KEY,
         'apikey':SUPA_KEY
       },
       body: JSON.stringify({imageData:SCAN.imageData, mediaType:SCAN.imageMediaType})
