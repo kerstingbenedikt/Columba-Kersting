@@ -1327,7 +1327,7 @@ function renderList(){
       <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
         ${renderColumnPicker()}
         <button class="btn ${S.bulkMode?'':'btn-outline'} btn-sm" onclick="toggleBulkMode()">${S.bulkMode?'✕ Massenbearbeitung beenden':'🧩 Massenbearbeitung'}</button>
-        <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben in der DB einheitlich formatieren">🧹 Ringnummern bereinigen</button>
+        <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben einheitlich formatieren und Duplikate zusammenführen">🧹 Ringnummern bereinigen</button>
         <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">📥 CSV</button>
         <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">🖨 PDF-Liste</button>
       </div>
@@ -2876,7 +2876,7 @@ async function submitQuick(){
 }
 
 async function cleanupRingnumbers(){
-  // Welche Tauben hätten nach Bereinigung eine andere ringnumber/ringnumberold?
+  // Phase 1: Welche Tauben hätten nach Formatierung eine andere ringnumber/ringnumberold?
   const changes = [];
   S.pigeons.forEach(p => {
     const newRing = fmtRingnumber(p.ringnumber);
@@ -2893,17 +2893,42 @@ async function cleanupRingnumbers(){
     if(Object.keys(updates).length) changes.push({p, updates});
   });
 
-  if(!changes.length){
-    alert('Alle Ringnummern sind bereits einheitlich formatiert — nichts zu tun.');
+  // Phase 2: Duplikate erkennen — auf Basis der Ringnummer NACH der virtuellen Formatierung,
+  // mit derselben toleranten Normalisierung (normRing) wie bei der Import-Dublettenprüfung,
+  // damit z.B. "004" und "4" auch hier als dasselbe erkannt werden.
+  const fmtOf = p => { const c = changes.find(c=>c.p===p); return (c && c.updates.ringnumber) || p.ringnumber || ''; };
+  const groups = {};
+  S.pigeons.forEach(p=>{
+    const key = normRing(fmtOf(p));
+    if(!key) return;
+    (groups[key] = groups[key] || []).push(p);
+  });
+  const dupGroups = Object.values(groups).filter(g=>g.length>1);
+
+  if(!changes.length && !dupGroups.length){
+    alert('Alle Ringnummern sind bereits einheitlich formatiert — und es gibt keine Duplikate.');
     return;
   }
 
-  const preview = changes.slice(0,8).map(c =>
-    `${c.p.ringnumber||'—'} → ${c.updates.ringnumber||c.p.ringnumber}`
-  ).join('\n') + (changes.length>8 ? `\n… und ${changes.length-8} weitere` : '');
+  let preview = '';
+  if(changes.length){
+    preview += 'Formatierung:\n' + changes.slice(0,5).map(c =>
+      `${c.p.ringnumber||'—'} → ${c.updates.ringnumber||c.p.ringnumber}`
+    ).join('\n') + (changes.length>5 ? `\n… und ${changes.length-5} weitere` : '');
+  }
+  if(dupGroups.length){
+    if(preview) preview += '\n\n';
+    preview += `Duplikate (${dupGroups.length} Gruppen):\n` + dupGroups.slice(0,5).map(g =>
+      `${escH(ring(g[0]))}${g[0].name?' · '+g[0].name:''}  ×${g.length}`
+    ).join('\n') + (dupGroups.length>5 ? `\n… und ${dupGroups.length-5} weitere Gruppen` : '');
+  }
 
-  if(!confirm(`${changes.length} Taube(n) werden in der Datenbank umformatiert:\n\n${preview}\n\nFortfahren?`)) return;
+  const dupNote = dupGroups.length
+    ? `\n\nBei Duplikaten bleibt der vollständigste Datensatz erhalten, fehlende Felder werden aus den anderen ergänzt. Verweise als Vater/Mutter bei anderen Tauben werden automatisch umgehängt. Die überflüssigen Datensätze werden als gelöscht markiert (Soft-Delete, kein Datenverlust rückwirkend nachvollziehbar in der DB).`
+    : '';
+  if(!confirm(`Folgende Änderungen werden ausgeführt:\n\n${preview}${dupNote}\n\nFortfahren?`)) return;
 
+  // Schritt A: Formatierung anwenden
   let ok=0, fail=0;
   for(const c of changes){
     try {
@@ -2915,9 +2940,79 @@ async function cleanupRingnumbers(){
       console.error('Bereinigung fehlgeschlagen für', c.p.pigeonid, e.message);
     }
   }
+
+  // Schritt B: Duplikate zusammenführen
+  let merged=0, mergeFail=0;
+  for(const group of dupGroups){
+    try {
+      const removed = await mergeDuplicateGroup(group);
+      merged += removed;
+    } catch(e){
+      mergeFail++;
+      console.error('Merge fehlgeschlagen für', ring(group[0]), e.message);
+    }
+  }
+
   applyFilter();
   render();
-  alert(`✅ ${ok} Taube(n) bereinigt.${fail?` ⚠️ ${fail} fehlgeschlagen (siehe Konsole).`:''}`);
+  alert(
+    `✅ ${ok} Ringnummer(n) formatiert.${fail?` ⚠️ ${fail} Formatierungs-Fehler.`:''}` +
+    (merged ? ` 🔗 ${merged} Duplikat(e) zusammengeführt.` : '') +
+    (mergeFail ? ` ⚠️ ${mergeFail} Merge-Fehler (siehe Konsole).` : '')
+  );
+}
+
+// Führt eine Gruppe von Tauben mit derselben (normalisierten) Ringnummer zusammen:
+// vollständigster Datensatz bleibt als "Primär" erhalten, fehlende Felder werden aus den
+// Duplikaten ergänzt, Eltern-Verweise (fatherid/motherid) anderer Tauben werden umgehängt,
+// und die überflüssigen Datensätze werden per Soft-Delete entfernt (gleiche Konvention wie deletePigeon()).
+// Gibt die Anzahl der entfernten Duplikate zurück.
+async function mergeDuplicateGroup(group){
+  const FILL_KEYS = ['name','color','race','strain','breeder','owner','countrycode','associationno',
+    'birthday','died','bought','sold','info','internalinfo','pigeonstateid','gender','date_year',
+    'ringnumberold','ringnumberfather','ringnumbermother','fatherid','motherid',
+    'userdefined1','userdefined2','userdefined3'];
+  const filled = v => v!==null && v!==undefined && v!=='';
+  const score = p => FILL_KEYS.filter(k=>filled(p[k])).length + (p.instock?1:0);
+
+  const sorted = [...group].sort((a,b)=>score(b)-score(a));
+  const primary = sorted[0];
+  const dups = sorted.slice(1);
+
+  // Fehlende Felder im Primär-Datensatz aus den Duplikaten ergänzen (bestehende Werte bleiben unangetastet)
+  const patch = {};
+  dups.forEach(d=>{
+    FILL_KEYS.forEach(k=>{
+      if(!filled(primary[k]) && !filled(patch[k]) && filled(d[k])) patch[k]=d[k];
+    });
+  });
+  if(group.some(p=>p.instock) && !primary.instock) patch.instock = true;
+
+  if(Object.keys(patch).length){
+    await apiPatch('pigeons', primary.pigeonid, patch);
+    Object.assign(primary, patch);
+  }
+
+  // Andere Tauben, die eines der Duplikate als Vater/Mutter referenzieren, auf den Primär-Datensatz umhängen
+  const dupIds = new Set(dups.map(d=>d.pigeonid));
+  for(const other of S.pigeons){
+    if(dupIds.has(other.pigeonid)) continue;
+    const upd={};
+    if(other.fatherid && dupIds.has(other.fatherid)) upd.fatherid = primary.pigeonid;
+    if(other.motherid && dupIds.has(other.motherid)) upd.motherid = primary.pigeonid;
+    if(Object.keys(upd).length){
+      await apiPatch('pigeons', other.pigeonid, upd);
+      Object.assign(other, upd);
+    }
+  }
+
+  // Duplikate als gelöscht markieren (Soft-Delete)
+  for(const d of dups){
+    await apiPatch('pigeons', d.pigeonid, {deleted:true, instock:false});
+  }
+
+  S.pigeons = S.pigeons.filter(p=>!dupIds.has(p.pigeonid));
+  return dups.length;
 }
 
 
