@@ -992,6 +992,10 @@ function exportPDF(){
 .scan-dots span:nth-child(2){animation-delay:.2s}
 .scan-dots span:nth-child(3){animation-delay:.4s}
 @keyframes sdot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-7px)}}
+/* Während der Verarbeitung: kleines Vorschaubild statt großem Bild — Fokus liegt auf dem Fortschritt */
+.scan-preview-thumb{width:56px;height:56px;object-fit:cover;border-radius:var(--radius-sm);border:1px solid var(--border);flex-shrink:0}
+.scan-progress-wrap{height:6px;background:var(--bg4);border-radius:3px;overflow:hidden;margin:8px 0 4px}
+.scan-progress-fill{height:100%;background:var(--green);border-radius:3px;width:6%;transition:width .7s ease}
 .diff-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
 .diff-table th{color:var(--text3);font-weight:500;text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.03em}
 .diff-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text2)}
@@ -2096,6 +2100,7 @@ let SCAN = {
 };
 
 function scanReset(){
+  stopScanProgress();
   SCAN={step:'upload',imageData:null,imagePreview:null,imageMediaType:'image/jpeg',
         pigeons:{},matches:{},actions:{},rawResponse:null,expandedKey:null};
 }
@@ -2137,10 +2142,13 @@ function renderScanUpload(){
 function renderScanAnalyzing(){
   return `<div class="card">
     <div class="card-title serif" style="font-size:18px">📷 Abstammungs-Scanner</div>
-    ${SCAN.imagePreview?`<img src="${SCAN.imagePreview}" class="scan-preview" alt="Vorschau">`:''}
-    <div class="scan-thinking">
-      <div class="scan-dots"><span></span><span></span><span></span></div>
-      <span id="scan-status">KI analysiert alle Generationen…</span>
+    <div style="display:flex;align-items:flex-start;gap:12px;margin:14px 0">
+      ${SCAN.imagePreview?`<img src="${SCAN.imagePreview}" class="scan-preview-thumb" alt="Vorschau">`:''}
+      <div style="flex:1;min-width:0">
+        <div id="scan-status" style="font-size:14px;color:var(--text);font-weight:500">Bild wird verarbeitet…</div>
+        <div class="scan-progress-wrap"><div class="scan-progress-fill" id="scan-progress-fill"></div></div>
+        <div style="font-size:11px;color:var(--text3)">Je nach Bildqualität kann das 10–30 Sekunden dauern.</div>
+      </div>
     </div>
     <div class="scan-steps">
       <div class="scan-step done"><div class="scan-step-dot">✓</div><span>Foto hochgeladen</span></div>
@@ -2149,6 +2157,36 @@ function renderScanAnalyzing(){
       <div class="scan-step"><div class="scan-step-dot">4</div><span>Auswahl &amp; Speichern</span></div>
     </div>
   </div>`;
+}
+
+// Während des KI-Calls gibt es keine echten Zwischen-Fortschrittswerte vom Server —
+// daher ein ehrlicher, sich der 90%-Marke annähernder Fortschrittsbalken mit wechselnden,
+// am tatsächlichen Ablauf orientierten Status-Texten, damit der Prozess sichtbar aktiv bleibt.
+let SCAN_PROGRESS_TIMER = null;
+function startScanProgress(){
+  stopScanProgress();
+  const messages = [
+    'Bild wird verarbeitet…',
+    'KI erkennt Ringnummern & Text…',
+    'Generationen werden ausgelesen…',
+    'Eltern, Großeltern, Urgroßeltern werden zugeordnet…',
+    'Fast fertig…',
+  ];
+  let i=0, pct=8;
+  const setFill = v => { const el=document.getElementById('scan-progress-fill'); if(el) el.style.width=v+'%'; };
+  const setTxt  = v => { const el=document.getElementById('scan-status'); if(el) el.textContent=v; };
+  setFill(pct); setTxt(messages[0]);
+  SCAN_PROGRESS_TIMER = setInterval(()=>{
+    i = Math.min(i+1, messages.length-1);
+    pct = Math.min(pct+16, 90); // nähert sich an, wird aber nie 100% bis es wirklich fertig ist
+    setTxt(messages[i]);
+    setFill(pct);
+  }, 2200);
+}
+function stopScanProgress(finalText){
+  if(SCAN_PROGRESS_TIMER){ clearInterval(SCAN_PROGRESS_TIMER); SCAN_PROGRESS_TIMER=null; }
+  const el=document.getElementById('scan-progress-fill'); if(el) el.style.width='100%';
+  if(finalText){ const t=document.getElementById('scan-status'); if(t) t.textContent=finalText; }
 }
 
 function renderScanSaving(){
@@ -2396,9 +2434,8 @@ function normalizePigeonData(d){
 }
 
 async function runScanAI(){
-  const setS = t => { const el=document.getElementById('scan-status'); if(el) el.textContent=t; };
+  startScanProgress();
   try {
-    setS('Verbinde mit KI-Service…');
     const resp = await fetch(EDGE_SCAN_URL, {
       method:'POST',
       headers:{
@@ -2431,7 +2468,7 @@ async function runScanAI(){
         SCAN.pigeons['mother'] = normalizePigeonData({ringnumber:d.ringnumbermother||d.mother_ring});
     }
 
-    setS('Abgleich mit Datenbank…');
+    stopScanProgress('Abgleich mit Datenbank…');
     fixGenderSlotMismatches();
     PED_KEYS.forEach(k => {
       const p = SCAN.pigeons[k];
@@ -2451,6 +2488,7 @@ async function runScanAI(){
     SCAN.step = 'result';
     render();
   } catch(err){
+    stopScanProgress();
     SCAN.rawResponse = {error:err.message};
     SCAN.pigeons = {};
     SCAN.step = 'result';
