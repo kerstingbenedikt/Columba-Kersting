@@ -1036,7 +1036,7 @@ tr.bulk-row-selected td{background:color-mix(in srgb,var(--green) 10%,var(--bg3)
 
 
 
-/* ── REISEN ───────────────────────────────────────────────────── */
+/* ── REISEN ─────────────────────────────────── */
 .trip-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
 .trip-card:hover{border-color:var(--green)}
 .imp-progress{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin:10px 0}
@@ -3531,33 +3531,26 @@ function renderImpDone(){
 
 
 // ── REISEN-MODUL ─────────────────────────────────────────────────
-// .009 Format (EDV-Kraus) + Excel-Export (Columba XT)
-//
-// .009 Positionen (verified):
-// Reise-Header (001-013):
-//   [0:3]  Reise-Nr (z.B. "001")
-//   [4:6]  Tag, [6:8] Monat, [8:10] Jahr (DDMMYY)
-//   [10:14] Uhrzeit (HHMM)
-//   [18:38] Ort (20 Zeichen, Latin-1)
-//   [38:58] Platz / Adresse
-// Züchter-Header (101-113):
-//   [9:12]  Gesetzt  [12:15] P1(RV)  [15:18] P2(FG)
-//   [18:21] P3(RegGr)[21:24] P4(Reg) [24:27] P5(Nat)
-//   [27:34] Ø-Distanz × 1000 (m)
-// Tauben-Zeilen (201-213):
-//   [10:12] Jahr  [12:16] Vereinsnr  [16:20] Endnr  [20] Geschlecht(W=♀)
-//   [32:41] Geschwindigkeit / 10000 = m/min
-//   [41:46] Preis P1(RV)   [46:51] Preis P2(FG)
-//   [51:56] Preis P3(RegGr)[56:61] Preis P4(Reg)
-//   [61:66] AS-Punkte
+// .009 verified positions:
+// Header  [0:3]=ReiseNr  [4:6]=Tag [6:8]=Mon [8:10]=Jahr  [18:38]=Ort
+// Züchter [9:12]=Gesetzt [12:15]=P1(RV) [15:18]=P2(FG) [18:21]=P3(RegGr)
+//         [21:24]=P4(Reg) [24:27]=P5(Nat) [27:34]=Dist*1000
+// Taube   [10:12]=Jahr [12:16]=Verein [16:20]=Endnr [20]=Geschl(W=F)
+//         [32:41]=Speed/10000  [41:46]=P1 [46:51]=P2 [51:56]=P3 [56:61]=P4 [61:66]=AS
 
-// Latin-1 Umlaute → UTF-8
-function fixLatin1(str){
-  return str
-    .replace(/\x81/g,'ü').replace(/\x94/g,'ö').replace(/\x84/g,'ä')
-    .replace(/\x8E/g,'Ä').replace(/\x99/g,'Ö').replace(/\x9A/g,'Ü')
-    .replace(/\xE1/g,'ß').replace(/\xE2/g,'ß')
-    .trim();
+function decodeLatin1(buf){
+  try{ return new TextDecoder('windows-1252').decode(buf); }
+  catch(e){ try{ return new TextDecoder('iso-8859-1').decode(buf); } catch(e2){ return ''; } }
+}
+
+function fixUmlauts(s){
+  // CP850/windows-1252 → Unicode
+  return (s||'')
+    .replace(/\u0081/g,'\xFC').replace(/\u0094/g,'\xF6').replace(/\u0084/g,'\xE4')
+    .replace(/\u008E/g,'\xC4').replace(/\u0099/g,'\xD6').replace(/\u009A/g,'\xDC')
+    .replace(/\xE1/g,'\xDF').replace(/\xFC/g,'ü').replace(/\xF6/g,'ö')
+    .replace(/\xE4/g,'ä').replace(/\xC4/g,'Ä').replace(/\xD6/g,'Ö')
+    .replace(/\xDC/g,'Ü').replace(/\xDF/g,'ß').trim();
 }
 
 let RT = {
@@ -3566,11 +3559,11 @@ let RT = {
 };
 
 async function loadTrips(){
-  try{ RT.trips = await apiGet('/trips?order=tripdate.desc,number.asc&limit=500') || []; }
+  try{ RT.trips = await apiGet('/trips?order=tripdate.desc,number.asc&limit=500')||[]; }
   catch(e){ RT.trips=[]; }
 }
 async function loadTripResults(tripid){
-  try{ RT.results = await apiGet(`/pigeontrips?tripid=eq.${tripid}&order=placement.asc&limit=500`) || []; }
+  try{ RT.results = await apiGet('/pigeontrips?tripid=eq.'+tripid+'&order=placement.asc&limit=500')||[]; }
   catch(e){ RT.results=[]; }
 }
 
@@ -3580,104 +3573,73 @@ function renderReisen(){
   return renderTripsList();
 }
 
-/* ── Liste ── */
 function renderTripsList(){
   const grouped={};
   RT.trips.forEach(t=>{ const yr=t.vintage||'?'; if(!grouped[yr]) grouped[yr]=[]; grouped[yr].push(t); });
-  const cards = Object.keys(grouped).sort((a,b)=>b-a).map(yr=>`
+  const cards=Object.keys(grouped).sort((a,b)=>b-a).map(yr=>`
     <div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Saison ${yr}</div>
       ${grouped[yr].map(t=>`
         <div class="trip-card" onclick="openTrip('${t.tripid}')">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             <div>
-              <div style="font-family:'Playfair Display',serif;font-size:15px;color:var(--text)">
-                Reise ${t.number} — ${escH(t.location||'?')}
-              </div>
-              <div style="font-size:12px;color:var(--text3);margin-top:3px">
-                ${t.tripdate||'?'} · ${t.pigeonsset||0} Tauben
-                ${t.averagedistance3?' · ⌀ '+Number(t.averagedistance3).toFixed(1)+' km':''}
-              </div>
+              <div style="font-family:'Playfair Display',serif;font-size:15px">Reise ${t.number} — ${escH(t.location||'?')}</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:3px">${t.tripdate||'?'} · ${t.pigeonsset||0} Tauben${t.averagedistance3?' · ⌀ '+Number(t.averagedistance3).toFixed(1)+' km':''}</div>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap">
-              ${t.prices1>0?`<span class="badge badge-u">RV: ${t.prices1}</span>`:''}
-              ${t.prices2>0?`<span class="badge badge-u">FG: ${t.prices2}</span>`:''}
-              ${t.prices3>0?`<span class="badge badge-u">RegGr: ${t.prices3}</span>`:''}
-              ${t.prices4>0?`<span class="badge badge-u">Reg: ${t.prices4}</span>`:''}
+              ${t.prices1>0?'<span class="badge badge-u">RV: '+t.prices1+'</span>':''}
+              ${t.prices2>0?'<span class="badge badge-u">FG: '+t.prices2+'</span>':''}
+              ${t.prices3>0?'<span class="badge badge-u">RegGr: '+t.prices3+'</span>':''}
+              ${t.prices4>0?'<span class="badge badge-u">Reg: '+t.prices4+'</span>':''}
             </div>
           </div>
         </div>`).join('')}
     </div>`).join('');
 
-  return `<div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-      <div class="serif" style="font-size:20px">🏁 ${RT.trips.length} Reisen</div>
-      <button class="btn" onclick="RT.step='import';RT.imp={step:'upload',rows:[],stats:{trips:0,results:0,err:0}};render()">
-        📥 Leistungsdaten importieren
-      </button>
-    </div>
-    ${RT.trips.length===0
-      ? `<div style="text-align:center;padding:48px;color:var(--text3)">
-          Noch keine Reisen.<br>
-          <button class="btn" style="margin-top:14px" onclick="RT.step='import';render()">📥 Jetzt importieren</button>
-         </div>`
-      : cards}
-  </div>`;
+  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' Reisen</div><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],stats:{trips:0,results:0,err:0}};render()">📥 Leistungsdaten importieren</button></div>'+(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">Noch keine Reisen.<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 Jetzt importieren</button></div>':cards)+'</div>';
 }
 
 async function openTrip(tripid){
   RT.selected=RT.trips.find(t=>t.tripid===tripid);
-  RT.step='detail'; RT.results=[];
-  render();
-  await loadTripResults(tripid);
-  render();
+  RT.step='detail'; RT.results=[]; render();
+  await loadTripResults(tripid); render();
 }
 
-/* ── Detail ── */
 function renderTripDetail(){
   const t=RT.selected; if(!t) return renderTripsList();
   const rows=RT.results.map(r=>{
     const p=S.pigeons.find(x=>x.pigeonid===r.pigeonid||(r.ringnumber&&x.ringnumber===r.ringnumber));
-    return `<tr onclick="${p?`selectPigeon('${p.pigeonid}')`:''}" style="${p?'cursor:pointer':''}">
-      <td style="font-weight:600;color:var(--green);font-size:12px">${r.placement||'—'}</td>
-      <td style="font-family:monospace;font-size:11px">${escH(r.ringnumber||'—')}</td>
-      <td>${p?escH(p.name||'—'):'<span style="color:var(--text3)">—</span>'}</td>
-      <td>${r.speed?Number(r.speed).toFixed(3):'—'}</td>
-      <td>${r.prize_rv||'—'}</td><td>${r.prize_fg||'—'}</td>
-      <td>${r.prize_reggr||'—'}</td><td>${r.prize_reg||'—'}</td>
-      <td>${r.as_reg>0?Number(r.as_reg).toFixed(2):'—'}</td>
-    </tr>`;
+    return '<tr onclick="'+(p?'selectPigeon(\''+p.pigeonid+'\')':'')+'" style="'+(p?'cursor:pointer':'')+'">'
+      +'<td style="font-weight:600;color:var(--green);font-size:12px">'+(r.placement||'—')+'</td>'
+      +'<td style="font-family:monospace;font-size:11px">'+escH(r.ringnumber||'—')+'</td>'
+      +'<td>'+(p?escH(p.name||'—'):'<span style="color:var(--text3)">—</span>')+'</td>'
+      +'<td>'+(r.speed?Number(r.speed).toFixed(3):'—')+'</td>'
+      +'<td>'+(r.prize_rv||'—')+'</td><td>'+(r.prize_fg||'—')+'</td>'
+      +'<td>'+(r.prize_reggr||'—')+'</td><td>'+(r.prize_reg||'—')+'</td>'
+      +'<td>'+(r.as_reg>0?Number(r.as_reg).toFixed(2):'—')+'</td></tr>';
   }).join('');
 
-  return `<div>
-    <button class="back-btn" onclick="RT.step='list';render()">← Alle Reisen</button>
-    <div class="card">
-      <div style="margin-bottom:14px">
-        <div class="serif" style="font-size:22px">Reise ${t.number} — ${escH(t.location||'')}</div>
-        <div style="color:var(--text3);font-size:13px;margin-top:4px">${t.tripdate||''} · Saison ${t.vintage||''}</div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">
-          ${t.pigeonsset?`<span class="badge badge-u">${t.pigeonsset} aufgesetzt</span>`:''}
-          ${t.prices1?`<span class="badge badge-u">RV: ${t.prices1}</span>`:''}
-          ${t.prices2?`<span class="badge badge-u">FG: ${t.prices2}</span>`:''}
-          ${t.prices3?`<span class="badge badge-u">RegGr: ${t.prices3}</span>`:''}
-          ${t.prices4?`<span class="badge badge-u">Reg: ${t.prices4}</span>`:''}
-          ${t.averagedistance3?`<span class="badge badge-u">⌀ ${Number(t.averagedistance3).toFixed(1)} km</span>`:''}
-        </div>
-      </div>
-      ${RT.results.length===0
-        ? `<div style="text-align:center;padding:24px;color:var(--text3)">Lade Ergebnisse…</div>`
-        : `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
-            <thead><tr>
-              <th>Pl.</th><th>Ringnummer</th><th>Name</th><th>m/min</th>
-              <th>Pr.RV</th><th>Pr.FG</th><th>Pr.RegGr</th><th>Pr.Reg</th><th>AS Reg</th>
-            </tr></thead>
-            <tbody>${rows}</tbody>
-           </table></div>`}
-    </div>
-  </div>`;
+  return '<div><button class="back-btn" onclick="RT.step=\'list\';render()">← Alle Reisen</button>'
+    +'<div class="card"><div style="margin-bottom:14px">'
+    +'<div class="serif" style="font-size:22px">Reise '+t.number+' — '+escH(t.location||'')+'</div>'
+    +'<div style="color:var(--text3);font-size:13px;margin-top:4px">'+(t.tripdate||'')+' · Saison '+(t.vintage||'')+'</div>'
+    +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">'
+    +(t.pigeonsset?'<span class="badge badge-u">'+t.pigeonsset+' aufgesetzt</span>':'')
+    +(t.prices1?'<span class="badge badge-u">RV: '+t.prices1+'</span>':'')
+    +(t.prices2?'<span class="badge badge-u">FG: '+t.prices2+'</span>':'')
+    +(t.prices3?'<span class="badge badge-u">RegGr: '+t.prices3+'</span>':'')
+    +(t.prices4?'<span class="badge badge-u">Reg: '+t.prices4+'</span>':'')
+    +(t.averagedistance3?'<span class="badge badge-u">⌀ '+Number(t.averagedistance3).toFixed(1)+' km</span>':'')
+    +'</div></div>'
+    +(RT.results.length===0
+      ?'<div style="text-align:center;padding:24px;color:var(--text3)">Lade Ergebnisse…</div>'
+      :'<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+      +'<thead><tr><th>Pl.</th><th>Ringnummer</th><th>Name</th><th>m/min</th>'
+      +'<th>Pr.RV</th><th>Pr.FG</th><th>Pr.RegGr</th><th>Pr.Reg</th><th>AS Reg</th></tr></thead>'
+      +'<tbody>'+rows+'</tbody></table></div>')
+    +'</div></div>';
 }
 
-/* ── Import ── */
 function renderTripsImport(){
   if(RT.imp.step==='upload')    return renderTripsUpload();
   if(RT.imp.step==='preview')   return renderTripsPreview();
@@ -3692,7 +3654,7 @@ function renderTripsUpload(){
     <div class="card-title serif" style="font-size:18px">📥 Leistungsdaten importieren</div>
     <p style="color:var(--text3);font-size:13px;margin:10px 0 18px">
       Unterstützt: <strong style="color:var(--text)">EDV-Kraus .009</strong> und
-      <strong style="color:var(--text)">Columba XT Excel-Export</strong> (Taubenpreise).
+      <strong style="color:var(--text)">Columba XT Excel</strong> (Taubenpreise-Export).
     </p>
     <div class="imp-drop"
       ondragover="event.preventDefault();this.classList.add('drag-over')"
@@ -3711,103 +3673,88 @@ async function handleTripsFile(file){
   try{
     if(file.name.toLowerCase().endsWith('.009')) await parse009(file);
     else await parseTripsXlsx(file);
-  }catch(e){ alert('Fehler: '+e.message); }
+  }catch(e){ alert('Fehler beim Lesen: '+e.message); }
 }
 
-/* ════════════════════════════════════════════
-   .009 Parser — verified positions
-   ════════════════════════════════════════════ */
 async function parse009(file){
-  const buf  = await file.arrayBuffer();
-  const text = new TextDecoder('iso-8859-1').decode(buf);
+  const buf   = await file.arrayBuffer();
+  const text  = decodeLatin1(new Uint8Array(buf));
   const lines = text.split('\n').map(l=>l.replace(/\r$/,''));
 
   const reiseMap={}, zuechterMap={};
 
   lines.forEach(line=>{
     if(line.length<18) return;
-    const prefix = line.substring(0,3);
+    const prefix=line.substring(0,3);
 
-    // Reise-Header: 001–099 (kein 1xx/2xx)
-    if(/^0\d\d$/.test(prefix)){
-      const rNr = parseInt(prefix);
-      const tag  = line.substring(4,6).trim();
-      const mon  = line.substring(6,8).trim();
-      const yr   = line.substring(8,10).trim();
-      const ort  = fixLatin1(line.substring(18,38));
-      const date = (tag&&mon&&yr) ? `20${yr}-${mon.padStart(2,'0')}-${tag.padStart(2,'0')}` : null;
-      reiseMap[rNr] = {
-        number:rNr, vintage: yr?2000+parseInt(yr):null,
-        location:ort, tripdate:date, results:[]
-      };
+    if(/^0[0-9][0-9]$/.test(prefix) && prefix!=='000'){
+      const rNr=parseInt(prefix);
+      const tag =line.substring(4,6).trim();
+      const mon =line.substring(6,8).trim();
+      const yr  =line.substring(8,10).trim();
+      const ort =fixUmlauts(line.substring(18,38));
+      const date=(tag&&mon&&yr)?`20${yr}-${mon.padStart(2,'0')}-${tag.padStart(2,'0')}`:null;
+      reiseMap[rNr]={number:rNr, vintage:yr?2000+parseInt(yr):null,
+        location:ort, tripdate:date, results:[]};
     }
 
-    // Züchter-Header: 101–199
-    if(/^1\d\d$/.test(prefix)){
-      const rNr    = parseInt(prefix.substring(1));
-      const gesetzt= parseInt(line.substring(9,12).trim())||0;
-      const p1     = parseInt(line.substring(12,15).trim())||0;
-      const p2     = parseInt(line.substring(15,18).trim())||0;
-      const p3     = parseInt(line.substring(18,21).trim())||0;
-      const p4     = parseInt(line.substring(21,24).trim())||0;
-      const p5     = parseInt(line.substring(24,27).trim())||0;
-      const dist   = parseInt(line.substring(27,34).trim())||0;
-      zuechterMap[rNr]={gesetzt,p1,p2,p3,p4,p5,dist};
+    if(/^1[0-9][0-9]$/.test(prefix)){
+      const rNr=parseInt(prefix.substring(1));
+      const g  =parseInt(line.substring(9,12).trim())||0;
+      const p1 =parseInt(line.substring(12,15).trim())||0;
+      const p2 =parseInt(line.substring(15,18).trim())||0;
+      const p3 =parseInt(line.substring(18,21).trim())||0;
+      const p4 =parseInt(line.substring(21,24).trim())||0;
+      const p5 =parseInt(line.substring(24,27).trim())||0;
+      const d  =parseInt(line.substring(27,34).trim())||0;
+      zuechterMap[rNr]={gesetzt:g,p1,p2,p3,p4,p5,dist:d};
     }
 
-    // Tauben-Ergebnis: 201–299
-    if(/^2\d\d$/.test(prefix)){
-      const rNr   = parseInt(prefix.substring(1));
+    if(/^2[0-9][0-9]$/.test(prefix)){
+      const rNr=parseInt(prefix.substring(1));
       if(!reiseMap[rNr]) return;
-      const yr    = line.substring(10,12).trim();
-      const vrnr  = line.substring(12,16).trim();
-      const endnr = line.substring(16,20).trim();
-      const geschl= line.substring(20,21).trim();
-      const gRaw  = line.substring(32,41).trim();
-      const speed = (gRaw && gRaw!=='0') ? parseInt(gRaw)/10000 : null;
-      const p1    = parseInt(line.substring(41,46).trim())||0;
-      const p2    = parseInt(line.substring(46,51).trim())||0;
-      const p3    = parseInt(line.substring(51,56).trim())||0;
-      const p4    = parseInt(line.substring(56,61).trim())||0;
-      const asP   = parseInt(line.substring(61,66).trim())||0;
+      const yr   =line.substring(10,12).trim();
+      const vrnr =line.substring(12,16).trim();
+      const endnr=line.substring(16,20).trim();
+      const geschl=line.substring(20,21).trim();
+      const gRaw =line.substring(32,41).trim();
+      const speed=(gRaw&&gRaw!=='0')?parseInt(gRaw)/10000:null;
+      const p1=parseInt(line.substring(41,46).trim())||0;
+      const p2=parseInt(line.substring(46,51).trim())||0;
+      const p3=parseInt(line.substring(51,56).trim())||0;
+      const p4=parseInt(line.substring(56,61).trim())||0;
+      const as_=parseInt(line.substring(61,66).trim())||0;
       if(!vrnr||!endnr||!yr) return;
-      const ring = `DE-${vrnr.padStart(5,'0')}-${yr.padStart(2,'0')}-${endnr}`;
+      const ring=`DE-${vrnr.padStart(5,'0')}-${yr.padStart(2,'0')}-${endnr}`;
       reiseMap[rNr].results.push({
-        ringnumber:ring,
-        gender: geschl==='W'?'F':'M',
+        ringnumber:ring, gender:geschl==='W'?'F':'M',
         speed, prize_rv:p1||null, prize_fg:p2||null,
-        prize_reggr:p3||null, prize_reg:p4||null,
-        as_reg:asP||null,
+        prize_reggr:p3||null, prize_reg:p4||null, as_reg:as_||null,
       });
     }
   });
 
-  // Zusammenführen + DB-Abgleich
-  RT.imp.rows = Object.values(reiseMap)
+  const normR=s=>(s||'').toLowerCase().replace(/[\s\-\.]/g,'');
+  RT.imp.rows=Object.values(reiseMap)
     .filter(r=>r.results.length>0)
     .sort((a,b)=>a.number-b.number)
     .map(trip=>{
       const h=zuechterMap[trip.number]||{};
       const results=trip.results.map((res,i)=>{
-        const norm=s=>(s||'').toLowerCase().replace(/[\s\-\.]/g,'');
-        const dbP=S.pigeons.find(p=>norm(p.ringnumber)===norm(res.ringnumber));
+        const dbP=S.pigeons.find(p=>normR(p.ringnumber)===normR(res.ringnumber));
         return {...res, placement:i+1, pigeonid:dbP?.pigeonid||null, found:!!dbP};
       });
       return {
-        trip:{
-          ...trip, pigeonsset:results.length,
+        trip:{...trip, pigeonsset:results.length,
           prices1:h.p1||null, prices2:h.p2||null, prices3:h.p3||null,
           prices4:h.p4||null, prices5:h.p5||null,
-          averagedistance3: h.dist?h.dist/1000:null,
-        },
+          averagedistance3:h.dist?h.dist/1000:null},
         results
       };
     });
-
   RT.imp.step='preview'; render();
 }
 
-/* ── Excel Parser ── */
 async function parseTripsXlsx(file){
   if(!window.XLSX){
     await new Promise((res,rej)=>{
@@ -3821,39 +3768,29 @@ async function parseTripsXlsx(file){
   const wb=XLSX.read(buf,{type:'array',cellDates:true});
   const raw=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:'',raw:false})
     .filter(r=>String(r['Taube']||'').trim()!=='');
-
-  function parseTaube(t){
+  const parseTaube=t=>{
     const m=String(t).match(/^(\d{4,5})-(\d{2})-(\d+)\s*[A-Z]?$/);
     return m?`DE-${m[1].padStart(5,'0')}-${m[2]}-${m[3]}`:null;
-  }
-
+  };
   const tripMap={};
   raw.forEach(r=>{
-    const key=`${r['Nr.']||r['Nr']||0}|${String(r['Datum']||'').substring(0,10)}`;
-    if(!tripMap[key]) tripMap[key]={
-      number:parseInt(r['Nr.']||r['Nr']||'0')||0,
-      vintage:parseInt(r['Jahr']||'0')||0,
-      location:String(r['Ort']||'?').trim(),
-      tripdate:String(r['Datum']||'').substring(0,10),
-      rows:[]
-    };
+    const key=(r['Nr.']||r['Nr']||0)+'|'+String(r['Datum']||'').substring(0,10);
+    if(!tripMap[key]) tripMap[key]={number:parseInt(r['Nr.']||r['Nr']||'0')||0,
+      vintage:parseInt(r['Jahr']||'0')||0,location:String(r['Ort']||'?').trim(),
+      tripdate:String(r['Datum']||'').substring(0,10),rows:[]};
     tripMap[key].rows.push(r);
   });
-
-  const norm=s=>(s||'').toLowerCase().replace(/[\s\-\.]/g,'');
+  const normR=s=>(s||'').toLowerCase().replace(/[\s\-\.]/g,'');
   RT.imp.rows=Object.values(tripMap).sort((a,b)=>a.number-b.number).map(trip=>{
     const results=trip.rows.map((r,i)=>{
       const ring=parseTaube(r['Taube']||'');
-      const dbP=ring?S.pigeons.find(p=>norm(p.ringnumber)===norm(ring)):null;
-      return {
-        ringnumber:ring||String(r['Taube']||''), pigeonid:dbP?.pigeonid||null, found:!!dbP,
+      const dbP=ring?S.pigeons.find(p=>normR(p.ringnumber)===normR(ring)):null;
+      return {ringnumber:ring||String(r['Taube']||''),pigeonid:dbP?.pigeonid||null,found:!!dbP,
         placement:i+1,
         speed:parseFloat(String(r['Geschwindigkeit']||'0').replace(',','.'))||null,
         maxkm:parseFloat(String(r['Max. Km']||'0').replace(',','.'))||null,
-        prize_rv:parseInt(r['RV']||'0')||null,
-        prize_fg:parseInt(r['FG']||'0')||null,
-        prize_reggr:parseInt(r['RegGr']||'0')||null,
-        prize_reg:parseInt(r['REG']||r['Reg']||'0')||null,
+        prize_rv:parseInt(r['RV']||'0')||null,prize_fg:parseInt(r['FG']||'0')||null,
+        prize_reggr:parseInt(r['RegGr']||'0')||null,prize_reg:parseInt(r['REG']||r['Reg']||'0')||null,
         as_rv:parseFloat(String(r['AS RV']||'0').replace(',','.'))||null,
         as_reg:parseFloat(String(r['AS Reg']||'0').replace(',','.'))||null,
         as_nat:parseFloat(String(r['AS Nat']||'0').replace(',','.'))||null,
@@ -3864,7 +3801,6 @@ async function parseTripsXlsx(file){
   RT.imp.step='preview'; render();
 }
 
-/* ── Vorschau ── */
 function renderTripsPreview(){
   const rows=RT.imp.rows;
   const totalR=rows.reduce((s,r)=>s+r.results.length,0);
@@ -3877,43 +3813,33 @@ function renderTripsPreview(){
     <td style="text-align:center">${item.results.length}</td>
     <td style="text-align:center;color:var(--green)">${item.results.filter(r=>r.found).length}</td>
     <td style="text-align:center;color:${item.results.filter(r=>!r.found).length?'#e07070':'var(--text3)'}">
-      ${item.results.filter(r=>!r.found).length||'—'}
-    </td>
+      ${item.results.filter(r=>!r.found).length||'—'}</td>
   </tr>`).join('');
-
   return `<div class="card">
     <button class="back-btn" onclick="RT.imp.step='upload';render()">← Neue Datei</button>
     <div class="card-title serif" style="font-size:18px;margin-bottom:12px">📥 Import-Vorschau</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
       <div style="background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
-        <strong style="color:#7ab3e0">${rows.length}</strong> <span style="color:var(--text2)">Reisen</span>
-      </div>
+        <strong style="color:#7ab3e0">${rows.length}</strong> <span style="color:var(--text2)">Reisen</span></div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
-        <strong style="color:var(--text)">${totalR}</strong> <span style="color:var(--text2)">Ergebnisse</span>
-      </div>
+        <strong style="color:var(--text)">${totalR}</strong> <span style="color:var(--text2)">Ergebnisse</span></div>
       <div style="background:rgba(91,134,89,.12);border:1px solid rgba(91,134,89,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
-        <strong style="color:var(--green)">${foundR}</strong> <span style="color:var(--text2)">Tauben gefunden</span>
-      </div>
+        <strong style="color:var(--green)">${foundR}</strong> <span style="color:var(--text2)">Tauben gefunden</span></div>
       ${totalR-foundR>0?`<div style="background:rgba(212,168,67,.1);border:1px solid rgba(212,168,67,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
-        <strong style="color:var(--amber)">${totalR-foundR}</strong> <span style="color:var(--text2)">nicht in DB</span>
-      </div>`:''}
+        <strong style="color:var(--amber)">${totalR-foundR}</strong> <span style="color:var(--text2)">nicht in DB</span></div>`:''}
     </div>
     <div class="table-wrap" style="margin-bottom:14px">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr>
-          <th>Nr.</th><th>Ort</th><th>Datum</th><th>Saison</th>
+        <thead><tr><th>Nr.</th><th>Ort</th><th>Datum</th><th>Saison</th>
           <th style="text-align:center">Tauben</th>
           <th style="text-align:center">Gefunden</th>
-          <th style="text-align:center">Fehlen</th>
-        </tr></thead>
+          <th style="text-align:center">Fehlen</th></tr></thead>
         <tbody>${tRows}</tbody>
       </table>
     </div>
     <div class="form-actions">
       <button class="btn btn-outline" onclick="RT.step='list';render()">Abbrechen</button>
-      <button class="btn" onclick="runTripsImport()">
-        🏁 Import starten (${rows.length} Reisen · ${totalR} Ergebnisse)
-      </button>
+      <button class="btn" onclick="runTripsImport()">🏁 Import starten (${rows.length} Reisen · ${totalR} Ergebnisse)</button>
     </div>
   </div>`;
 }
@@ -3937,16 +3863,13 @@ function renderTripsDone(){
     <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:16px 0">
       <div style="background:rgba(91,134,89,.12);border:1px solid rgba(91,134,89,.3);border-radius:var(--radius-sm);padding:10px 20px">
         <div style="font-size:24px;font-weight:600;color:var(--green)">${RT.imp.stats.trips}</div>
-        <div style="font-size:12px;color:var(--text3)">Reisen angelegt</div>
-      </div>
+        <div style="font-size:12px;color:var(--text3)">Reisen angelegt</div></div>
       <div style="background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25);border-radius:var(--radius-sm);padding:10px 20px">
         <div style="font-size:24px;font-weight:600;color:#7ab3e0">${RT.imp.stats.results}</div>
-        <div style="font-size:12px;color:var(--text3)">Ergebnisse gespeichert</div>
-      </div>
+        <div style="font-size:12px;color:var(--text3)">Ergebnisse gespeichert</div></div>
       ${RT.imp.stats.err?`<div style="background:rgba(192,80,77,.1);border:1px solid rgba(192,80,77,.25);border-radius:var(--radius-sm);padding:10px 20px">
         <div style="font-size:24px;font-weight:600;color:#e07070">${RT.imp.stats.err}</div>
-        <div style="font-size:12px;color:var(--text3)">Fehler</div>
-      </div>`:''}
+        <div style="font-size:12px;color:var(--text3)">Fehler</div></div>`:''}
     </div>
     <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
       <button class="btn btn-outline" onclick="RT.imp={step:'upload',rows:[],stats:{trips:0,results:0,err:0}};render()">📥 Weiterer Import</button>
@@ -3955,7 +3878,6 @@ function renderTripsDone(){
   </div>`;
 }
 
-/* ── Import ausführen ── */
 async function runTripsImport(){
   RT.imp.stats={trips:0,results:0,err:0};
   RT.imp.step='importing'; render();
@@ -3964,39 +3886,38 @@ async function runTripsImport(){
     const total=RT.imp.rows.reduce((s,r)=>s+r.results.length,0);
     const pct=total?Math.round(RT.imp.stats.results/total*100):0;
     const bar=document.getElementById('trips-bar');
-    if(bar) bar.style.width=pct+'%';
+    if(bar)bar.style.width=pct+'%';
     const lbl=document.getElementById('trips-status');
-    if(lbl) lbl.textContent=`${RT.imp.stats.results} von ${total} (${pct}%)`;
+    if(lbl)lbl.textContent=RT.imp.stats.results+' von '+total+' ('+pct+'%)';
   };
+
+  // Sammle alle tripids dieser Session für Duplikat-Check
+  const sessionTrips=[...RT.trips];
 
   for(const item of RT.imp.rows){
     const t=item.trip;
-    setS(`Reise ${t.number} — ${t.location}…`);
-
-    let tripid=null;
-    const norm=s=>(s||'').toLowerCase().trim();
-    const existing=RT.trips.find(x=>
+    setS('Reise '+t.number+' — '+t.location+'…');
+    const normL=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
+    const existing=sessionTrips.find(x=>
       x.vintage===t.vintage && x.number===t.number &&
-      norm(x.location)===norm(t.location)
+      normL(x.location)===normL(t.location)
     );
-
+    let tripid;
     if(existing){
       tripid=existing.tripid;
     } else {
+      tripid=crypto.randomUUID();
       try{
-        tripid=crypto.randomUUID();
-        const row={tripid, vintage:t.vintage||null, number:t.number||null,
-          location:t.location||null, tripdate:t.tripdate||null, pigeonsset:t.pigeonsset||null};
-        if(t.prices1) row.prices1=t.prices1;
-        if(t.prices2) row.prices2=t.prices2;
-        if(t.prices3) row.prices3=t.prices3;
-        if(t.prices4) row.prices4=t.prices4;
-        if(t.prices5) row.prices5=t.prices5;
-        if(t.averagedistance3) row.averagedistance3=t.averagedistance3;
+        const row={tripid,vintage:t.vintage||null,number:t.number||null,
+          location:t.location||null,tripdate:t.tripdate||null,pigeonsset:t.pigeonsset||null};
+        ['prices1','prices2','prices3','prices4','prices5','averagedistance3']
+          .forEach(k=>{ if(t[k]) row[k]=t[k]; });
         await apiPost('trips',row);
         RT.imp.stats.trips++;
+        sessionTrips.push(row); // sofort für nächste Iteration verfügbar
       } catch(e){
-        RT.imp.stats.err++;
+        console.error('Reise Fehler:',e.message);
+        RT.imp.stats.err+=item.results.length;
         RT.imp.stats.results+=item.results.length;
         updP(); continue;
       }
@@ -4004,32 +3925,28 @@ async function runTripsImport(){
 
     for(const res of item.results){
       try{
-        const row={id:crypto.randomUUID(), tripid};
-        if(res.pigeonid)    row.pigeonid=res.pigeonid;
-        if(res.ringnumber)  row.ringnumber=res.ringnumber;
-        if(res.placement)   row.placement=res.placement;
-        if(res.speed)       row.speed=res.speed;
-        if(res.maxkm)       row.maxkm=res.maxkm;
-        if(res.prize_rv)    row.prize_rv=res.prize_rv;
-        if(res.prize_fg)    row.prize_fg=res.prize_fg;
-        if(res.prize_reggr) row.prize_reggr=res.prize_reggr;
-        if(res.prize_reg)   row.prize_reg=res.prize_reg;
-        if(res.as_rv)       row.as_rv=res.as_rv;
-        if(res.as_reg)      row.as_reg=res.as_reg;
-        if(res.as_nat)      row.as_nat=res.as_nat;
+        const row={id:crypto.randomUUID(),tripid};
+        const setIf=(k,v)=>{ if(v) row[k]=v; };
+        setIf('pigeonid',res.pigeonid); setIf('ringnumber',res.ringnumber);
+        setIf('placement',res.placement); setIf('speed',res.speed);
+        setIf('maxkm',res.maxkm);
+        setIf('prize_rv',res.prize_rv); setIf('prize_fg',res.prize_fg);
+        setIf('prize_reggr',res.prize_reggr); setIf('prize_reg',res.prize_reg);
+        setIf('as_rv',res.as_rv); setIf('as_reg',res.as_reg); setIf('as_nat',res.as_nat);
         await apiPost('pigeontrips',row);
         RT.imp.stats.results++;
       } catch(e){ RT.imp.stats.err++; }
-      if(RT.imp.stats.results%20===0) updP();
+      if(RT.imp.stats.results%25===0) updP();
     }
   }
+  updP();
   await loadTrips();
   RT.imp.step='done'; render();
 }
 
-// Reisen beim App-Start laden
-const _ld=loadData;
-loadData=async function(){ await _ld(); await loadTrips(); };
+// Beim App-Start Reisen laden
+const _ldRT=loadData;
+loadData=async function(){ await _ldRT(); await loadTrips(); };
 
 // ── STATISTIK ──────────────────────────────────────────────────
 function renderStats(){
