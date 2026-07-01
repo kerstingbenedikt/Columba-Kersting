@@ -3264,10 +3264,46 @@ function renderImpMap(){
 /* ── Zeilen aufbereiten ── */
 function buildImpRows(){
   // Spaltenwerte nach Mapping lesen
+  
   function val(row, fieldKey){
     const h = IMP.headers.find(h=>IMP.colMap[h]===fieldKey);
     return h ? String(row[h]||'').trim() : '';
   }
+async function doImport() {
+  const newRows = IMP.rows.filter(r => r.status === 'new');
+  if (!newRows.length) return;
+
+  IMP.step = 'importing';
+  IMP.stats = { new: 0, dup: 0, err: 0, done: 0 };
+  IMP.log = [];
+  render();
+
+  for (const row of newRows) {
+    try {
+      // pigeonid sicherstellen (falls noch nicht gesetzt)
+      if (!row.row.pigeonid) row.row.pigeonid = crypto.randomUUID();
+
+      await apiPost('pigeons', row.row);
+      S.pigeons.push(row.row);
+      IMP.stats.done++;
+      IMP.stats.new++;
+    } catch (e) {
+      IMP.stats.err++;
+      IMP.log.push({ ring: row.row.ringnumber, msg: e.message });
+    }
+
+    // Fortschrittsbalken aktualisieren
+    const pct = Math.round((IMP.stats.done + IMP.stats.err) / newRows.length * 100);
+    const bar = document.querySelector('.imp-progress-bar');
+    const lbl = document.querySelector('#imp-progress-lbl');
+    if (bar) bar.style.width = pct + '%';
+    if (lbl) lbl.textContent = `${IMP.stats.done + IMP.stats.err} / ${newRows.length}`;
+  }
+
+  applyFilter();
+  IMP.step = 'done';
+  render();
+}
 
   IMP.rows = IMP.raw.map((raw,idx) => {
     const vereinsnr  = val(raw,'associationno');
@@ -3325,7 +3361,8 @@ function buildImpRows(){
     }
 
     const row = {
-      ringnumber,
+      pigeonid: crypto.randomUUID(),
+	  ringnumber,
       countrycode:   parsed.countrycode   || normCountryCode(land) || null,
       associationno: parsed.associationno || vereinsnr || null,
       date_year:     parsed.date_year     || (jahrgang?Number(jahrgang):null),
@@ -3537,6 +3574,10 @@ function renderImpDone(){
 //         [21:24]=P4(Reg) [24:27]=P5(Nat) [27:34]=Dist*1000
 // Taube   [10:12]=Jahr [12:16]=Verein [16:20]=Endnr [20]=Geschl(W=F)
 //         [32:41]=Speed/10000  [41:46]=P1 [46:51]=P2 [51:56]=P3 [56:61]=P4 [61:66]=AS
+function calcAS(platz, g_aufgesetzt) {
+  if (!platz || platz <= 0 || !g_aufgesetzt || g_aufgesetzt <= 0) return null;
+  return Math.round((g_aufgesetzt - platz + 1) / g_aufgesetzt * 10000) / 100;
+}
 
 function decodeLatin1(buf){
   try{ return new TextDecoder('windows-1252').decode(buf); }
@@ -3694,8 +3735,14 @@ async function parse009(file){
       const yr  =line.substring(8,10).trim();
       const ort =fixUmlauts(line.substring(18,38));
       const date=(tag&&mon&&yr)?`20${yr}-${mon.padStart(2,'0')}-${tag.padStart(2,'0')}`:null;
+      const mR=line.match(/R\s+(\d+)/);
+      const mG=line.match(/G\s+(\d+)/);
+      const mA=line.match(/A\s+(\d+)/);
       reiseMap[rNr]={number:rNr, vintage:yr?2000+parseInt(yr):null,
-        location:ort, tripdate:date, results:[]};
+        location:ort, tripdate:date, results:[],
+        g_rv:  mR?parseInt(mR[1]):0,
+        g_reggr:mG?parseInt(mG[1]):0,
+        g_reg:  mA?parseInt(mA[1]):0};
     }
 
     if(/^1[0-9][0-9]$/.test(prefix)){
@@ -3707,7 +3754,7 @@ async function parse009(file){
       const p4 =parseInt(line.substring(21,24).trim())||0;
       const p5 =parseInt(line.substring(24,27).trim())||0;
       const d  =parseInt(line.substring(27,34).trim())||0;
-      zuechterMap[rNr]={gesetzt:g,p1,p2,p3,p4,p5,dist:d};
+      zuechterMap[rNr]={gesetztg:g,p1,p2,p3,p4,p5,dist:d};
     }
 
     if(/^2[0-9][0-9]$/.test(prefix)){
@@ -3726,10 +3773,16 @@ async function parse009(file){
       const as_=parseInt(line.substring(61,66).trim())||0;
       if(!vrnr||!endnr||!yr) return;
       const ring=`DE-${vrnr.padStart(5,'0')}-${yr.padStart(2,'0')}-${endnr}`;
+      // p1=Platz RV | p2=Platz RegGr (G-Liste) | p3=Platz Reg (A-Liste, größer)
+      const _h   = reiseMap[rNr];
+      const _prv = as_!==0 ? as_ : (p1!==0?p1:null);
+      const _prg = p2!==0?p2:null;  // RegGr = G-Liste
+      const _pre = p3!==0?p3:null;  // Reg   = A-Liste (große Liste)
       reiseMap[rNr].results.push({
         ringnumber:ring, gender:geschl==='W'?'F':'M',
-        speed, prize_rv:p1||null, prize_fg:p2||null,
-        prize_reggr:p3||null, prize_reg:p4||null, as_reg:as_||null,
+        speed,
+        prize_rv:_prv, prize_fg:null, prize_reggr:_pre, prize_reg:_prg,
+        as_rv:calcAS(_prv,_h.g_rv||0), as_reg:calcAS(_prg,_h.g_reggr||0)
       });
     }
   });
