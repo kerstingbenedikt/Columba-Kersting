@@ -217,6 +217,7 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
   <button onclick="showTab('import')">📥 Import</button>
   <button onclick="showTab('reisen')">🏁 Reisen</button>
   <button onclick="showTab('zuechter')">🧑‍🌾 Züchter</button>
+  <button onclick="showTab('bestenliste')">🏆 Bestenliste</button>
   <button onclick="showTab('nachkommen')">🐣 Nachkommen</button>
   <button onclick="showTab('statistik')">📊 Statistik</button>
 </nav>
@@ -679,6 +680,11 @@ async function apiPost(table, body){
 }
 async function apiPatch(table, id, body){
   const r = await fetch(SUPA_URL+'/'+table+'?pigeonid=eq.'+id,{method:'PATCH',headers:H(),body:JSON.stringify(body)});
+  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  return r.json();
+}
+async function apiPatchBy(table, filter, body){
+  const r = await fetch(SUPA_URL+'/'+table+'?'+filter,{method:'PATCH',headers:H(),body:JSON.stringify(body)});
   if(!r.ok){ const t=await r.text(); throw new Error(t); }
   return r.json();
 }
@@ -1230,7 +1236,7 @@ function sortBy(col){ S.sortCol===col ? S.sortDir*=-1 : (S.sortCol=col,S.sortDir
 // Einzige Quelle der Wahrheit für die Nav-Reihenfolge (muss exakt den <nav>-Buttons entsprechen).
 // 'stammbaum' ist kein eigener Reiter mehr — Stammbäume werden über die Tauben-Liste
 // bzw. den Paarungscheck aufgerufen, daher keine Nav-Taste dafür.
-const NAV_TABS = ['tauben','paarung','neu','scan','import','reisen','zuechter','nachkommen','statistik'];
+const NAV_TABS = ['tauben','paarung','neu','scan','import','reisen','zuechter','bestenliste','nachkommen','statistik'];
 function setActiveNav(tab){
   document.querySelectorAll('nav button').forEach((b,i)=>b.classList.toggle('active', NAV_TABS[i]===tab));
 }
@@ -1255,6 +1261,7 @@ function render(){
   else if(S.tab==='import')     m.innerHTML=renderImport();
   else if(S.tab==='reisen')     m.innerHTML=renderReisen();
   else if(S.tab==='zuechter')   m.innerHTML=renderZuechter();
+  else if(S.tab==='bestenliste') m.innerHTML=renderBestenliste();
   else                          m.innerHTML=renderStats();
   bindAutocomplete();
   bindNachSearch();
@@ -3600,7 +3607,7 @@ function fixUmlauts(s){
 
 let RT = {
   step:'list', trips:[], selected:null, results:[],
-  imp:{ step:'upload', rows:[], stats:{trips:0,results:0,err:0} }
+  imp:{ step:'upload', rows:[], stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0} }
 };
 
 async function loadTrips(){
@@ -3754,29 +3761,53 @@ function renderReisen(){
 }
 
 function renderTripsList(){
+  if(!ZT.loaded){ loadZuechterData().then(render); }
   const grouped={};
   RT.trips.forEach(t=>{ const yr=t.vintage||'?'; if(!grouped[yr]) grouped[yr]=[]; grouped[yr].push(t); });
   const cards=Object.keys(grouped).sort((a,b)=>b-a).map(yr=>`
     <div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Saison ${yr}</div>
-      ${grouped[yr].map(t=>`
+      ${grouped[yr].map(t=>{
+        const breeders=ZT.loaded?tripBreederRows(t.tripid):[];
+        return `
         <div class="trip-card" onclick="openTrip('${t.tripid}')">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             <div>
               <div style="font-family:'Playfair Display',serif;font-size:15px">Reise ${t.number} — ${escH(t.location||'?')}</div>
-              <div style="font-size:12px;color:var(--text3);margin-top:3px">${t.tripdate||'?'} · ${t.pigeonsset||0} Tauben${t.averagedistance3?' · ⌀ '+Number(t.averagedistance3).toFixed(1)+' km':''}</div>
-            </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              ${t.prices1>0?'<span class="badge badge-u">RV: '+t.prices1+'</span>':''}
-              ${t.prices2>0?'<span class="badge badge-u">FG: '+t.prices2+'</span>':''}
-              ${t.prices3>0?'<span class="badge badge-u">RegGr: '+t.prices3+'</span>':''}
-              ${t.prices4>0?'<span class="badge badge-u">Reg: '+t.prices4+'</span>':''}
+              <div style="font-size:12px;color:var(--text3);margin-top:3px">${t.tripdate||'?'}${t.averagedistance3?' · ⌀ '+Number(t.averagedistance3).toFixed(1)+' km':''}</div>
             </div>
           </div>
-        </div>`).join('')}
+          ${breeders.length?`<div style="margin-top:10px;display:flex;flex-direction:column;gap:5px">
+            ${breeders.map(b=>`
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;background:var(--bg2);border-radius:8px;padding:5px 9px">
+                <span style="color:var(--text2)">🧑‍🌾 ${escH(b.name)}${b.number?' <span style="color:var(--text3)">· '+escH(b.number)+'</span>':''} <span style="color:var(--text3)">· ${b.gesetzt} Tauben</span></span>
+                <span style="display:flex;gap:5px;flex-wrap:wrap">
+                  ${b.rv>0?'<span class="badge badge-u">RV: '+b.rv+'</span>':''}
+                  ${b.reggr>0?'<span class="badge badge-u">RegGr: '+b.reggr+'</span>':''}
+                  ${b.reg>0?'<span class="badge badge-u">Reg: '+b.reg+'</span>':''}
+                </span>
+              </div>`).join('')}
+          </div>`:''}
+        </div>`;
+      }).join('')}
     </div>`).join('');
 
-  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' Reisen</div><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],stats:{trips:0,results:0,err:0}};render()">📥 Leistungsdaten importieren</button></div>'+(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">Noch keine Reisen.<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 Jetzt importieren</button></div>':cards)+'</div>';
+  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' Reisen</div><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0}};render()">📥 Leistungsdaten importieren</button></div>'+(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">Noch keine Reisen.<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 Jetzt importieren</button></div>':cards)+'</div>';
+}
+
+// Fasst die je Reise importierten Züchter mit gesetzten Tauben und Preisen zusammen
+function tripBreederRows(tripid){
+  const g={};
+  ZT.rows.filter(r=>r.tripid===tripid).forEach(r=>{
+    const key=r.breedername||'Unbekannt';
+    if(!g[key]) g[key]={name:key, number:r.breedernumber||null, gesetzt:0, rv:0, reggr:0, reg:0};
+    const b=g[key];
+    b.gesetzt++;
+    if(r.prize_rv) b.rv++;
+    if(r.prize_reggr) b.reggr++;
+    if(r.prize_reg) b.reg++;
+  });
+  return Object.values(g).sort((a,b)=>a.name.localeCompare(b.name));
 }
 
 async function openTrip(tripid){
@@ -3925,7 +3956,7 @@ async function parse009(file, breedernumber){
       const _prg = p2!==0?p2:null;  // RegGr = G-Liste
       const _pre = p3!==0?p3:null;  // Reg   = A-Liste (große Liste)
       reiseMap[rNr].results.push({
-        ringnumber:ring, gender:geschl==='W'?'F':'M',
+        ringnumber:ring, sex:geschl==='W'?'F':'M',
         speed,
         prize_rv:_prv, prize_fg:null, prize_reggr:_pre, prize_reg:_prg,
         as_rv:calcAS(_prv,_h.g_rv||0), as_reg:calcAS(_prg,_h.g_reggr||0)
@@ -4064,23 +4095,23 @@ function renderTripsDone(){
     <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:16px 0">
       <div style="background:rgba(91,134,89,.12);border:1px solid rgba(91,134,89,.3);border-radius:var(--radius-sm);padding:10px 20px">
         <div style="font-size:24px;font-weight:600;color:var(--green)">${RT.imp.stats.trips}</div>
-        <div style="font-size:12px;color:var(--text3)">Reisen angelegt</div></div>
+        <div style="font-size:12px;color:var(--text3)">Reisen angelegt${RT.imp.stats.tripsUpdated?' · '+RT.imp.stats.tripsUpdated+' aktualisiert':''}</div></div>
       <div style="background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25);border-radius:var(--radius-sm);padding:10px 20px">
         <div style="font-size:24px;font-weight:600;color:#7ab3e0">${RT.imp.stats.results}</div>
-        <div style="font-size:12px;color:var(--text3)">Ergebnisse gespeichert</div></div>
+        <div style="font-size:12px;color:var(--text3)">Ergebnisse (${RT.imp.stats.resultsNew} neu, ${RT.imp.stats.resultsUpdated} aktualisiert)</div></div>
       ${RT.imp.stats.err?`<div style="background:rgba(192,80,77,.1);border:1px solid rgba(192,80,77,.25);border-radius:var(--radius-sm);padding:10px 20px">
         <div style="font-size:24px;font-weight:600;color:#e07070">${RT.imp.stats.err}</div>
         <div style="font-size:12px;color:var(--text3)">Fehler</div></div>`:''}
     </div>
     <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
-      <button class="btn btn-outline" onclick="RT.imp={step:'upload',rows:[],stats:{trips:0,results:0,err:0}};render()">📥 Weiterer Import</button>
+      <button class="btn btn-outline" onclick="RT.imp={step:'upload',rows:[],stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0}};render()">📥 Weiterer Import</button>
       <button class="btn" onclick="RT.step='list';loadTrips().then(()=>render())">🏁 Zu den Reisen</button>
     </div>
   </div>`;
 }
 
 async function runTripsImport(){
-  RT.imp.stats={trips:0,results:0,err:0};
+  RT.imp.stats={trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0};
   RT.imp.step='importing'; render();
   const setS=t=>{const el=document.getElementById('trips-status');if(el)el.textContent=t;};
   const updP=()=>{
@@ -4105,7 +4136,25 @@ async function runTripsImport(){
     );
     let tripid;
     if(existing){
+      // Reise existiert bereits → aktualisieren statt doppelt anzulegen.
+      // Nur Felder überschreiben, zu denen die neue Datei tatsächlich Werte liefert.
       tripid=existing.tripid;
+      const upd={};
+      if(t.tripdate) upd.tripdate=t.tripdate;
+      ['prices1','prices2','prices3','prices4','prices5','averagedistance3'].forEach(k=>{ if(t[k]) upd[k]=t[k]; });
+      if(t.g_rv)    upd.pigeonsset_rv=t.g_rv;
+      if(t.g_reggr) upd.pigeonsset_reggr=t.g_reggr;
+      if(t.g_reg)   upd.pigeonsset_reg=t.g_reg;
+      if(Object.keys(upd).length){
+        try{ await apiPatchBy('trips','tripid=eq.'+tripid,upd); }
+        catch(e2){
+          // Fallback: pigeonsset_rv/_reggr/_reg-Spalten evtl. noch nicht angelegt
+          delete upd.pigeonsset_rv; delete upd.pigeonsset_reggr; delete upd.pigeonsset_reg;
+          if(Object.keys(upd).length){ try{ await apiPatchBy('trips','tripid=eq.'+tripid,upd); }catch(e3){} }
+        }
+        Object.assign(existing,upd);
+        RT.imp.stats.tripsUpdated++;
+      }
     } else {
       tripid=crypto.randomUUID();
       try{
@@ -4133,9 +4182,23 @@ async function runTripsImport(){
       }
     }
 
+    // Vorhandene Ergebnisse dieser Reise laden, um Doppel-Einträge zu vermeiden
+    // (Abgleich über Ringnummer + ggf. Züchtername, falls mehrere Züchter dieselbe Reise melden)
+    let existingResults=[];
+    try{
+      existingResults = await apiGet('/pigeontrips?tripid=eq.'+tripid+'&select=id,ringnumber,breedername') || [];
+    }catch(e){ existingResults=[]; }
+    const existingByKey={};
+    existingResults.forEach(r=>{
+      const key=normRing(r.ringnumber)+'|'+(r.breedername||'');
+      existingByKey[key]=r.id;
+    });
+
     for(const res of item.results){
       try{
-        const row={id:crypto.randomUUID(),tripid};
+        const key=normRing(res.ringnumber)+'|'+(res.breedername||'');
+        const existingId=existingByKey[key];
+        const row={};
         const setIf=(k,v)=>{ if(v) row[k]=v; };
         setIf('pigeonid',res.pigeonid); setIf('ringnumber',res.ringnumber);
         setIf('placement',res.placement); setIf('speed',res.speed);
@@ -4144,7 +4207,19 @@ async function runTripsImport(){
         setIf('prize_reggr',res.prize_reggr); setIf('prize_reg',res.prize_reg);
         setIf('as_rv',res.as_rv); setIf('as_reg',res.as_reg); setIf('as_nat',res.as_nat);
         setIf('breedername',res.breedername); setIf('breedernumber',res.breedernumber);
-        await apiPost('pigeontrips',row);
+        setIf('sex',res.sex);
+        const doWrite=async(r)=>{
+          if(existingId) await apiPatchBy('pigeontrips','id=eq.'+existingId,r);
+          else await apiPost('pigeontrips',{id:crypto.randomUUID(),tripid,...r});
+        };
+        try{
+          await doWrite(row);
+        }catch(e2){
+          // Fallback: sex-Spalte evtl. noch nicht angelegt
+          if(row.sex){ const r2={...row}; delete r2.sex; await doWrite(r2); }
+          else throw e2;
+        }
+        if(existingId) RT.imp.stats.resultsUpdated++; else RT.imp.stats.resultsNew++;
         RT.imp.stats.results++;
       } catch(e){ RT.imp.stats.err++; }
       if(RT.imp.stats.results%25===0) updP();
@@ -4165,26 +4240,39 @@ let ZT = { rows:[], loaded:false, selected:null };
 
 async function loadZuechterData(){
   try{
-    ZT.rows = await apiGet('/pigeontrips?breedername=not.is.null&select=breedername,breedernumber,tripid,ringnumber,prize_rv,prize_reggr,prize_reg,as_rv,as_reg&limit=10000') || [];
-  }catch(e){ ZT.rows = []; }
+    ZT.rows = await apiGet('/pigeontrips?breedername=not.is.null&select=breedername,breedernumber,tripid,pigeonid,ringnumber,sex,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat&limit=10000') || [];
+  }catch(e){
+    // Fallback: sex-Spalte evtl. noch nicht angelegt
+    try{
+      ZT.rows = await apiGet('/pigeontrips?breedername=not.is.null&select=breedername,breedernumber,tripid,pigeonid,ringnumber,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat&limit=10000') || [];
+    }catch(e2){ ZT.rows = []; }
+  }
   ZT.loaded = true;
 }
 
 function zuechterAgg(){
+  const tripById={}; RT.trips.forEach(t=>tripById[t.tripid]=t);
   const g={};
   ZT.rows.forEach(r=>{
     const key=r.breedername||'Unbekannt';
-    if(!g[key]) g[key]={name:key, number:r.breedernumber||null, total:0, rv:0, reggr:0, reg:0, trips:new Set(), bestAS:0};
+    if(!g[key]) g[key]={name:key, number:r.breedernumber||null, total:0, rvSet:0,rvWon:0, reggrSet:0,reggrWon:0, regSet:0,regWon:0, trips:new Set(), bestAS:0};
     const b=g[key];
     b.total++;
-    if(r.prize_rv)    b.rv++;
-    if(r.prize_reggr) b.reggr++;
-    if(r.prize_reg)   b.reg++;
     if(r.tripid) b.trips.add(r.tripid);
+    const trip=tripById[r.tripid];
+    // Preisausbeute nur über Reisen berechnen, bei denen die jeweilige Liste (RV/RegGr/Reg)
+    // überhaupt ausgewertet wurde (pigeonsset_xx>0) — sonst zählt "keine Liste erstellt" fälschlich als 0%.
+    if(trip){
+      if(trip.pigeonsset_rv>0)    { b.rvSet++;    if(r.prize_rv)    b.rvWon++; }
+      if(trip.pigeonsset_reggr>0) { b.reggrSet++; if(r.prize_reggr) b.reggrWon++; }
+      if(trip.pigeonsset_reg>0)   { b.regSet++;   if(r.prize_reg)   b.regWon++; }
+    }
     [r.as_rv,r.as_reg].forEach(v=>{ if(v&&v>b.bestAS) b.bestAS=v; });
   });
   return Object.values(g).map(b=>({...b, tripCount:b.trips.size,
-    pctRV:b.total?b.rv/b.total*100:0, pctRegGr:b.total?b.reggr/b.total*100:0, pctReg:b.total?b.reg/b.total*100:0
+    pctRV:   b.rvSet    ? b.rvWon/b.rvSet*100       : null,
+    pctRegGr:b.reggrSet ? b.reggrWon/b.reggrSet*100 : null,
+    pctReg:  b.regSet   ? b.regWon/b.regSet*100     : null
   })).sort((a,b)=>b.total-a.total);
 }
 
@@ -4208,9 +4296,9 @@ function renderZuechter(){
       <td style="font-family:monospace;font-size:11px">${escH(b.number||'—')}</td>
       <td style="text-align:center">${b.tripCount}</td>
       <td style="text-align:center">${b.total}</td>
-      <td style="text-align:center">${b.pctRV.toFixed(0)}%</td>
-      <td style="text-align:center">${b.pctRegGr.toFixed(0)}%</td>
-      <td style="text-align:center">${b.pctReg.toFixed(0)}%</td>
+      <td style="text-align:center">${b.pctRV!=null?b.pctRV.toFixed(0)+'%':'—'}</td>
+      <td style="text-align:center">${b.pctRegGr!=null?b.pctRegGr.toFixed(0)+'%':'—'}</td>
+      <td style="text-align:center">${b.pctReg!=null?b.pctReg.toFixed(0)+'%':'—'}</td>
       <td style="text-align:center;font-weight:600;color:var(--green)">${b.bestAS?b.bestAS.toFixed(2):'—'}</td>
     </tr>`).join('');
   return `<div><div class="serif" style="font-size:20px;margin-bottom:16px">🧑‍🌾 ${list.length} Züchter</div>
@@ -4237,26 +4325,30 @@ function renderZuechterDetail(name){
   const tripRows=Object.values(byTrip).map(t=>({...t, trip:tripById[t.tripid]}))
     .filter(t=>t.trip)
     .sort((a,b)=>(a.trip.tripdate||'').localeCompare(b.trip.tripdate||''))
-    .map(t=>`
+    .map(t=>{
+      // "—" bedeutet: für diese Reise wurde die betreffende Liste gar nicht ausgewertet
+      // (nicht mit 0 Preisen gleichzusetzen!)
+      const rvCell    = t.trip.pigeonsset_rv>0    ? t.rv+' ('+(t.rv/t.total*100).toFixed(0)+'%)'       : '—';
+      const reggrCell = t.trip.pigeonsset_reggr>0 ? t.reggr+' ('+(t.reggr/t.total*100).toFixed(0)+'%)' : '—';
+      const regCell   = t.trip.pigeonsset_reg>0   ? t.reg+' ('+(t.reg/t.total*100).toFixed(0)+'%)'     : '—';
+      return `
       <tr data-tripid="${t.tripid}" onclick="openTripFromZuechter(this.dataset.tripid)" style="cursor:pointer">
         <td>${t.trip.number}</td><td>${escH(t.trip.location||'')}</td><td>${t.trip.tripdate||'—'}</td>
         <td style="text-align:center">${t.total}</td>
-        <td style="text-align:center">${t.rv}${t.total?' ('+(t.rv/t.total*100).toFixed(0)+'%)':''}</td>
-        <td style="text-align:center">${t.reggr}${t.total?' ('+(t.reggr/t.total*100).toFixed(0)+'%)':''}</td>
-        <td style="text-align:center">${t.reg}${t.total?' ('+(t.reg/t.total*100).toFixed(0)+'%)':''}</td>
+        <td style="text-align:center">${rvCell}</td>
+        <td style="text-align:center">${reggrCell}</td>
+        <td style="text-align:center">${regCell}</td>
         <td style="text-align:center;font-weight:600;color:var(--green)">${t.bestAS?t.bestAS.toFixed(2):'—'}</td>
-      </tr>`).join('');
+      </tr>`;}).join('');
   const totalTauben=myRows.length;
-  const totalRV=myRows.filter(r=>r.prize_rv).length;
-  const totalRegGr=myRows.filter(r=>r.prize_reggr).length;
-  const totalReg=myRows.filter(r=>r.prize_reg).length;
+  const agg=zuechterAgg().find(b=>b.name===name)||{pctRV:null,pctRegGr:null,pctReg:null};
   return `<div><button class="back-btn" onclick="ZT.selected=null;render()">← Alle Züchter</button>
     <div class="card"><div class="serif" style="font-size:22px;margin-bottom:4px">${escH(name)}</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 16px">
-      <span class="badge badge-u">${Object.keys(byTrip).length} Reisen</span>
-      <span class="badge badge-u">RV: ${totalRV}${totalTauben?' ('+(totalRV/totalTauben*100).toFixed(0)+'%)':''}</span>
-      <span class="badge badge-u">RegGr: ${totalRegGr}${totalTauben?' ('+(totalRegGr/totalTauben*100).toFixed(0)+'%)':''}</span>
-      <span class="badge badge-u">Reg: ${totalReg}${totalTauben?' ('+(totalReg/totalTauben*100).toFixed(0)+'%)':''}</span>
+      <span class="badge badge-u">${Object.keys(byTrip).length} Reisen · ${totalTauben} Tauben</span>
+      <span class="badge badge-u">RV: ${agg.pctRV!=null?agg.pctRV.toFixed(0)+'%':'—'}</span>
+      <span class="badge badge-u">RegGr: ${agg.pctRegGr!=null?agg.pctRegGr.toFixed(0)+'%':'—'}</span>
+      <span class="badge badge-u">Reg: ${agg.pctReg!=null?agg.pctReg.toFixed(0)+'%':'—'}</span>
     </div>
     <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr><th>Reise</th><th>Ort</th><th>Datum</th><th style="text-align:center">Tauben</th>
@@ -4264,6 +4356,130 @@ function renderZuechterDetail(name){
         <th style="text-align:center">Bester AS</th></tr></thead>
       <tbody>${tripRows}</tbody></table></div>
     </div></div>`;
+}
+
+// ── BESTENLISTE ────────────────────────────────────────────────
+// Rangliste der Tauben nach Anzahl Preise (ein Flug zählt als ein Preis, unabhängig
+// davon in wie vielen Listen RV/RegGr/Reg gleichzeitig platziert wurde) und in
+// zweiter Instanz nach Summe der besten AS-Punkte je Flug. Je Reisesaison (Jahr)
+// getrennt ausgewertet, neueste Saison zuerst. Getrennt nach Vögel/Weibchen — das
+// Geschlecht wird bevorzugt aus der Verbands-Importdatei gelesen, funktioniert also
+// auch für Tauben ohne Zuordnung zur eigenen Datenbank — jeweils zusätzlich als
+// einjährig (Jahrgang = Saison-Jahr minus 1) gefiltert. Die Kategorie "Alle Tauben"
+// zeigt zusätzlich auch Tauben mit unbekanntem Geschlecht; deren Jahrgang wird bei
+// fehlender DB-Zuordnung direkt aus der Ringnummer abgeleitet (mittleres Segment,
+// z.B. DE 6559-23-3535 → Jahrgang 2023).
+let BL = { breeder:'ALL', cat:'gesamt' };
+
+function bestenliste(breederFilter){
+  const tripById={}; RT.trips.forEach(t=>tripById[t.tripid]=t);
+  // Schlüssel je Saison+Taube (Tauben ohne DB-Zuordnung werden über die Ringnummer gruppiert)
+  const byKey={};
+  ZT.rows.forEach(r=>{
+    if(breederFilter && breederFilter!=='ALL' && (r.breedername||'Unbekannt')!==breederFilter) return;
+    const trip=tripById[r.tripid];
+    const yr=trip?trip.vintage:null;
+    if(!yr) return; // ohne bekannte Reise/Saison keine Zuordnung möglich
+    const pid=r.pigeonid || ('ring:'+normRing(r.ringnumber||''));
+    const key=yr+'|'+pid;
+    if(!byKey[key]) byKey[key]={year:yr, pigeonid:r.pigeonid||null, ringnumber:r.ringnumber||null, prizes:0, asSum:0, breedernames:new Set(), sexVotes:{M:0,F:0}};
+    const b=byKey[key];
+    const hasPreis = r.prize_rv!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
+    if(hasPreis) b.prizes++;
+    const asVals=[r.as_rv,r.as_reg,r.as_nat].filter(v=>v!=null && v!=='');
+    if(asVals.length) b.asSum += Math.max(...asVals.map(Number));
+    if(r.breedername) b.breedernames.add(r.breedername);
+    if(r.sex==='M'||r.sex==='F') b.sexVotes[r.sex]++;
+  });
+
+  const entries=Object.values(byKey).map(b=>{
+    const p=b.pigeonid?S.pigeons.find(x=>x.pigeonid===b.pigeonid):null;
+    // Geschlecht bevorzugt aus der Verbands-Importdatei (dort für jede Taube vermerkt,
+    // funktioniert daher auch für Tauben, die nicht in der eigenen Datenbank stehen).
+    // Nur wenn die Importdatei kein Geschlecht liefert (z.B. Excel-Import), auf die
+    // eigene Datenbank zurückfallen.
+    let sex = b.sexVotes.M>=b.sexVotes.F && b.sexVotes.M>0 ? 'M'
+            : b.sexVotes.F>b.sexVotes.M ? 'F'
+            : (p?sex_(p):'?');
+    let birthYear=null, ring=b.ringnumber, name=null, inDb=!!p;
+    if(p){ birthYear=p.date_year; ring=p.ringnumber||ring; name=p.name; }
+    else { const parsed=parseRingComponents(b.ringnumber); birthYear=parsed?.date_year||null; }
+    return {...b, pigeon:p, inDb, sex, birthYear, ring, name, breedername:[...b.breedernames].join(', ')};
+  });
+
+  const years=[...new Set(entries.map(e=>e.year))].sort((a,b)=>Number(b)-Number(a));
+  const sortFn=(a,b)=> b.prizes-a.prizes || b.asSum-a.asSum;
+  const build=(filterFn)=> years.map(yr=>({
+    year:yr,
+    rows: entries.filter(e=>e.year===yr && filterFn(e,yr)).sort(sortFn)
+  })).filter(g=>g.rows.length);
+
+  return {
+    years,
+    gesamt:      build(()=>true),
+    tauber:      build(e=>e.sex==='M'),
+    taubinnen:   build(e=>e.sex==='F'),
+    tauberJg:    build((e,yr)=>e.sex==='M' && String(e.birthYear)===String(Number(yr)-1)),
+    taubinnenJg: build((e,yr)=>e.sex==='F' && String(e.birthYear)===String(Number(yr)-1))
+  };
+}
+
+function renderBestenliste(){
+  if(!ZT.loaded){ loadZuechterData().then(render); return '<div class="loading"><div class="spinner"></div>Lade Leistungsdaten…</div>'; }
+  if(!RT.trips.length){ loadTrips().then(render); return '<div class="loading"><div class="spinner"></div>Lade Reisen…</div>'; }
+  const breeders=[...new Set(ZT.rows.map(r=>r.breedername).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const data=bestenliste(BL.breeder);
+
+  const tabs=[
+    ['gesamt','🐦 Alle Tauben'],
+    ['tauber','♂ Vögel'],
+    ['taubinnen','♀ Weibchen'],
+    ['tauberJg','♂ Vögel (einjährig)'],
+    ['taubinnenJg','♀ Weibchen (einjährig)']
+  ];
+  const groups=data[BL.cat]||[];
+
+  const renderRow=(e,i)=>`
+    <tr ${e.pigeonid?`onclick="selectPigeon('${e.pigeonid}')" style="cursor:pointer"`:''}>
+      <td style="text-align:center;font-weight:600;color:${i<3?'var(--green)':'var(--text3)'}">${i+1}</td>
+      <td style="font-family:monospace;font-size:12px">${escH(e.ring||'—')}${!e.inDb?' <span style="color:var(--text3);font-size:10px">(nicht in DB)</span>':''}</td>
+      <td>${escH(e.name||'—')}</td>
+      <td style="font-size:12px;color:var(--text3)">${e.birthYear||'—'}</td>
+      ${BL.breeder==='ALL'?'<td style="font-size:12px;color:var(--text3)">'+escH(e.breedername||'—')+'</td>':''}
+      <td style="text-align:center;font-weight:600">${e.prizes}</td>
+      <td style="text-align:center;font-weight:600;color:var(--green)">${e.asSum.toFixed(2)}</td>
+    </tr>`;
+
+  const yearBlocks = groups.length ? groups.map(g=>`
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Saison ${g.year}</div>
+      <div class="card"><div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr><th>#</th><th>Ring</th><th>Name</th><th>Jg.</th>${BL.breeder==='ALL'?'<th>Züchter</th>':''}<th style="text-align:center">Preise</th><th style="text-align:center">Σ AS</th></tr></thead>
+        <tbody>${g.rows.map(renderRow).join('')}</tbody>
+      </table></div></div>
+    </div>`).join('')
+    : '<div class="card" style="text-align:center;padding:24px;color:var(--text3)">Keine Tauben in dieser Kategorie.</div>';
+
+  return `<div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <div class="serif" style="font-size:20px">🏆 Bestenliste</div>
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text3)">
+        Züchter:
+        <select onchange="BL.breeder=this.value;render()" style="max-width:260px">
+          <option value="ALL" ${BL.breeder==='ALL'?'selected':''}>Gesamt (alle Züchter)</option>
+          ${breeders.map(b=>`<option value="${escH(b)}" ${BL.breeder===b?'selected':''}>${escH(b)}</option>`).join('')}
+        </select>
+      </label>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      ${tabs.map(([k,label])=>`<button class="btn ${BL.cat===k?'':'btn-outline'}" style="font-size:12px;padding:7px 12px" onclick="BL.cat='${k}';render()">${label}</button>`).join('')}
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">
+      Je Reisesaison getrennt sortiert nach Anzahl Preise (ein Flug zählt als ein Preis, egal in wie vielen Listen RV/RegGr/Reg platziert wurde), bei Gleichstand nach Summe der AS-Punkte (je Flug wird der beste AS-Wert gewertet).
+      ${BL.cat==='gesamt'?'Enthält auch Tauben ohne Zuordnung zur eigenen Datenbank (Jahrgang dann aus der Ringnummer abgeleitet).':'Das Geschlecht stammt aus der Verbands-Importdatei, daher erscheinen hier auch Tauben ohne Zuordnung zur eigenen Datenbank.'}
+    </div>
+    ${yearBlocks}
+  </div>`;
 }
 
 // Beim App-Start Reisen laden
