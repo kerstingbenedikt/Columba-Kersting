@@ -3951,15 +3951,18 @@ async function parse009(file, breedernumber){
       if(!vrnr||!endnr||!yr) return;
       const ring=`DE-${vrnr.padStart(5,'0')}-${yr.padStart(2,'0')}-${endnr}`;
       // p1=Platz RV | p2=Platz RegGr (G-Liste) | p3=Platz Reg (A-Liste, größer)
-      const _h   = reiseMap[rNr];
-      const _prv = as_!==0 ? as_ : (p1!==0?p1:null);
+      // Der AS-Wert (Pos. 61-66) ist der von der Verbandssoftware bereits fertig berechnete,
+      // offizielle AS-Punktwert für diesen Flug (÷100). Dieser wird 1:1 übernommen statt
+      // selbst neu berechnet zu werden — das war die Ursache der Abweichungen zum DSE-Portal.
+      const _prv = p1!==0?p1:null;
       const _prg = p2!==0?p2:null;  // RegGr = G-Liste
       const _pre = p3!==0?p3:null;  // Reg   = A-Liste (große Liste)
+      const asOfficial = as_!==0 ? Math.round(as_)/100 : null;
       reiseMap[rNr].results.push({
         ringnumber:ring, sex:geschl==='W'?'F':'M',
         speed,
         prize_rv:_prv, prize_fg:null, prize_reggr:_pre, prize_reg:_prg,
-        as_rv:calcAS(_prv,_h.g_rv||0), as_reg:calcAS(_prg,_h.g_reggr||0)
+        as_rv:asOfficial, as_reg:asOfficial
       });
     }
   });
@@ -4369,7 +4372,7 @@ function renderZuechterDetail(name){
 // zeigt zusätzlich auch Tauben mit unbekanntem Geschlecht; deren Jahrgang wird bei
 // fehlender DB-Zuordnung direkt aus der Ringnummer abgeleitet (mittleres Segment,
 // z.B. DE 6559-23-3535 → Jahrgang 2023).
-let BL = { breeder:'ALL', cat:'gesamt' };
+let BL = { breeder:'ALL', cat:'gesamt', expanded:new Set() };
 
 function bestenliste(breederFilter){
   const tripById={}; RT.trips.forEach(t=>tripById[t.tripid]=t);
@@ -4382,14 +4385,20 @@ function bestenliste(breederFilter){
     if(!yr) return; // ohne bekannte Reise/Saison keine Zuordnung möglich
     const pid=r.pigeonid || ('ring:'+normRing(r.ringnumber||''));
     const key=yr+'|'+pid;
-    if(!byKey[key]) byKey[key]={year:yr, pigeonid:r.pigeonid||null, ringnumber:r.ringnumber||null, prizes:0, asSum:0, breedernames:new Set(), sexVotes:{M:0,F:0}};
+    if(!byKey[key]) byKey[key]={year:yr, pigeonid:r.pigeonid||null, ringnumber:r.ringnumber||null, prizes:0, asSum:0, breedernames:new Set(), sexVotes:{M:0,F:0}, flights:[]};
     const b=byKey[key];
     const hasPreis = r.prize_rv!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
     if(hasPreis) b.prizes++;
     const asVals=[r.as_rv,r.as_reg,r.as_nat].filter(v=>v!=null && v!=='');
-    if(asVals.length) b.asSum += Math.max(...asVals.map(Number));
+    const flightAS = asVals.length ? Math.max(...asVals.map(Number)) : null;
+    if(flightAS!=null) b.asSum += flightAS;
     if(r.breedername) b.breedernames.add(r.breedername);
     if(r.sex==='M'||r.sex==='F') b.sexVotes[r.sex]++;
+    b.flights.push({
+      tripNumber: trip.number, location: trip.location, tripdate: trip.tripdate,
+      prizeRV: r.prize_rv, prizeRegGr: r.prize_reggr, prizeReg: r.prize_reg,
+      as: flightAS, hasPreis
+    });
   });
 
   const entries=Object.values(byKey).map(b=>{
@@ -4404,7 +4413,8 @@ function bestenliste(breederFilter){
     let birthYear=null, ring=b.ringnumber, name=null, inDb=!!p;
     if(p){ birthYear=p.date_year; ring=p.ringnumber||ring; name=p.name; }
     else { const parsed=parseRingComponents(b.ringnumber); birthYear=parsed?.date_year||null; }
-    return {...b, pigeon:p, inDb, sex, birthYear, ring, name, breedername:[...b.breedernames].join(', ')};
+    const flights=[...b.flights].sort((a,b2)=>(a.tripNumber||0)-(b2.tripNumber||0));
+    return {...b, pigeon:p, inDb, sex, birthYear, ring, name, flights, breedername:[...b.breedernames].join(', ')};
   });
 
   const years=[...new Set(entries.map(e=>e.year))].sort((a,b)=>Number(b)-Number(a));
@@ -4438,24 +4448,51 @@ function renderBestenliste(){
     ['taubinnenJg','♀ Weibchen (einjährig)']
   ];
   const groups=data[BL.cat]||[];
+  if(!BL.expanded) BL.expanded=new Set();
+  const rowKey=(yr,e)=> BL.cat+'|'+yr+'|'+(e.pigeonid||e.ring);
+  function toggleBL(k){ if(BL.expanded.has(k)) BL.expanded.delete(k); else BL.expanded.add(k); render(); }
+  window.toggleBL = toggleBL;
 
-  const renderRow=(e,i)=>`
-    <tr ${e.pigeonid?`onclick="selectPigeon('${e.pigeonid}')" style="cursor:pointer"`:''}>
+  const renderFlights=(e)=>{
+    if(!e.flights.length) return '<div style="padding:10px;color:var(--text3);font-size:12px">Keine Flugdaten.</div>';
+    const cells=e.flights.map((f,i)=>{
+      const platz=f.prizeRV||f.prizeRegGr||f.prizeReg||null;
+      return `<div style="text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">F${String(i+1).padStart(2,'0')}</div>
+        <div style="font-size:12px;font-weight:500">${platz!=null?platz:'—'}</div>
+        <div style="font-size:11px;color:var(--green)">${f.as!=null?f.as.toFixed(2):'—'}</div>
+      </div>`;
+    }).join('');
+    const sumCheck=e.flights.reduce((s,f)=>s+(f.as||0),0);
+    return `<div style="padding:10px 4px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;background:var(--bg2);border-radius:8px;padding:10px">${cells}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Summe geprüft: <strong style="color:var(--text2)">${sumCheck.toFixed(2)}</strong> ${Math.abs(sumCheck-e.asSum)<0.01?'✓ stimmt mit Σ AS überein':'⚠ weicht von Σ AS ab — bitte melden'}</div>
+    </div>`;
+  };
+
+  const renderRow=(e,i,yr)=>{
+    const k=rowKey(yr,e);
+    const open=BL.expanded.has(k);
+    return `
+    <tr>
       <td style="text-align:center;font-weight:600;color:${i<3?'var(--green)':'var(--text3)'}">${i+1}</td>
-      <td style="font-family:monospace;font-size:12px">${escH(e.ring||'—')}${!e.inDb?' <span style="color:var(--text3);font-size:10px">(nicht in DB)</span>':''}</td>
+      <td style="text-align:center"><button class="btn btn-outline" style="padding:2px 8px;font-size:11px;min-width:0" onclick="event.stopPropagation();toggleBL('${k}')">${open?'−':'+'}</button></td>
+      <td style="font-family:monospace;font-size:12px;${e.pigeonid?'cursor:pointer':''}" ${e.pigeonid?`onclick="selectPigeon('${e.pigeonid}')"`:''}>${escH(e.ring||'—')}${!e.inDb?' <span style="color:var(--text3);font-size:10px">(nicht in DB)</span>':''}</td>
       <td>${escH(e.name||'—')}</td>
       <td style="font-size:12px;color:var(--text3)">${e.birthYear||'—'}</td>
       ${BL.breeder==='ALL'?'<td style="font-size:12px;color:var(--text3)">'+escH(e.breedername||'—')+'</td>':''}
       <td style="text-align:center;font-weight:600">${e.prizes}</td>
       <td style="text-align:center;font-weight:600;color:var(--green)">${e.asSum.toFixed(2)}</td>
-    </tr>`;
+    </tr>
+    ${open?`<tr><td colspan="${BL.breeder==='ALL'?8:7}" style="padding:0">${renderFlights(e)}</td></tr>`:''}`;
+  };
 
   const yearBlocks = groups.length ? groups.map(g=>`
     <div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Saison ${g.year}</div>
       <div class="card"><div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr><th>#</th><th>Ring</th><th>Name</th><th>Jg.</th>${BL.breeder==='ALL'?'<th>Züchter</th>':''}<th style="text-align:center">Preise</th><th style="text-align:center">Σ AS</th></tr></thead>
-        <tbody>${g.rows.map(renderRow).join('')}</tbody>
+        <thead><tr><th>#</th><th></th><th>Ring</th><th>Name</th><th>Jg.</th>${BL.breeder==='ALL'?'<th>Züchter</th>':''}<th style="text-align:center">Preise</th><th style="text-align:center">Σ AS</th></tr></thead>
+        <tbody>${g.rows.map((e,i)=>renderRow(e,i,g.year)).join('')}</tbody>
       </table></div></div>
     </div>`).join('')
     : '<div class="card" style="text-align:center;padding:24px;color:var(--text3)">Keine Tauben in dieser Kategorie.</div>';
@@ -4475,8 +4512,9 @@ function renderBestenliste(){
       ${tabs.map(([k,label])=>`<button class="btn ${BL.cat===k?'':'btn-outline'}" style="font-size:12px;padding:7px 12px" onclick="BL.cat='${k}';render()">${label}</button>`).join('')}
     </div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:12px">
-      Je Reisesaison getrennt sortiert nach Anzahl Preise (ein Flug zählt als ein Preis, egal in wie vielen Listen RV/RegGr/Reg platziert wurde), bei Gleichstand nach Summe der AS-Punkte (je Flug wird der beste AS-Wert gewertet).
+      Je Reisesaison getrennt sortiert nach Anzahl Preise (ein Flug zählt als ein Preis, egal in wie vielen Listen RV/RegGr/Reg platziert wurde), bei Gleichstand nach Summe der AS-Punkte (je Flug wird der offizielle, aus der Importdatei übernommene AS-Wert gewertet — nicht selbst nachgerechnet).
       ${BL.cat==='gesamt'?'Enthält auch Tauben ohne Zuordnung zur eigenen Datenbank (Jahrgang dann aus der Ringnummer abgeleitet).':'Das Geschlecht stammt aus der Verbands-Importdatei, daher erscheinen hier auch Tauben ohne Zuordnung zur eigenen Datenbank.'}
+      Über „+" lässt sich jede Taube aufklappen und die einzelnen Flüge (Platz &amp; AS-Wert) zur Kontrolle gegen das DSE-Portal prüfen.
     </div>
     ${yearBlocks}
   </div>`;
