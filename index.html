@@ -363,7 +363,7 @@ async function startApp(){
   loadData();
 }
 
-const DEFAULT_COLUMNS = ['ringnumber','name','year','gender','color','strain','status','instock','father','mother','breeder','owner'];
+const DEFAULT_COLUMNS = ['ringnumber','name','year','gender','color','strain','status','instock','father','mother','breeder','owner','reiseleistung','top10'];
 
 const S = {
   tab: 'tauben', pigeons: [], filtered: [],
@@ -542,6 +542,23 @@ const COLUMN_DEFS = [
     val:p=>p.breeder||'', cell:p=>escH(p.breeder||'—') },
   { key:'owner', label:'Besitzer',
     val:p=>p.owner||'', cell:p=>escH(p.owner||'—') },
+  { key:'reiseleistung', label:'Reiseleistung',
+    // Kein sortKey: Reisedaten werden nur seitenweise nachgeladen (PT_CACHE), eine
+    // Sortierung über alle gefilterten Tauben hinweg wäre daher unvollständig/irreführend.
+    val:p=>{ const s=pigeonReiseSummary(p.pigeonid); return (s&&s.gesetzt)?`${s.preise}/${s.gesetzt} Preise, Σ AS ${s.asSum.toFixed(2)}`:''; },
+    cell:p=>{
+      const s=pigeonReiseSummary(p.pigeonid);
+      if(s===null) return '<span style="color:var(--text3);font-size:12px">Lade…</span>';
+      if(!s.gesetzt) return '<span style="color:var(--text3)">—</span>';
+      return `<span style="font-size:12px">${s.preise}/${s.gesetzt} Preise</span><br><span style="font-size:11px;color:var(--text3)">Σ AS ${s.asSum.toFixed(2)}</span>`;
+    } },
+  { key:'top10', label:'Top10',
+    val:p=>{ const s=pigeonReiseSummary(p.pigeonid); return s?String(s.top10):''; },
+    cell:p=>{
+      const s=pigeonReiseSummary(p.pigeonid);
+      if(s===null) return '<span style="color:var(--text3);font-size:12px">…</span>';
+      return s.top10>0 ? `<span style="color:var(--amber);font-weight:600">🏆 ${s.top10}</span>` : '<span style="color:var(--text3)">—</span>';
+    } },
 ];
 const COLUMN_BY_KEY = Object.fromEntries(COLUMN_DEFS.map(c=>[c.key,c]));
 
@@ -924,8 +941,16 @@ async function applyBulkEdit(){
   alert(err ? `Fertig: ${done-err} aktualisiert, ${err} Fehler.` : `✅ ${done} Taube(n) aktualisiert.`);
 }
 
-function exportCSV(){
+async function ensureReiseColumnsLoadedForExport(cols){
+  if(!cols.some(c=>c.key==='reiseleistung'||c.key==='top10')) return;
+  const ids = S.filtered.map(p=>p.pigeonid);
+  if(S.error) return; // keine Blockade bei DB-Fehlern
+  try{ await loadPigeonTripsBatchChunked(ids); }catch(e){ /* Export läuft trotzdem weiter */ }
+}
+
+async function exportCSV(){
   const cols = activeColumns();
+  await ensureReiseColumnsLoadedForExport(cols);
   const header = cols.map(c=>c.label);
   const rows = S.filtered.map(p=>cols.map(c=>c.val(p)));
   const csv = [header, ...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
@@ -937,9 +962,10 @@ function exportCSV(){
   setTimeout(()=>URL.revokeObjectURL(url),5000);
 }
 
-function exportPDF(){
+async function exportPDF(){
   const esc = s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const cols = activeColumns();
+  await ensureReiseColumnsLoadedForExport(cols);
   const header = cols.map(c=>c.label);
   const rows = S.filtered.map(p=>cols.map(c=>esc(c.val(p))));
   // Aktive Filter als Text
@@ -1270,6 +1296,12 @@ function render(){
 // ── LISTE ──────────────────────────────────────────────────────
 function buildTableHTML(page, si){
   const cols = activeColumns();
+  if(cols.some(c=>c.key==='reiseleistung'||c.key==='top10')){
+    const missing=page.map(p=>p.pigeonid).filter(id=>id && !PT_CACHE[id]);
+    if(missing.length){
+      loadPigeonTripsBatch(missing).then(()=>{ if(S.tab==='tauben' && !S.selected) renderTableOnly(); });
+    }
+  }
   const allOnPageSelected = S.bulkMode && page.length>0 && page.every(p=>S.bulkSelected.has(p.pigeonid));
   const headCb = S.bulkMode ? `<th class="bulk-th"><input type="checkbox" id="bulk-select-all" ${allOnPageSelected?'checked':''} onclick="event.stopPropagation()" onchange="toggleBulkPage(this.checked)"></th>` : '';
   return `<table>
@@ -3639,6 +3671,55 @@ async function loadPigeonTrips(pigeonid){
   } catch(e){ PT_CACHE[pigeonid]=[]; return []; }
 }
 
+// Batch-Ladung der Reisedaten für mehrere Tauben auf einmal (z.B. eine Tabellenseite
+// der Tauben-Übersicht) statt einer Einzelabfrage pro Taube.
+async function loadPigeonTripsBatch(pigeonids){
+  const missing=[...new Set(pigeonids.filter(id=>id && !PT_CACHE[id]))];
+  if(!missing.length) return;
+  try{
+    if(!RT.trips.length) await loadTrips();
+    const tripById={}; RT.trips.forEach(t=>{ tripById[t.tripid]=t; });
+    const idsParam=missing.map(id=>`"${id}"`).join(',');
+    const rows=await apiGet('/pigeontrips?pigeonid=in.('+idsParam+')&order=placement.asc&limit=20000')||[];
+    const byPigeon={}; missing.forEach(id=>{ byPigeon[id]=[]; });
+    rows.forEach(r=>{
+      const t=tripById[r.tripid]||{};
+      const enriched={...r, vintage:t.vintage||null, tripnumber:t.number||null, location:t.location||null,
+        tripdate:t.tripdate||null, pigeonsset:t.pigeonsset||null,
+        pigeonsset_rv:t.pigeonsset_rv||null, pigeonsset_reggr:t.pigeonsset_reggr||null, pigeonsset_reg:t.pigeonsset_reg||null,
+        distance:t.averagedistance3!=null?Number(t.averagedistance3):null};
+      if(!byPigeon[r.pigeonid]) byPigeon[r.pigeonid]=[];
+      byPigeon[r.pigeonid].push(enriched);
+    });
+    missing.forEach(id=>{ PT_CACHE[id]=byPigeon[id]||[]; });
+  }catch(e){ missing.forEach(id=>{ if(!PT_CACHE[id]) PT_CACHE[id]=[]; }); }
+}
+// Wie loadPigeonTripsBatch, aber in Häppchen (z.B. für CSV/PDF-Export über
+// tausende Tauben hinweg), um die Query-URL nicht zu sprengen.
+async function loadPigeonTripsBatchChunked(pigeonids, chunkSize=150){
+  const missing=[...new Set(pigeonids.filter(id=>id && !PT_CACHE[id]))];
+  for(let i=0;i<missing.length;i+=chunkSize){
+    await loadPigeonTripsBatch(missing.slice(i,i+chunkSize));
+  }
+}
+
+// Kompakte Reiseleistungs-Kennzahlen einer Taube für die Tauben-Übersicht.
+// Gibt null zurück, solange die Daten noch nicht geladen sind (Aufrufer zeigt "Lade…").
+function pigeonReiseSummary(pigeonid){
+  const rows=PT_CACHE[pigeonid];
+  if(!rows) return null;
+  if(!rows.length) return {gesetzt:0,preise:0,asSum:0,top10:0};
+  let gesetzt=0,preise=0,asSum=0;
+  rows.forEach(r=>{
+    gesetzt++;
+    const hasPreis=r.prize_rv!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
+    if(hasPreis) preise++;
+    const asVals=[r.as_rv,r.as_reg,r.as_nat].filter(v=>v!=null && v!=='');
+    if(asVals.length) asSum+=Math.max(...asVals.map(Number));
+  });
+  return {gesetzt, preise, asSum, top10:getTop10Placements(rows).length};
+}
+
 function groupPigeonTripsByYear(rows){
   const byYear={};
   rows.forEach(r=>{
@@ -3947,22 +4028,22 @@ async function parse009(file, breedernumber){
       const p2=parseInt(line.substring(46,51).trim())||0;
       const p3=parseInt(line.substring(51,56).trim())||0;
       const p4=parseInt(line.substring(56,61).trim())||0;
-      const as_=parseInt(line.substring(61,66).trim())||0;
       if(!vrnr||!endnr||!yr) return;
       const ring=`DE-${vrnr.padStart(5,'0')}-${yr.padStart(2,'0')}-${endnr}`;
       // p1=Platz RV | p2=Platz RegGr (G-Liste) | p3=Platz Reg (A-Liste, größer)
-      // Der AS-Wert (Pos. 61-66) ist der von der Verbandssoftware bereits fertig berechnete,
-      // offizielle AS-Punktwert für diesen Flug (÷100). Dieser wird 1:1 übernommen statt
-      // selbst neu berechnet zu werden — das war die Ursache der Abweichungen zum DSE-Portal.
-      const _prv = p1!==0?p1:null;
-      const _prg = p2!==0?p2:null;  // RegGr = G-Liste
-      const _pre = p3!==0?p3:null;  // Reg   = A-Liste (große Liste)
-      const asOfficial = as_!==0 ? Math.round(as_)/100 : null;
+      // AS-Punkte werden je Liste separat aus Platzierung + tatsächlicher Feldgröße dieser
+      // Liste berechnet (RV-Feld ist meist klein, RegGr mittel, Reg/A-Liste groß) — ein
+      // fest angenommenes AS-Byte-Feld in der Datei hat sich als nicht zuverlässig
+      // erwiesen (führte zu Platz/100 statt echtem AS-Wert).
+      const _h = reiseMap[rNr];
+      const prv = p1!==0?p1:null;
+      const prg = p2!==0?p2:null;  // RegGr = G-Liste
+      const pre = p3!==0?p3:null;  // Reg   = A-Liste (große Liste)
       reiseMap[rNr].results.push({
         ringnumber:ring, sex:geschl==='W'?'F':'M',
         speed,
-        prize_rv:_prv, prize_fg:null, prize_reggr:_pre, prize_reg:_prg,
-        as_rv:asOfficial, as_reg:asOfficial
+        prize_rv:prv, prize_fg:null, prize_reggr:prg, prize_reg:pre,
+        as_rv:calcAS(prv,_h.g_rv||0), as_reg:calcAS(pre,_h.g_reg||0), as_nat:calcAS(prg,_h.g_reggr||0)
       });
     }
   });
@@ -4389,15 +4470,20 @@ function bestenliste(breederFilter){
     const b=byKey[key];
     const hasPreis = r.prize_rv!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
     if(hasPreis) b.prizes++;
-    const asVals=[r.as_rv,r.as_reg,r.as_nat].filter(v=>v!=null && v!=='');
-    const flightAS = asVals.length ? Math.max(...asVals.map(Number)) : null;
+    // Je Liste (RV/RegGr/Reg) ein Kandidatenpaar aus Platz+AS; das beste (höchste AS) gilt für den Flug
+    const candidates=[
+      {platz:r.prize_rv,    as:r.as_rv},
+      {platz:r.prize_reggr, as:r.as_nat},
+      {platz:r.prize_reg,   as:r.as_reg}
+    ].filter(c=>c.as!=null && c.as!=='');
+    const best = candidates.length ? candidates.reduce((a,c)=>Number(c.as)>Number(a.as)?c:a) : null;
+    const flightAS = best ? Number(best.as) : null;
     if(flightAS!=null) b.asSum += flightAS;
     if(r.breedername) b.breedernames.add(r.breedername);
     if(r.sex==='M'||r.sex==='F') b.sexVotes[r.sex]++;
     b.flights.push({
       tripNumber: trip.number, location: trip.location, tripdate: trip.tripdate,
-      prizeRV: r.prize_rv, prizeRegGr: r.prize_reggr, prizeReg: r.prize_reg,
-      as: flightAS, hasPreis
+      platz: best?best.platz:null, as: flightAS, hasPreis
     });
   });
 
@@ -4456,10 +4542,9 @@ function renderBestenliste(){
   const renderFlights=(e)=>{
     if(!e.flights.length) return '<div style="padding:10px;color:var(--text3);font-size:12px">Keine Flugdaten.</div>';
     const cells=e.flights.map((f,i)=>{
-      const platz=f.prizeRV||f.prizeRegGr||f.prizeReg||null;
       return `<div style="text-align:center">
         <div style="font-size:10px;color:var(--text3);margin-bottom:2px">F${String(i+1).padStart(2,'0')}</div>
-        <div style="font-size:12px;font-weight:500">${platz!=null?platz:'—'}</div>
+        <div style="font-size:12px;font-weight:500">${f.platz!=null?f.platz:'—'}</div>
         <div style="font-size:11px;color:var(--green)">${f.as!=null?f.as.toFixed(2):'—'}</div>
       </div>`;
     }).join('');
