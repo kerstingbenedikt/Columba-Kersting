@@ -51,6 +51,7 @@ main{padding:18px 20px;max-width:1300px;margin:0 auto}
 
 /* ── Suche & Filter ── */
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.search-row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
 .search-wrap{position:relative;flex:1;min-width:200px}
 .search-wrap input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px 9px 36px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .15s}
 .search-wrap input:focus{border-color:var(--green)}
@@ -59,6 +60,15 @@ main{padding:18px 20px;max-width:1300px;margin:0 auto}
 select{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:8px 10px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;height:36px}
 select:focus{border-color:var(--green)}
 .count-label{font-size:12px;color:var(--text3);white-space:nowrap}
+/* Filter & Werkzeuge: eingeklappt per Default, damit die Ergebnisliste auf mobilen
+   Geräten sofort sichtbar ist statt hinter langen Filterreihen zu verschwinden. */
+.filter-panel{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:14px;background:var(--bg2)}
+.filter-panel summary{list-style:none;cursor:pointer;padding:10px 14px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);user-select:none}
+.filter-panel summary::-webkit-details-marker{display:none}
+.filter-panel summary::before{content:'▸';display:inline-block;color:var(--text3);transition:transform .15s;font-size:11px}
+.filter-panel[open] summary::before{transform:rotate(90deg)}
+.filter-panel-body{padding:2px 14px 14px;border-top:1px solid var(--border)}
+.filter-badge{background:var(--green3);color:#e8f0e8;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600}
 
 /* ── Tabelle ── */
 .table-wrap{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--border)}
@@ -212,6 +222,10 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
   .subnav-btn{padding:8px 13px;font-size:12px}
   .toolbar{gap:6px}
   .search-wrap{min-width:0}
+  .search-row{gap:6px}
+  .count-label{font-size:11px}
+  .filter-panel summary{padding:9px 12px;font-size:12.5px}
+  .filter-panel-body{padding:2px 12px 12px}
   .btn,.btn-outline{padding:8px 13px}
   .form-grid{grid-template-columns:1fr}
   .field-grid{grid-template-columns:1fr 1fr}
@@ -412,6 +426,7 @@ const S = {
   tab: 'tauben', pigeons: [], filtered: [],
   page: 0, pageSize: 50,
   search: '', sexFilter: 'all', yearFilter: 'all', inStockFilter: 'all', colorFilter: 'all', stateFilter: 'all', racingFilter: 'all',
+  filtersOpen: false,
   pigeonStates: [],
   uniqueColors: [], uniqueRaces: [], uniqueStrains: [], uniqueBreeders: [],
   sortCol: 'ringnumber', sortDir: 1,
@@ -1498,51 +1513,59 @@ function renderList(){
   const start=S.page*S.pageSize, end=start+S.pageSize;
   const page=S.filtered.slice(start,end);
   const totalPages=Math.ceil(S.filtered.length/S.pageSize)||1;
+  const activeFilterCount=[S.sexFilter,S.yearFilter,S.inStockFilter,S.colorFilter,S.stateFilter,S.racingFilter].filter(v=>v&&v!=='all').length;
   return `
     ${S.error?`<div class="error-box">⚠️ ${escH(S.error)}</div>`:''}
-    <div class="toolbar">
+    <div class="search-row">
       <div class="search-wrap"><span class="search-icon">🔍</span>
         <input id="tauben-search" type="text" placeholder="Endnr. (1), Jahrg+Nr (26/1), Name+Nr (idefix 1), Text…" title="26/1 = Jahrgang 2026 Endnummer 1 | idefix 1 = Name + Nummer | 455 = Endnummer" value="${escH(S.search)}" oninput="S.search=this.value;applyFilter()">
       </div>
-      <select id="sex-filter" onchange="S.sexFilter=this.value;applyFilter()">
-        <option value="all" ${S.sexFilter==='all'?'selected':''}>Alle</option>
-        <option value="M" ${S.sexFilter==='M'?'selected':''}>♂ Täuber</option>
-        <option value="F" ${S.sexFilter==='F'?'selected':''}>♀ Täubin</option>
-      </select>
-      <select id="year-filter" onchange="S.yearFilter=this.value;applyFilter()">
-        <option value="all">Alle Jahrgänge</option>
-        ${years.map(y=>`<option value="${y}"${S.yearFilter===String(y)?' selected':''}>${y}</option>`).join('')}
-      </select>
-      <select id="stock-filter" onchange="S.inStockFilter=this.value;applyFilter()">
-        <option value="all">Alle Bestände</option>
-        <option value="yes"${S.inStockFilter==='yes'?' selected':''}>Im Bestand</option>
-        <option value="no"${S.inStockFilter==='no'?' selected':''}>Nicht im Bestand</option>
-      </select>
-      <button class="btn btn-outline btn-sm" onclick="resetTaubenFilter()">↺ Filter zurücksetzen</button>
       <span id="count-label" class="count-label">${S.filtered.length.toLocaleString('de')} / ${S.pigeons.length.toLocaleString('de')}</span>
     </div>
-    <div class="toolbar" style="flex-wrap:wrap;gap:6px;padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
-      <select id="color-filter" onchange="S.colorFilter=this.value;S.page=0;applyFilter()">
-        <option value="all">🎨 Alle Farben</option>
-        ${[...new Set(S.pigeons.map(p=>p.color).filter(Boolean))].sort().map(c=>`<option value="${escH(c)}"${S.colorFilter===c?' selected':''}>${escH(c)}</option>`).join('')}
-      </select>
-      <select id="state-filter" onchange="S.stateFilter=this.value;S.page=0;applyFilter()">
-        <option value="all">📋 Alle Status</option>
-        ${(S.pigeonStates.length?S.pigeonStates:S.pigeons.filter(p=>p.pigeonstate).map(p=>({name:p.pigeonstate,pigeonstateid:p.pigeonstate}))).map(s=>`<option value="${escH(s.name)}"${S.stateFilter===s.name?' selected':''}>${escH(s.name)}</option>`).join('')}
-      </select>
-      <select id="racing-filter" onchange="S.racingFilter=this.value;S.page=0;applyFilter()">
-        <option value="all">🏁 Reise: Alle</option>
-        <option value="yes"${S.racingFilter==='yes'?' selected':''}>Reisetauben</option>
-        <option value="no"${S.racingFilter==='no'?' selected':''}>Keine Reisetauben</option>
-      </select>
-      <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
-        ${renderColumnPicker()}
-        <button class="btn ${S.bulkMode?'':'btn-outline'} btn-sm" onclick="toggleBulkMode()">${S.bulkMode?'✕ Massenbearbeitung beenden':'🧩 Massenbearbeitung'}</button>
-        <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben einheitlich formatieren und Duplikate zusammenführen">🧹 Ringnummern bereinigen</button>
-        <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">📥 CSV</button>
-        <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">🖨 PDF-Liste</button>
+    <details class="filter-panel" id="filter-panel" ${S.filtersOpen?'open':''} ontoggle="S.filtersOpen=this.open">
+      <summary>⚙️ Filter &amp; Werkzeuge${activeFilterCount?` <span class="filter-badge">${activeFilterCount}</span>`:''}</summary>
+      <div class="filter-panel-body">
+        <div class="toolbar">
+          <select id="sex-filter" onchange="S.sexFilter=this.value;applyFilter()">
+            <option value="all" ${S.sexFilter==='all'?'selected':''}>Alle</option>
+            <option value="M" ${S.sexFilter==='M'?'selected':''}>♂ Täuber</option>
+            <option value="F" ${S.sexFilter==='F'?'selected':''}>♀ Täubin</option>
+          </select>
+          <select id="year-filter" onchange="S.yearFilter=this.value;applyFilter()">
+            <option value="all">Alle Jahrgänge</option>
+            ${years.map(y=>`<option value="${y}"${S.yearFilter===String(y)?' selected':''}>${y}</option>`).join('')}
+          </select>
+          <select id="stock-filter" onchange="S.inStockFilter=this.value;applyFilter()">
+            <option value="all">Alle Bestände</option>
+            <option value="yes"${S.inStockFilter==='yes'?' selected':''}>Im Bestand</option>
+            <option value="no"${S.inStockFilter==='no'?' selected':''}>Nicht im Bestand</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="resetTaubenFilter()">↺ Filter zurücksetzen</button>
+        </div>
+        <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
+          <select id="color-filter" onchange="S.colorFilter=this.value;S.page=0;applyFilter()">
+            <option value="all">🎨 Alle Farben</option>
+            ${[...new Set(S.pigeons.map(p=>p.color).filter(Boolean))].sort().map(c=>`<option value="${escH(c)}"${S.colorFilter===c?' selected':''}>${escH(c)}</option>`).join('')}
+          </select>
+          <select id="state-filter" onchange="S.stateFilter=this.value;S.page=0;applyFilter()">
+            <option value="all">📋 Alle Status</option>
+            ${(S.pigeonStates.length?S.pigeonStates:S.pigeons.filter(p=>p.pigeonstate).map(p=>({name:p.pigeonstate,pigeonstateid:p.pigeonstate}))).map(s=>`<option value="${escH(s.name)}"${S.stateFilter===s.name?' selected':''}>${escH(s.name)}</option>`).join('')}
+          </select>
+          <select id="racing-filter" onchange="S.racingFilter=this.value;S.page=0;applyFilter()">
+            <option value="all">🏁 Reise: Alle</option>
+            <option value="yes"${S.racingFilter==='yes'?' selected':''}>Reisetauben</option>
+            <option value="no"${S.racingFilter==='no'?' selected':''}>Keine Reisetauben</option>
+          </select>
+        </div>
+        <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
+          ${renderColumnPicker()}
+          <button class="btn ${S.bulkMode?'':'btn-outline'} btn-sm" onclick="toggleBulkMode()">${S.bulkMode?'✕ Massenbearbeitung beenden':'🧩 Massenbearbeitung'}</button>
+          <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben einheitlich formatieren und Duplikate zusammenführen">🧹 Ringnummern bereinigen</button>
+          <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">📥 CSV</button>
+          <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">🖨 PDF-Liste</button>
+        </div>
       </div>
-    </div>
+    </details>
     <div id="bulk-bar">${renderBulkBar()}</div>
     <div id="table-wrap" class="table-wrap">${buildTableHTML(page, si)}</div>
     <div id="pagination-wrap">${totalPages>1?buildPagination(totalPages):''}</div>`;
