@@ -57,6 +57,9 @@ main{padding:18px 20px;max-width:1300px;margin:0 auto}
 .search-wrap input:focus{border-color:var(--green)}
 .search-wrap input::placeholder{color:var(--text3)}
 .search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none}
+.search-wrap input{padding-right:30px}
+.search-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:20px;height:20px;border-radius:50%;display:none;align-items:center;justify-content:center;color:var(--text3);font-size:13px;cursor:pointer;background:none;border:none;line-height:1}
+.search-clear:hover{background:var(--bg4);color:var(--text)}
 select{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:8px 10px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;height:36px}
 select:focus{border-color:var(--green)}
 .count-label{font-size:12px;color:var(--text3);white-space:nowrap}
@@ -430,7 +433,7 @@ const DEFAULT_COLUMNS = ['ringnumber','name','year','gender','color','strain','s
 const S = {
   tab: 'tauben', pigeons: [], filtered: [],
   page: 0, pageSize: 50,
-  search: '', sexFilter: 'all', yearFilter: 'all', inStockFilter: 'all', colorFilter: 'all', stateFilter: 'all', racingFilter: 'all',
+  search: '', sexFilter: 'all', yearFilter: 'all', inStockFilter: 'yes', colorFilter: 'all', stateFilter: 'all', racingFilter: 'all',
   filtersOpen: false,
   pigeonStates: [],
   uniqueColors: [], uniqueRaces: [], uniqueStrains: [], uniqueBreeders: [],
@@ -867,6 +870,18 @@ function renderTableOnly() {
 }
 
 
+function toggleSearchClear(id, val){
+  const el=document.getElementById(id);
+  if(el) el.style.display = val ? 'flex' : 'none';
+}
+function clearTaubenSearch(){
+  S.search='';
+  const si=document.getElementById('tauben-search'); if(si){ si.value=''; si.focus(); }
+  toggleSearchClear('tauben-search-clear','');
+  S.page=0;
+  applyFilter();
+}
+
 function resetTaubenFilter(){
   S.search=''; S.sexFilter='all'; S.yearFilter='all';
   S.inStockFilter='all'; S.colorFilter='all'; S.stateFilter='all'; S.racingFilter='all';
@@ -874,6 +889,7 @@ function resetTaubenFilter(){
   ['sex-filter','year-filter','stock-filter','color-filter','state-filter','racing-filter']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.value='all'; });
   const si=document.getElementById('tauben-search'); if(si) si.value='';
+  toggleSearchClear('tauben-search-clear','');
   applyFilter();
 }
 
@@ -1510,7 +1526,8 @@ function renderList(){
     ${S.error?`<div class="error-box">⚠️ ${escH(S.error)}</div>`:''}
     <div class="search-row">
       <div class="search-wrap"><span class="search-icon">🔍</span>
-        <input id="tauben-search" type="text" placeholder="Endnr. (1), Jahrg+Nr (26/1), Name+Nr (idefix 1), Text…" title="26/1 = Jahrgang 2026 Endnummer 1 | idefix 1 = Name + Nummer | 455 = Endnummer" value="${escH(S.search)}" oninput="S.search=this.value;applyFilter()">
+        <input id="tauben-search" type="text" placeholder="Endnr. (1), Jahrg+Nr (26/1), Name+Nr (idefix 1), Text…" title="26/1 = Jahrgang 2026 Endnummer 1 | idefix 1 = Name + Nummer | 455 = Endnummer" value="${escH(S.search)}" oninput="S.search=this.value;toggleSearchClear('tauben-search-clear',this.value);applyFilter()">
+        <button type="button" id="tauben-search-clear" class="search-clear" style="display:${S.search?'flex':'none'}" onclick="clearTaubenSearch()" title="Suche löschen" aria-label="Suche löschen">✕</button>
       </div>
       <span id="count-label" class="count-label">${S.filtered.length.toLocaleString('de')} / ${S.pigeons.length.toLocaleString('de')}</span>
     </div>
