@@ -237,9 +237,11 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
   th,td{padding:8px 9px;font-size:12.5px}
   .ped-tree{min-width:0}
   /* Tauben-Übersicht: Tabelle → Karten, damit alle Spalten ohne horizontales
-     Scrollen lesbar bleiben (Spaltenauswahl über "☰ Spalten" bleibt wirksam). */
-  .table-wrap{border:none;overflow-x:visible;border-radius:0}
-  .table-wrap>table{display:none}
+     Scrollen lesbar bleiben (Spaltenauswahl über "☰ Spalten" bleibt wirksam).
+     Wichtig: nur die Haupt-Tabellenliste (#table-wrap) betreffen — andere Tabellen
+     (z.B. Reiseleistung/Top10 auf der Detailseite) sollen weiterhin sichtbar bleiben. */
+  #table-wrap{border:none;overflow-x:visible;border-radius:0}
+  #table-wrap>table{display:none}
   .pigeon-cards{display:block}
 }
 /* ── Tauben-Karten (mobile Übersicht) ── */
