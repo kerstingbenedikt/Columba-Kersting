@@ -62,6 +62,7 @@ select:focus{border-color:var(--green)}
 
 /* ── Tabelle ── */
 .table-wrap{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--border)}
+.pigeon-cards{display:none}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{background:var(--bg3);color:var(--text3);font-weight:500;text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
 th:hover{color:var(--text2)}
@@ -218,7 +219,26 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
   .stat-num{font-size:26px}
   th,td{padding:8px 9px;font-size:12.5px}
   .ped-tree{min-width:0}
+  /* Tauben-Übersicht: Tabelle → Karten, damit alle Spalten ohne horizontales
+     Scrollen lesbar bleiben (Spaltenauswahl über "☰ Spalten" bleibt wirksam). */
+  .table-wrap{border:none;overflow-x:visible;border-radius:0}
+  .table-wrap>table{display:none}
+  .pigeon-cards{display:block}
 }
+/* ── Tauben-Karten (mobile Übersicht) ── */
+.pigeon-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.15);transition:border-color .15s}
+.pigeon-card:active,.pigeon-card:hover{border-color:var(--green2)}
+.pigeon-card.bulk-row-selected{border-color:var(--green);background:color-mix(in srgb,var(--green) 7%,var(--bg2))}
+.pc-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.pc-ring{font-family:monospace;font-weight:700;font-size:16px;color:var(--green)}
+.pc-name{font-size:13px;color:var(--text2);font-style:italic;margin-top:2px}
+.pc-check input{width:18px;height:18px}
+.pc-body{display:flex;gap:12px}
+.pc-icon{flex-shrink:0;width:56px;height:56px;display:flex;align-items:center;justify-content:center}
+.pc-fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.pc-row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12.5px}
+.pc-label{color:var(--text3);flex-shrink:0}
+.pc-val{color:var(--text);font-weight:500;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:420px){
   .field-grid{grid-template-columns:1fr}
   header h1{font-size:15px}
@@ -1354,6 +1374,84 @@ function render(){
 }
 
 // ── LISTE ──────────────────────────────────────────────────────
+// ── Tauben-Illustration (Farbe → Icon) ──────────────────────────
+// Ordnet gängige deutsche Brieftauben-Farbbezeichnungen einer Icon-Farbe zu.
+// Gemusterte Farbschläge (gehämmert, gestrichelt, gescheckt …) bekommen zusätzlich
+// eine dezente Musterung, um dem Original-Erscheinungsbild näherzukommen.
+const PIGEON_COLOR_MAP = [
+  [/wei[ßs]/i, '#eee9df'],
+  [/schwarz/i, '#2c2b2e'],
+  [/rot|rost/i, '#8a4632'],
+  [/gelb/i, '#cfa953'],
+  [/silber/i, '#c3c8d0'],
+  [/blau/i, '#5c6570'],
+  [/braun/i, '#5f4632'],
+  [/gescheckt|scheck|getigert/i, '#aeb3ba'],
+];
+function pigeonColorHex(colorName){
+  const c=(colorName||'').trim();
+  for(const [re,hex] of PIGEON_COLOR_MAP) if(re.test(c)) return hex;
+  return '#868c96'; // neutrale Standardfarbe, falls unbekannt/leer
+}
+function pigeonIsPatterned(colorName){
+  return /gehämmert|hammerschlag|gestrichelt|gescheckt|scheck|getigert|gebändert/i.test(colorName||'');
+}
+function shadeHex(hex, amt){
+  hex=hex.replace('#','');
+  const num=parseInt(hex,16);
+  let r=(num>>16)+amt, g=((num>>8)&0xff)+amt, b=(num&0xff)+amt;
+  r=Math.max(0,Math.min(255,r)); g=Math.max(0,Math.min(255,g)); b=Math.max(0,Math.min(255,b));
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+let _pgIconSeq=0;
+function pigeonIconSvg(colorName, size){
+  size = size||52;
+  const base = pigeonColorHex(colorName);
+  const dark = shadeHex(base, -34);
+  const patterned = pigeonIsPatterned(colorName);
+  const uid = 'pgpat'+(_pgIconSeq++);
+  return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    ${patterned?`<defs><pattern id="${uid}" width="7" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(6)">
+      <rect width="7" height="6" fill="${base}"/>
+      <path d="M0 5 Q1.75 2 3.5 5 Q5.25 2 7 5" stroke="${dark}" stroke-width="1.3" fill="none"/>
+    </pattern></defs>`:''}
+    <ellipse cx="30" cy="41" rx="18" ry="12" fill="${patterned?`url(#${uid})`:base}"/>
+    <path d="M13 39 Q3 35 9 26 Q18 30 21 39 Z" fill="${dark}"/>
+    <circle cx="46" cy="25" r="8.5" fill="${base}"/>
+    <path d="M53.5 24 L61 26 L53.5 28.5 Z" fill="#d6963c"/>
+    <circle cx="49" cy="23" r="1.5" fill="#20232a"/>
+    <path d="M18 48 Q30 57 43 49 L39 45 Q30 50 23 44 Z" fill="${dark}"/>
+    <path d="M22 51 L20 58 M28 52 L27 59" stroke="#c98a3e" stroke-width="1.8" stroke-linecap="round"/>
+  </svg>`;
+}
+
+// ── Karten-Ansicht (mobil) ───────────────────────────────────────
+// Zeigt dieselben aktiven Spalten (S.columns) wie die Tabelle, nur als
+// beschriftete Zeilen statt Tabellenspalten — dadurch auf schmalen Bildschirmen
+// ohne horizontales Scrollen lesbar, ohne dass die Spaltenauswahl verloren geht.
+function buildCardsHTML(page){
+  const cols = activeColumns().filter(c=>c.key!=='ringnumber' && c.key!=='name');
+  return `<div class="pigeon-cards">${page.map(p=>{
+    const sel = S.bulkMode && S.bulkSelected.has(p.pigeonid);
+    const cardClick = S.bulkMode ? `toggleBulkRow('${p.pigeonid}')` : `selectPigeon('${p.pigeonid}')`;
+    const bulkCb = S.bulkMode ? `<input type="checkbox" ${sel?'checked':''} onclick="event.stopPropagation()" onchange="toggleBulkRow('${p.pigeonid}')">` : '';
+    const rows = cols.map(c=>`<div class="pc-row"><span class="pc-label">${escH(c.label)}</span><span class="pc-val">${(c.cell||(x=>escH(c.val(x))))(p)}</span></div>`).join('');
+    return `<div class="pigeon-card ${sel?'bulk-row-selected':''}" onclick="${cardClick}">
+      <div class="pc-head">
+        <div>
+          <div class="pc-ring">${escH(ring(p))}</div>
+          ${p.name?`<div class="pc-name">„${escH(p.name)}"</div>`:''}
+        </div>
+        ${bulkCb?`<div class="pc-check">${bulkCb}</div>`:''}
+      </div>
+      <div class="pc-body">
+        <div class="pc-icon">${pigeonIconSvg(p.color)}</div>
+        <div class="pc-fields">${rows}</div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
 function buildTableHTML(page, si){
   const cols = activeColumns();
   if(cols.some(c=>c.key==='reiseleistung'||c.key==='top10')){
@@ -1364,7 +1462,7 @@ function buildTableHTML(page, si){
   }
   const allOnPageSelected = S.bulkMode && page.length>0 && page.every(p=>S.bulkSelected.has(p.pigeonid));
   const headCb = S.bulkMode ? `<th class="bulk-th"><input type="checkbox" id="bulk-select-all" ${allOnPageSelected?'checked':''} onclick="event.stopPropagation()" onchange="toggleBulkPage(this.checked)"></th>` : '';
-  return `<table>
+  return buildCardsHTML(page) + `<table>
       <thead><tr>
         ${headCb}
         ${cols.map(c=>c.sortKey
