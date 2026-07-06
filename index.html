@@ -430,12 +430,12 @@ async function startApp(){
   loadData();
 }
 
-const DEFAULT_COLUMNS = ['ringnumber','name','year','gender','color','strain','status','instock','father','mother','breeder','owner','reiseleistung','top10'];
+const DEFAULT_COLUMNS = ['ringnumber','name','year','gender','color','strain','status','pigeontype','instock','standort','father','mother','breeder','owner','reiseleistung','top10'];
 
 const S = {
   tab: 'tauben', pigeons: [], filtered: [],
   page: 0, pageSize: 50,
-  search: '', sexFilter: 'all', yearFilter: 'all', inStockFilter: 'yes', colorFilter: 'all', stateFilter: 'all', racingFilter: 'all',
+  search: '', sexFilter: 'all', yearFilter: 'all', inStockFilter: 'yes', colorFilter: 'all', stateFilter: 'all', typeFilter: 'all', standortFilter: 'all',
   filtersOpen: false,
   pigeonStates: [],
   uniqueColors: [], uniqueRaces: [], uniqueStrains: [], uniqueBreeders: [],
@@ -597,9 +597,19 @@ const COLUMN_DEFS = [
     val:p=>p.strain||'', cell:p=>escH(p.strain||'—') },
   { key:'status', label:'Status',
     val:p=>pigeonStateName(p), cell:p=>escH(pigeonStateName(p)||'—') },
+  { key:'pigeontype', label:'Taubentyp',
+    val:p=>p.pigeontype||'', cell:p=>{
+      const t=p.pigeontype;
+      if(t==='Reisetaube') return '<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25)">✈ Reisetaube</span>';
+      if(t==='Zuchttaube') return '<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25)">🥚 Zuchttaube</span>';
+      if(t==='Heimtaube') return '<span class="badge badge-u">🏠 Heimtaube</span>';
+      return '—';
+    } },
   { key:'instock', label:'Im Bestand',
     val:p=>p.instock!=null?(p.instock?'Ja':'Nein'):'', sortVal:p=>p.instock?1:0,
     cell:p=>p.instock?'<span style="color:var(--green)">✓ Ja</span>':'<span style="color:var(--text3)">Nein</span>' },
+  { key:'standort', label:'Standort / akt. Besitzer',
+    val:p=>p.standort||'', cell:p=>escH(p.standort||'—') },
   { key:'father', label:'Vater',
     val:p=>{const f=findFather(p); return f?ring(f):(p.ringnumberfather||'');},
     cell:p=>{const f=findFather(p); const r=f?ring(f):(p.ringnumberfather||''); return r?`<span class="ring-sm" onclick="event.stopPropagation();${f?`selectPigeon('${f.pigeonid}')`:'void(0)'}">${escH(r)}</span>`:'—';} },
@@ -640,13 +650,15 @@ const BULK_FIELDS = [
   { key:'pigeonstateid', label:'Status', type:'select',
     options:()=>[{v:'',l:'— leer —'}].concat(S.pigeonStates.map(s=>({v:s.pigeonstateid,l:s.name}))) },
   { key:'instock', label:'Im Bestand', type:'bool' },
-  { key:'ontrip',  label:'Reisetaube', type:'bool' },
+  { key:'pigeontype', label:'Taubentyp', type:'select',
+    options:()=>[{v:'',l:'— leer —'},{v:'Reisetaube',l:'✈ Reisetaube'},{v:'Zuchttaube',l:'🥚 Zuchttaube'},{v:'Heimtaube',l:'🏠 Heimtaube'}] },
   { key:'sold',    label:'Verkauft',   type:'bool' },
   { key:'died',    label:'Verstorben', type:'bool' },
   { key:'color',   label:'Farbe',      type:'text', list:'dl-colors' },
   { key:'strain',  label:'Linie / Stamm', type:'text', list:'dl-strains' },
   { key:'breeder', label:'Züchter',    type:'text' },
   { key:'owner',   label:'Besitzer',   type:'text' },
+  { key:'standort', label:'Standort / akt. Besitzer', type:'text' },
 ];
 const BULK_FIELD_BY_KEY = Object.fromEntries(BULK_FIELDS.map(f=>[f.key,f]));
 
@@ -898,9 +910,9 @@ function colorMatchesKeyword(colorText, keyword){
 
 function resetTaubenFilter(){
   S.search=''; S.sexFilter='all'; S.yearFilter='all';
-  S.inStockFilter='all'; S.colorFilter='all'; S.stateFilter='all'; S.racingFilter='all';
+  S.inStockFilter='all'; S.colorFilter='all'; S.stateFilter='all'; S.typeFilter='all'; S.standortFilter='all';
   S.page=0;
-  ['sex-filter','year-filter','stock-filter','color-filter','state-filter','racing-filter']
+  ['sex-filter','year-filter','stock-filter','color-filter','state-filter','type-filter','standort-filter']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.value='all'; });
   const si=document.getElementById('tauben-search'); if(si) si.value='';
   toggleSearchClear('tauben-search-clear','');
@@ -1068,8 +1080,9 @@ async function exportPDF(){
     S.yearFilter!=='all'?'Jg. '+S.yearFilter:null,
     S.colorFilter!=='all'?'Farbe: '+S.colorFilter:null,
     S.stateFilter!=='all'?'Status: '+S.stateFilter:null,
+    S.standortFilter!=='all'?'Standort: '+S.standortFilter:null,
     S.inStockFilter==='yes'?'Im Bestand':S.inStockFilter==='no'?'Nicht im Bestand':null,
-    S.racingFilter==='yes'?'Reisetauben':S.racingFilter==='no'?'Keine Reisetauben':null,
+    S.typeFilter!=='all'?'Typ: '+S.typeFilter:null,
   ].filter(Boolean).join(' · ');
   const today = new Date().toLocaleDateString('de-DE');
   const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
@@ -1322,8 +1335,7 @@ function applyFilter(){
   if(S.inStockFilter==='no') arr=arr.filter(p=>!p.instock);
   if(S.colorFilter!=='all') arr=arr.filter(p=>colorMatchesKeyword(p.color,S.colorFilter));
   if(S.stateFilter!=='all') arr=arr.filter(p=>pigeonStateName(p)===S.stateFilter);
-  if(S.racingFilter==='yes') arr=arr.filter(p=>p.ontrip===true);
-  if(S.racingFilter==='no')  arr=arr.filter(p=>p.ontrip!==true);
+  if(S.typeFilter!=='all') arr=arr.filter(p=>p.pigeontype===S.typeFilter);
 
   // Fallback-Sortierung nur wenn KEIN Scoring aktiv war
   if(!q || !((/^\d/.test(q)) || q.match(/^(\d{2,4})[\/\-\s](\d{1,6})$/))){
@@ -1535,7 +1547,7 @@ function renderList(){
   const start=S.page*S.pageSize, end=start+S.pageSize;
   const page=S.filtered.slice(start,end);
   const totalPages=Math.ceil(S.filtered.length/S.pageSize)||1;
-  const activeFilterCount=[S.sexFilter,S.yearFilter,S.inStockFilter,S.colorFilter,S.stateFilter,S.racingFilter].filter(v=>v&&v!=='all').length;
+  const activeFilterCount=[S.sexFilter,S.yearFilter,S.inStockFilter,S.colorFilter,S.stateFilter,S.typeFilter].filter(v=>v&&v!=='all').length;
   return `
     ${S.error?`<div class="error-box">⚠️ ${escH(S.error)}</div>`:''}
     <div class="search-row">
@@ -1574,10 +1586,11 @@ function renderList(){
             <option value="all">📋 Alle Status</option>
             ${(S.pigeonStates.length?S.pigeonStates:S.pigeons.filter(p=>p.pigeonstate).map(p=>({name:p.pigeonstate,pigeonstateid:p.pigeonstate}))).map(s=>`<option value="${escH(s.name)}"${S.stateFilter===s.name?' selected':''}>${escH(s.name)}</option>`).join('')}
           </select>
-          <select id="racing-filter" onchange="S.racingFilter=this.value;S.page=0;applyFilter()">
-            <option value="all">🏁 Reise: Alle</option>
-            <option value="yes"${S.racingFilter==='yes'?' selected':''}>Reisetauben</option>
-            <option value="no"${S.racingFilter==='no'?' selected':''}>Keine Reisetauben</option>
+          <select id="type-filter" onchange="S.typeFilter=this.value;S.page=0;applyFilter()">
+            <option value="all">🏁 Typ: Alle</option>
+            <option value="Reisetaube"${S.typeFilter==='Reisetaube'?' selected':''}>✈ Reisetaube</option>
+            <option value="Zuchttaube"${S.typeFilter==='Zuchttaube'?' selected':''}>🥚 Zuchttaube</option>
+            <option value="Heimtaube"${S.typeFilter==='Heimtaube'?' selected':''}>🏠 Heimtaube</option>
           </select>
         </div>
         <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
@@ -1608,7 +1621,7 @@ function renderDetail(p){
     ['Inzuchtkoeff.',p.inbreedcoefficient!=null?Number(p.inbreedcoefficient).toFixed(4):null],
     ['Ber. Inzucht',ib>0?`${(ib*100).toFixed(2)} %`:null],
     ['Land',p.countrycode],['Verbandsnr.',p.associationno],
-    ['Züchter',p.breeder],['Besitzer',p.owner],['Zustand',p.pigeonstate],
+    ['Züchter',p.breeder],['Besitzer',p.owner],['Standort / akt. Besitzer',p.standort],['Zustand',p.pigeonstate],
     ['Info',p.info],['Interne Info',p.internalinfo],
     ['Benutzer 1',p.userdefined1],['Benutzer 2',p.userdefined2],['Benutzer 3',p.userdefined3],
   ].filter(([,v])=>v!==null&&v!==undefined&&v!=='');
@@ -1620,11 +1633,12 @@ function renderDetail(p){
     ['Ringnummer',p.ringnumber],['Alte Ringnr.',p.ringnumberold],
     ['Jahrgang',p.date_year],['Farbe',p.color],['Rasse',p.race],
     ['Linie/Stamm',p.strain],['Züchter',p.breeder],['Besitzer',p.owner],
+    ['Standort / akt. Besitzer',p.standort],
     ['Land',p.countrycode],['Verbandsnr.',p.associationno],
     ['Geburtstag',p.birthday],['Verstorben',p.died],
     ['Gekauft',p.bought],['Verkauft',p.sold],
     ['Im Bestand',p.instock!=null?(p.instock?'Ja':'Nein'):null],
-    ['Reisetaube',p.ontrip!=null?(p.ontrip?'Ja ✈':'Nein'):null],
+    ['Taubentyp',p.pigeontype||null],
     ['Status',stateName||null],
     ['Inzuchtkoeff.',p.inbreedcoefficient!=null?Number(p.inbreedcoefficient).toFixed(4):null],
     ['Ber. Inzucht',ib>0?`${(ib*100).toFixed(2)} %`:null],
@@ -1654,7 +1668,9 @@ function renderDetail(p){
               ${p.color?`<span class="badge badge-u">${escH(p.color)}</span>`:''}
               ${p.strain?`<span class="badge badge-u">${escH(p.strain)}</span>`:''}
               ${stateName?`<span class="badge" style="background:rgba(212,168,67,.12);color:var(--amber);border:1px solid rgba(212,168,67,.25)">${escH(stateName)}</span>`:''}
-              ${p.ontrip?'<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25)">✈ Reisetaube</span>':''}
+              ${p.pigeontype==='Reisetaube'?'<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25)">✈ Reisetaube</span>':''}
+              ${p.pigeontype==='Zuchttaube'?'<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25)">🥚 Zuchttaube</span>':''}
+              ${p.pigeontype==='Heimtaube'?'<span class="badge badge-u">🏠 Heimtaube</span>':''}
               ${p.instock===false?'<span class="badge" style="background:#2a1a0a;color:#c8883a">Nicht im Bestand</span>':''}
             </div>
           </div>
@@ -1814,6 +1830,10 @@ function renderDetailEdit(p){
           <datalist id="dl-breeders">${[...new Set(S.pigeons.map(p=>p.breeder).filter(Boolean))].sort().map(b=>`<option value="${escH(b)}">`).join('')}</datalist>
         </div>
         <div class="form-field"><label>Besitzer</label><input id="e_owner" value="${fv(p,'owner')}"></div>
+        <div class="form-field"><label>Standort / akt. Besitzer</label>
+          <input id="e_standort" list="dl-standorte" value="${fv(p,'standort')}" autocomplete="off" placeholder="z.B. eigener Schlag, Name des Halters…">
+          <datalist id="dl-standorte">${[...new Set(S.pigeons.map(p=>p.standort).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}">`).join('')}</datalist>
+        </div>
         <div class="form-field"><label>Status</label>
           <select id="e_pigeonstateid">
             <option value="">— kein Status —</option>
@@ -1832,10 +1852,12 @@ function renderDetailEdit(p){
             <option value="false" ${p.instock===false?'selected':''}>Nein</option>
           </select>
         </div>
-        <div class="form-field"><label>Reisetaube</label>
-          <select id="e_ontrip">
-            <option value="false" ${p.ontrip!==true?'selected':''}>Nein — Heimtaube</option>
-            <option value="true"  ${p.ontrip===true?'selected':''}>Ja — Reisetaube ✈</option>
+        <div class="form-field"><label>Taubentyp</label>
+          <select id="e_pigeontype">
+            <option value="" ${!p.pigeontype?'selected':''}>— nicht festgelegt —</option>
+            <option value="Reisetaube" ${p.pigeontype==='Reisetaube'?'selected':''}>✈ Reisetaube</option>
+            <option value="Zuchttaube" ${p.pigeontype==='Zuchttaube'?'selected':''}>🥚 Zuchttaube</option>
+            <option value="Heimtaube" ${p.pigeontype==='Heimtaube'?'selected':''}>🏠 Heimtaube</option>
           </select>
         </div>
         <div class="form-field" style="grid-column:1/-1"><label>Info</label><textarea id="e_info" rows="3" style="width:100%;resize:vertical">${fv(p,'info')}</textarea></div>
@@ -1907,6 +1929,7 @@ async function saveEdit(id){
     strain:         val('e_strain'),
     breeder:        val('e_breeder'),
     owner:          val('e_owner'),
+    standort:       val('e_standort'),
     countrycode:    normCountryCode(val('e_countrycode')),
     associationno:  val('e_associationno'),
     birthday:       val('e_birthday')||null,
@@ -1914,7 +1937,7 @@ async function saveEdit(id){
     bought:         val('e_bought')||null,
     sold:           val('e_sold')||null,
     instock:        val('e_instock')==='true',
-    ontrip:         (()=>{ const el=document.getElementById('e_ontrip'); return el ? el.value==='true' : (p.ontrip||false); })(),
+    pigeontype:     (()=>{ const el=document.getElementById('e_pigeontype'); return el&&el.value?el.value:null; })(),
     pigeonstateid:  (()=>{ const el=document.getElementById('e_pigeonstateid'); return el&&el.value?el.value:null; })(),
     info:           val('e_info'),
     internalinfo:   val('e_internalinfo'),
@@ -2944,10 +2967,12 @@ function renderNeu(){
         </select>
       </div>
       <div class="form-field">
-        <label>Reisetaube ✈</label>
-        <select id="neu_ontrip">
-          <option value="false">Nein — Heimtaube</option>
-          <option value="true">Ja — Reisetaube</option>
+        <label>Taubentyp</label>
+        <select id="neu_pigeontype">
+          <option value="">— nicht festgelegt —</option>
+          <option value="Reisetaube">✈ Reisetaube</option>
+          <option value="Zuchttaube">🥚 Zuchttaube</option>
+          <option value="Heimtaube">🏠 Heimtaube</option>
         </select>
       </div>
     </div>
@@ -2991,6 +3016,11 @@ function renderNeu(){
         <input id="neu_owner" list="neu-dl-owners" placeholder="Name des Besitzers" autocomplete="off">
         <datalist id="neu-dl-owners">${[...new Set(S.pigeons.map(p=>p.owner).filter(Boolean))].sort().map(o=>`<option value="${escH(o)}">`).join('')}</datalist>
       </div>
+      <div class="form-field">
+        <label>Standort / akt. Besitzer</label>
+        <input id="neu_standort" list="neu-dl-standorte" placeholder="z.B. eigener Schlag, Name des Halters…" autocomplete="off">
+        <datalist id="neu-dl-standorte">${[...new Set(S.pigeons.map(p=>p.standort).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}">`).join('')}</datalist>
+      </div>
     </div>
 
     <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Informationen</div>
@@ -3016,10 +3046,10 @@ let NEU = { ringnumber:'', parsed:null, dupMatch:null };
 
 function neuFormReset(){
   NEU = { ringnumber:'', parsed:null, dupMatch:null };
-  ['neu_ring','neu_name','neu_color','neu_race','neu_strain','neu_breeder','neu_owner',
+  ['neu_ring','neu_name','neu_color','neu_race','neu_strain','neu_breeder','neu_owner','neu_standort',
    'neu_father_inp','neu_mother_inp','neu_info','neu_internalinfo']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  ['neu_gender','neu_pigeonstateid','neu_instock','neu_ontrip','neu_father_id','neu_mother_id']
+  ['neu_gender','neu_pigeonstateid','neu_instock','neu_pigeontype','neu_father_id','neu_mother_id']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=el.tagName==='SELECT'?(el.options[0]?.value||''):''; });
   const prev=document.getElementById('neu-ring-preview');
   if(prev) prev.innerHTML='';
@@ -3076,13 +3106,14 @@ async function submitNeu(){
   if(g('neu_strain'))        row.strain        = g('neu_strain');
   if(g('neu_breeder'))       row.breeder       = g('neu_breeder');
   if(g('neu_owner'))         row.owner         = g('neu_owner');
+  if(g('neu_standort'))      row.standort      = g('neu_standort');
   if(g('neu_father_id'))     row.fatherid      = g('neu_father_id');
   if(g('neu_mother_id'))     row.motherid      = g('neu_mother_id');
   if(g('neu_info'))          row.info          = g('neu_info');
   if(g('neu_internalinfo'))  row.internalinfo  = g('neu_internalinfo');
   const stId=gs('neu_pigeonstateid'); if(stId) row.pigeonstateid=stId;
   row.instock = gs('neu_instock') !== 'false';
-  row.ontrip  = gs('neu_ontrip') === 'true';
+  const ptype = gs('neu_pigeontype'); if(ptype) row.pigeontype = ptype;
   // Eltern-Ringnummer aus Textfeld als Fallback
   const fInp=g('neu_father_inp');
   if(!row.fatherid && fInp){ const fp=findInDb(fInp); if(fp){row.fatherid=fp.pigeonid;row.ringnumberfather=ring(fp);}else{row.ringnumberfather=fmtRingnumber(fInp)||fInp;} }
@@ -3321,7 +3352,7 @@ async function cleanupRingnumbers(){
 // und die überflüssigen Datensätze werden per Soft-Delete entfernt (gleiche Konvention wie deletePigeon()).
 // Gibt die Anzahl der entfernten Duplikate zurück.
 async function mergeDuplicateGroup(group){
-  const FILL_KEYS = ['name','color','race','strain','breeder','owner','countrycode','associationno',
+  const FILL_KEYS = ['name','color','race','strain','breeder','owner','standort','pigeontype','countrycode','associationno',
     'birthday','died','bought','sold','info','internalinfo','pigeonstateid','gender','date_year',
     'ringnumberold','ringnumberfather','ringnumbermother','fatherid','motherid',
     'userdefined1','userdefined2','userdefined3'];
@@ -3384,6 +3415,8 @@ const IMP_FIELDS = [
   {key:'strain',       label:'Linie'},
   {key:'breeder',      label:'Züchter'},
   {key:'owner',        label:'Besitzer'},
+  {key:'standort',     label:'Standort / akt. Besitzer'},
+  {key:'pigeontype',   label:'Taubentyp'},
   {key:'ringnumberfather', label:'Vater-Ringnr.'},
   {key:'ringnumbermother', label:'Mutter-Ringnr.'},
   {key:'info',         label:'Info'},
@@ -3401,6 +3434,8 @@ const IMP_AUTO = {
   'linie':'strain','linien':'strain','stamm':'strain','strain':'strain',
   'züchter':'breeder','zuchter':'breeder','breeder':'breeder',
   'besitzer':'owner','owner':'owner','eigentümer':'owner',
+  'standort':'standort','aktueller besitzer':'standort','halter':'standort',
+  'taubentyp':'pigeontype','typ':'pigeontype',
   'vater':'ringnumberfather','father':'ringnumberfather','ringnummervater':'ringnumberfather',
   'mutter':'ringnumbermother','mother':'ringnumbermother','ringnummermutter':'ringnumbermother',
   'info':'info','notiz':'info','notizen':'info','bemerkung':'info',
