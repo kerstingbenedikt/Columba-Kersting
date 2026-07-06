@@ -884,6 +884,18 @@ function clearTaubenSearch(){
   applyFilter();
 }
 
+// ── Farbfilter: Basis-Schlagworte statt exakter Einzelwerte ──────
+// Die Datenbank enthält viele feine Farbvarianten (z.B. "Dunkelblau",
+// "Blau gehämmert", "Blauscheck", "Blau-Spieß" …). Ein exakter Abgleich
+// im Filter würde jede Variante als eigenen, isolierten Wert behandeln
+// und dadurch viel zu wenige Treffer liefern. Stattdessen prüfen wir
+// hier, ob ein Basis-Schlagwort (z.B. "Blau") im Farbtext ENTHALTEN ist
+// - das findet dann automatisch alle Varianten mit.
+const COLOR_FILTER_KEYWORDS = ['Blau','Rot','Fahl','Gehämmert','Scheck','Schimmel','Weiß','Schwarz','Gelb','Silber','Braun','Schalie'];
+function colorMatchesKeyword(colorText, keyword){
+  return (colorText||'').toLowerCase().includes((keyword||'').toLowerCase());
+}
+
 function resetTaubenFilter(){
   S.search=''; S.sexFilter='all'; S.yearFilter='all';
   S.inStockFilter='all'; S.colorFilter='all'; S.stateFilter='all'; S.racingFilter='all';
@@ -1308,7 +1320,7 @@ function applyFilter(){
   if(S.yearFilter!=='all') arr=arr.filter(p=>String(p.date_year)===S.yearFilter);
   if(S.inStockFilter==='yes') arr=arr.filter(p=>p.instock);
   if(S.inStockFilter==='no') arr=arr.filter(p=>!p.instock);
-  if(S.colorFilter!=='all') arr=arr.filter(p=>(p.color||'')===S.colorFilter);
+  if(S.colorFilter!=='all') arr=arr.filter(p=>colorMatchesKeyword(p.color,S.colorFilter));
   if(S.stateFilter!=='all') arr=arr.filter(p=>pigeonStateName(p)===S.stateFilter);
   if(S.racingFilter==='yes') arr=arr.filter(p=>p.ontrip===true);
   if(S.racingFilter==='no')  arr=arr.filter(p=>p.ontrip!==true);
@@ -1556,7 +1568,7 @@ function renderList(){
         <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
           <select id="color-filter" onchange="S.colorFilter=this.value;S.page=0;applyFilter()">
             <option value="all">🎨 Alle Farben</option>
-            ${[...new Set(S.pigeons.map(p=>p.color).filter(Boolean))].sort().map(c=>`<option value="${escH(c)}"${S.colorFilter===c?' selected':''}>${escH(c)}</option>`).join('')}
+            ${COLOR_FILTER_KEYWORDS.filter(k=>S.pigeons.some(p=>colorMatchesKeyword(p.color,k))).map(k=>`<option value="${escH(k)}"${S.colorFilter===k?' selected':''}>${escH(k)}</option>`).join('')}
           </select>
           <select id="state-filter" onchange="S.stateFilter=this.value;S.page=0;applyFilter()">
             <option value="all">📋 Alle Status</option>
