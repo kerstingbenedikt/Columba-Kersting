@@ -2499,6 +2499,63 @@ function siblingKeyOf(key){
   return key.slice(0,-1) + (key.endsWith('f') ? 'm' : 'f');
 }
 
+// Alle Vorfahren-Positionen eines Schlüssels (Elternteil, Großeltern, …) ermitteln.
+// Wird für die Plausibilitätsprüfung gebraucht: eine Taube darf nicht ihr eigener
+// Vorfahre sein (z.B. Mutter == Großmutter wäre biologisch unmöglich).
+function ancestorKeysOf(key){
+  const out = [];
+  let queue = [key];
+  while(queue.length){
+    const k = queue.shift();
+    const par = PARENT_MAP[k];
+    if(!par) continue;
+    [par.f, par.m].forEach(pk => { out.push(pk); queue.push(pk); });
+  }
+  return out;
+}
+
+// Plausibilitätsprüfung nach dem Scan (und generell vor dem Speichern eines
+// Stammbaums): identische Ringnummern an biologisch unmöglichen Positionen
+// erkennen (z.B. Mutter == Großmutter, Vater == Vater der Mutter, Vater == Mutter),
+// statt sie unbemerkt durchzuspeichern. Verdächtige aber theoretisch mögliche
+// Fälle (z.B. Inzucht: gleicher Großvater auf beiden Seiten) werden nur als
+// Warnung markiert, nicht blockiert — die Entscheidung bleibt beim Nutzer.
+function checkScanPlausibility(){
+  const keysWithRing = PED_KEYS.filter(k => SCAN.pigeons[k]?.ringnumber);
+  keysWithRing.forEach(k => {
+    delete SCAN.pigeons[k]._plausibilityError;
+    delete SCAN.pigeons[k]._plausibilityWarn;
+  });
+
+  keysWithRing.forEach(k => {
+    const ring1 = normRing(SCAN.pigeons[k].ringnumber);
+    if(!ring1) return;
+    const ancestors = new Set(ancestorKeysOf(k));
+
+    keysWithRing.forEach(other => {
+      if(other===k) return;
+      const ring2 = normRing(SCAN.pigeons[other].ringnumber);
+      if(ring1!==ring2) return;
+
+      if(ancestors.has(other) || new Set(ancestorKeysOf(other)).has(k)){
+        // k und other stehen in Abstammungslinie zueinander -> unmöglich
+        SCAN.pigeons[k]._plausibilityError =
+          `Identisch mit "${PED_LABEL[other]}" (${SCAN.pigeons[other].ringnumber}) — das ist als eigener Vorfahre biologisch unmöglich.`;
+      } else if(k==='father' && other==='mother' || k==='mother' && other==='father'){
+        SCAN.pigeons[k]._plausibilityError =
+          `Vater und Mutter haben dieselbe Ringnummer (${SCAN.pigeons[other].ringnumber}) — bitte prüfen.`;
+      } else if(!SCAN.pigeons[k]._plausibilityError){
+        SCAN.pigeons[k]._plausibilityWarn =
+          `Gleiche Ringnummer wie "${PED_LABEL[other]}" — nur plausibel bei starker Inzucht, sonst bitte im Original prüfen.`;
+      }
+    });
+
+    // Fehlerhafte Positionen sicherheitshalber vom automatischen Speichern ausschließen,
+    // bis der Nutzer die Angabe bestätigt/korrigiert hat.
+    if(SCAN.pigeons[k]._plausibilityError) SCAN.actions[k] = 'skip';
+  });
+}
+
 // Nach dem Scan: prüfen ob das erkannte Geschlecht zur festen Position passt.
 // Falls genau das Geschwister-Paar vertauscht wurde (z.B. Großvater/Großmutter
 // im Bild verwechselt), automatisch zurücktauschen. Sonst klar markieren,
@@ -2654,6 +2711,8 @@ function updateScanField(k, field, value){
     // Bei geänderter Ringnummer DB-Treffer neu bestimmen
     SCAN.matches[k] = findInDb(value);
     if(SCAN.actions[k]!=='skip') SCAN.actions[k] = SCAN.matches[k] ? 'update' : 'new';
+    // Plausibilität neu prüfen — eine Korrektur kann einen Fehler beheben oder neu erzeugen
+    checkScanPlausibility();
   }
   if(field==='gender'){
     // Manuelle Korrektur entkräftet die Mismatch-Warnung
@@ -2737,6 +2796,12 @@ function renderScanResult(){
     const genderWarn = p._genderMismatch
       ? `<div style="margin-top:4px;font-size:11px;color:#e0a050;font-weight:600">⚠️ Geschlecht (${sx}) passt nicht zur erwarteten Position "${PED_LABEL[k]}" — bitte im Originalbild prüfen, evtl. mit Nachbar-Position vertauscht.</div>`
       : '';
+    const plausibilityError = p._plausibilityError
+      ? `<div style="margin-top:4px;font-size:11px;color:#e07070;font-weight:600">🚫 Datenfehler: ${escH(p._plausibilityError)} Wird beim Speichern übersprungen, bis korrigiert.</div>`
+      : '';
+    const plausibilityWarn = (!p._plausibilityError && p._plausibilityWarn)
+      ? `<div style="margin-top:4px;font-size:11px;color:#e0a050;font-weight:600">⚠️ ${escH(p._plausibilityWarn)}</div>`
+      : '';
 
     const badge = m
       ? `<span style="font-size:11px;background:rgba(91,134,89,.15);color:var(--green);border:1px solid rgba(91,134,89,.3);border-radius:20px;padding:2px 8px;white-space:nowrap">✅ in DB</span>`
@@ -2779,6 +2844,8 @@ function renderScanResult(){
         ${p.breeder?`<div style="font-size:11px;color:var(--text3)">Z: ${escH(p.breeder)}</div>`:''}
         ${p.info?`<div style="font-size:11px;color:var(--text3);margin-top:3px;max-width:380px;white-space:pre-wrap">📝 ${escH(p.info.length>180?p.info.slice(0,180)+'…':p.info)}</div>`:''}
         ${genderWarn}
+        ${plausibilityError}
+        ${plausibilityWarn}
         ${diffHtml}
       </td>
       <td style="padding:8px 10px;vertical-align:top">${badge}</td>
@@ -2901,6 +2968,7 @@ async function runScanAI(){
 
     stopScanProgress('Abgleich mit Datenbank…');
     fixGenderSlotMismatches();
+    checkScanPlausibility();
     PED_KEYS.forEach(k => {
       const p = SCAN.pigeons[k];
       if(!p) return;
@@ -3813,12 +3881,25 @@ async function doImport() {
     // Null-Felder entfernen
     Object.keys(row).forEach(k=>{ if(row[k]===null||row[k]===''||row[k]===undefined) delete row[k]; });
 
+    // Plausibilitätsprüfung: eine Taube kann nicht ihr eigener Elternteil sein,
+    // und Vater/Mutter dürfen nicht dieselbe Ringnummer haben. Solche Zeilen
+    // werden nicht automatisch blockiert (Tippfehler bei Ringnummern sind häufig),
+    // aber deutlich markiert, damit sie vor dem Import geprüft werden.
+    let plausibilityMsg = null;
+    const rNorm = normRing(ringnumber);
+    const fNorm = ringnumberfather ? normRing(ringnumberfather) : null;
+    const mNorm = ringnumbermother ? normRing(ringnumbermother) : null;
+    if(fNorm && rNorm===fNorm) plausibilityMsg = 'Ringnummer identisch mit Vater — das ist biologisch unmöglich.';
+    else if(mNorm && rNorm===mNorm) plausibilityMsg = 'Ringnummer identisch mit Mutter — das ist biologisch unmöglich.';
+    else if(fNorm && mNorm && fNorm===mNorm) plausibilityMsg = 'Vater und Mutter haben dieselbe Ringnummer — bitte prüfen.';
+
     return {
       _idx: idx,
-      _status: dup ? 'dup' : 'new',
+      _status: plausibilityMsg ? 'err' : (dup ? 'dup' : 'new'),
       _dup: dup || null,
-      _msg: dup ? `Bereits vorhanden: ${ring(dup)}` : 'Neu',
-      _action: dup ? 'skip' : 'import',
+      _msg: plausibilityMsg || (dup ? `Bereits vorhanden: ${ring(dup)}` : 'Neu'),
+      _action: plausibilityMsg ? 'skip' : (dup ? 'skip' : 'import'),
+      _plausibilityError: plausibilityMsg || null,
       row,
     };
   });
@@ -3861,7 +3942,7 @@ function renderImpPreview(){
       <td>${escH(r.row?.color||'—')}</td>
       <td>${r.row?.gender==='M'?'♂':r.row?.gender==='F'?'♀':'—'}</td>
       <td>${escH(r.row?.strain||'—')}</td>
-      <td>${badge}</td>
+      <td>${badge}${r._status==='err'&&r._msg?`<div style="margin-top:3px;font-size:10.5px;color:#e07070">${escH(r._msg)}</div>`:''}</td>
       <td>${actSel}</td>
     </tr>`;
   }).join('');
