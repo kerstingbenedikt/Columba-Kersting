@@ -840,6 +840,10 @@ async function loadData(){
       S._loadingMore=false;
       updateHeaderStats();
       applyFilter();
+      render(); // Filter-Dropdowns (Standort, Status, Farbe, Jahr…) mit vollständigen Daten neu aufbauen —
+                // applyFilter() ruft bei bereits vorhandener Tabelle nur renderTableOnly() auf, das die
+                // Dropdown-Optionen nicht neu berechnet. Erst nach kompletter Ladephase relevant, daher
+                // performance-unkritisch.
     }
   } catch(e){
     S.loading=false;
@@ -1335,6 +1339,7 @@ function applyFilter(){
   if(S.inStockFilter==='no') arr=arr.filter(p=>!p.instock);
   if(S.colorFilter!=='all') arr=arr.filter(p=>colorMatchesKeyword(p.color,S.colorFilter));
   if(S.stateFilter!=='all') arr=arr.filter(p=>pigeonStateName(p)===S.stateFilter);
+  if(S.standortFilter!=='all') arr=arr.filter(p=>(p.standort||'')===S.standortFilter);
   if(S.typeFilter!=='all') arr=arr.filter(p=>p.pigeontype===S.typeFilter);
 
   // Fallback-Sortierung nur wenn KEIN Scoring aktiv war
@@ -1547,7 +1552,7 @@ function renderList(){
   const start=S.page*S.pageSize, end=start+S.pageSize;
   const page=S.filtered.slice(start,end);
   const totalPages=Math.ceil(S.filtered.length/S.pageSize)||1;
-  const activeFilterCount=[S.sexFilter,S.yearFilter,S.inStockFilter,S.colorFilter,S.stateFilter,S.typeFilter].filter(v=>v&&v!=='all').length;
+  const activeFilterCount=[S.sexFilter,S.yearFilter,S.inStockFilter,S.colorFilter,S.stateFilter,S.typeFilter,S.standortFilter].filter(v=>v&&v!=='all').length;
   return `
     ${S.error?`<div class="error-box">⚠️ ${escH(S.error)}</div>`:''}
     <div class="search-row">
@@ -1591,6 +1596,10 @@ function renderList(){
             <option value="Reisetaube"${S.typeFilter==='Reisetaube'?' selected':''}>✈ Reisetaube</option>
             <option value="Zuchttaube"${S.typeFilter==='Zuchttaube'?' selected':''}>🥚 Zuchttaube</option>
             <option value="Heimtaube"${S.typeFilter==='Heimtaube'?' selected':''}>🏠 Heimtaube</option>
+          </select>
+          <select id="standort-filter" onchange="S.standortFilter=this.value;S.page=0;applyFilter()">
+            <option value="all">📍 Alle Standorte</option>
+            ${[...new Set(S.pigeons.map(p=>p.standort).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}"${S.standortFilter===s?' selected':''}>${escH(s)}</option>`).join('')}
           </select>
         </div>
         <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
