@@ -152,6 +152,9 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .ped-box.empty{opacity:.3;cursor:default;border-style:dashed}
 .ped-box.empty:hover{border-color:var(--border);background:var(--bg3)}
 .ped-box.root{border-color:var(--green2);background:color-mix(in srgb,var(--green) 8%,var(--bg3))}
+.scan-node-err{border-color:#8a3a3a!important;background:rgba(192,80,77,.12)!important}
+.scan-node-warn{border-color:#a3792f!important;background:rgba(212,168,67,.1)!important}
+.scan-node-active{outline:2px solid var(--green);outline-offset:1px}
 .ped-ring{font-family:monospace;font-size:11px;color:var(--green);font-weight:600}
 .ped-name{font-size:12px;color:var(--text);margin-top:2px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ped-info{font-size:11px;color:var(--text3);margin-top:1px}
@@ -2587,13 +2590,13 @@ function fixGenderSlotMismatches(){
 
 let SCAN = {
   step:'upload', imageData:null, imagePreview:null, imageMediaType:'image/jpeg',
-  pigeons:{}, matches:{}, actions:{}, rawResponse:null, expandedKey:null
+  pigeons:{}, matches:{}, actions:{}, instock:{}, rawResponse:null, expandedKey:null
 };
 
 function scanReset(){
   stopScanProgress();
   SCAN={step:'upload',imageData:null,imagePreview:null,imageMediaType:'image/jpeg',
-        pigeons:{},matches:{},actions:{},rawResponse:null,expandedKey:null};
+        pigeons:{},matches:{},actions:{},instock:{},rawResponse:null,expandedKey:null};
 }
 
 function renderScan(){
@@ -2688,10 +2691,15 @@ function renderScanSaving(){
 function normRing(s){
   s = String(s||'').trim();
   if(!s) return '';
-  // Pro Segment (durch Leerzeichen/Bindestrich/Punkt getrennt) führende Nullen
+  // Pro Segment (durch Leerzeichen/Bindestrich/Punkt/Schrägstrich getrennt) führende Nullen
   // bei rein numerischen Teilen entfernen, damit "004" und "4" als gleich gelten.
-  return s.split(/[\s\-\.]+/).filter(Boolean).map(function(seg){
-    return /^\d+$/.test(seg) ? seg.replace(/^0+(?=\d)/,'') : seg.toLowerCase();
+  return s.split(/[\s\-\.\/]+/).filter(Boolean).map(function(seg){
+    if(!/^\d+$/.test(seg)) return seg.toLowerCase();
+    let n = seg.replace(/^0+(?=\d)/,'');
+    // Jahrgang marginal abweichend: 4-stellig (19xx/20xx) auf 2-stellig normalisieren,
+    // damit z.B. "2015" und "15" beim Abgleich als gleich gelten (Bestandsabgleich beim Scan).
+    if(/^(19|20)\d{2}$/.test(n)) n = n.slice(-2);
+    return n;
   }).join('');
 }
 
@@ -2725,6 +2733,8 @@ function renderScanEditPanel(k, p){
   const races   = [...new Set(S.pigeons.map(x=>x.race).filter(Boolean))].sort();
   const strains = [...new Set(S.pigeons.map(x=>x.strain).filter(Boolean))].sort();
   const breeders= [...new Set(S.pigeons.map(x=>x.breeder).filter(Boolean))].sort();
+  const m   = SCAN.matches[k];
+  const act = SCAN.actions[k] ?? (m?'update':'new');
 
   const txt = (label, field, type='text') => `
     <div class="form-field">
@@ -2740,7 +2750,41 @@ function renderScanEditPanel(k, p){
       <datalist id="scanedit-${k}-${field}">${opts.map(o=>`<option value="${escH(o)}">`).join('')}</datalist>
     </div>`;
 
-  return `<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Korrigiere hier die von der KI erkannten Felder dieser einen Taube — die Änderung gilt nur lokal, bis du auf "Tauben speichern" klickst.</div>
+  const genderWarn = p._genderMismatch
+    ? `<div style="margin-bottom:8px;font-size:11px;color:#e0a050;font-weight:600">⚠️ Geschlecht passt nicht zur erwarteten Position "${escH(PED_LABEL[k]||'')}" — bitte im Originalbild prüfen, evtl. mit Nachbar-Position vertauscht.</div>`
+    : '';
+  const plausibilityError = p._plausibilityError
+    ? `<div style="margin-bottom:8px;font-size:11px;color:#e07070;font-weight:600">🚫 Datenfehler: ${escH(p._plausibilityError)} Wird beim Speichern übersprungen, bis korrigiert.</div>`
+    : '';
+  const plausibilityWarn = (!p._plausibilityError && p._plausibilityWarn)
+    ? `<div style="margin-bottom:8px;font-size:11px;color:#e0a050;font-weight:600">⚠️ ${escH(p._plausibilityWarn)}</div>`
+    : '';
+
+  const actSel = m
+    ? `<select onchange="SCAN.actions['${k}']=this.value;render()"
+         style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 9px;font-size:12px;cursor:pointer">
+         <option value="update" ${act==='update'?'selected':''}>📋 Ergänzen</option>
+         <option value="skip"   ${act==='skip'  ?'selected':''}>⏭ Überspringen</option>
+       </select>`
+    : `<select onchange="SCAN.actions['${k}']=this.value;render()"
+         style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 9px;font-size:12px;cursor:pointer">
+         <option value="new"  ${act==='new' ?'selected':''}>＋ Neu anlegen</option>
+         <option value="skip" ${act==='skip'?'selected':''}>⏭ Überspringen</option>
+       </select>`;
+
+  return `${genderWarn}${plausibilityError}${plausibilityWarn}
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;color:var(--text3)">Status:</span>
+        ${m?`<span style="font-size:11px;color:var(--green)">✅ bereits in DB</span>`:`<span style="font-size:11px;color:#7ab3e0">🆕 neu</span>`}
+        ${actSel}
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);cursor:pointer">
+        <input type="checkbox" ${SCAN.instock[k]?'checked':''} onchange="SCAN.instock['${k}']=this.checked;render()">
+        Als Bestandstaube erfassen
+      </label>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Korrigiere hier die von der KI erkannten Felder dieser einen Taube — die Änderung gilt nur lokal, bis du auf "Ausführen" klickst. Ohne den Haken "Bestandstaube" wird diese Position nur als Ahnen-Datensatz gespeichert.</div>
     <div class="scan-result-grid">
       ${txt('Ringnummer','ringnumber')}
       ${txt('Name','name')}
@@ -2787,76 +2831,106 @@ function renderScanResult(){
 
   const inDb   = keys.filter(k=> SCAN.matches[k]).length;
   const isNew  = keys.filter(k=>!SCAN.matches[k]).length;
+  const toSave = keys.filter(k=>(SCAN.actions[k]??'x')!=='skip').length;
 
-  const rows = keys.map(k => {
-    const p   = SCAN.pigeons[k];
+  // Stammbaum-Box je Scan-Position: klickbar → öffnet das Bearbeiten-Panel für genau diese Taube.
+  function scanNode(k){
+    const p = SCAN.pigeons[k];
+    if(!p || !p.ringnumber){
+      return `<div class="ped-box empty" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:11px">—<br>${escH(PED_LABEL[k]||'')}</div></div>`;
+    }
     const m   = SCAN.matches[k];
     const act = SCAN.actions[k] ?? (m?'update':'new');
     const sx  = p.gender==='M'?'♂':p.gender==='F'?'♀':'?';
-    const genderWarn = p._genderMismatch
-      ? `<div style="margin-top:4px;font-size:11px;color:#e0a050;font-weight:600">⚠️ Geschlecht (${sx}) passt nicht zur erwarteten Position "${PED_LABEL[k]}" — bitte im Originalbild prüfen, evtl. mit Nachbar-Position vertauscht.</div>`
-      : '';
-    const plausibilityError = p._plausibilityError
-      ? `<div style="margin-top:4px;font-size:11px;color:#e07070;font-weight:600">🚫 Datenfehler: ${escH(p._plausibilityError)} Wird beim Speichern übersprungen, bis korrigiert.</div>`
-      : '';
-    const plausibilityWarn = (!p._plausibilityError && p._plausibilityWarn)
-      ? `<div style="margin-top:4px;font-size:11px;color:#e0a050;font-weight:600">⚠️ ${escH(p._plausibilityWarn)}</div>`
-      : '';
+    const hasError = !!p._plausibilityError;
+    const hasWarn  = !hasError && (p._genderMismatch || p._plausibilityWarn);
+    const boxCls = [
+      'ped-box',
+      sx==='M'?'male':sx==='F'?'female':'',
+      k==='proband'?'root':'',
+      hasError?'scan-node-err':(hasWarn?'scan-node-warn':''),
+      SCAN.expandedKey===k?'scan-node-active':''
+    ].filter(Boolean).join(' ');
+    const statusIcon = hasError ? '🚫' : hasWarn ? '⚠️' : (m ? '✅' : '🆕');
+    const instockOn = !!SCAN.instock[k];
+    return `<div class="${boxCls}" style="width:100%;box-sizing:border-box" onclick="toggleScanEdit('${k}')">
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:1px">
+        <span style="font-size:9px;font-weight:700;flex-shrink:0;color:${sx==='M'?'var(--blue)':sx==='F'?'var(--purple)':'var(--text3)'}">${sx==='M'?'♂':sx==='F'?'♀':'?'}</span>
+        <div class="ped-ring" style="font-size:${k==='proband'?'12px':'10px'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escH(p.ringnumber)}</div>
+        <span title="${m?'In Datenbank':'Neu'}" style="font-size:11px;flex-shrink:0">${statusIcon}</span>
+      </div>
+      ${p.name?`<div class="ped-name" style="font-size:${k==='proband'?'13px':'11px'}">${escH(p.name)}</div>`:''}
+      <div style="font-size:9px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[p.date_year,p.color,p.strain].filter(Boolean).join(' · ')}</div>
+      <div style="margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+        <span style="font-size:9px;padding:0 5px;border-radius:8px;background:${act==='skip'?'var(--bg4)':'rgba(91,134,89,.15)'};color:${act==='skip'?'var(--text3)':'var(--green)'};border:1px solid ${act==='skip'?'var(--border)':'rgba(91,134,89,.3)'}">${act==='skip'?'übersprungen':act==='update'?'ergänzen':'neu'}</span>
+        ${instockOn?`<span style="font-size:9px;padding:0 5px;border-radius:8px;background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.3)">Bestand</span>`:''}
+      </div>
+    </div>`;
+  }
 
-    const badge = m
-      ? `<span style="font-size:11px;background:rgba(91,134,89,.15);color:var(--green);border:1px solid rgba(91,134,89,.3);border-radius:20px;padding:2px 8px;white-space:nowrap">✅ in DB</span>`
-      : `<span style="font-size:11px;background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25);border-radius:20px;padding:2px 8px;white-space:nowrap">🆕 neu</span>`;
+  function scanConnector(rowStart, rowEnd, gridCol){
+    return `<div style="grid-column:${gridCol};grid-row:${rowStart}/${rowEnd};position:relative">
+      <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+        <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
+        <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+        <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
+      </svg>
+    </div>`;
+  }
 
-    const actSel = m
-      ? `<select onchange="SCAN.actions['${k}']=this.value;render()"
-           style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:5px 8px;font-size:12px;cursor:pointer;width:100%">
-           <option value="update" ${act==='update'?'selected':''}>📋 Ergänzen</option>
-           <option value="skip"   ${act==='skip'  ?'selected':''}>⏭ Überspringen</option>
-         </select>`
-      : `<select onchange="SCAN.actions['${k}']=this.value;render()"
-           style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:5px 8px;font-size:12px;cursor:pointer;width:100%">
-           <option value="new"  ${act==='new' ?'selected':''}>＋ Neu anlegen</option>
-           <option value="skip" ${act==='skip'?'selected':''}>⏭ Überspringen</option>
-         </select>`;
+  const treeHtml = `<div class="ped-wrap">
+    <div style="display:grid;grid-template-columns:160px 28px 160px 28px 160px 28px 160px;grid-template-rows:28px repeat(8,80px);min-width:940px;align-items:stretch">
+      <div class="ped-col-hdr" style="grid-column:1">Proband</div>
+      <div style="grid-column:2"></div>
+      <div class="ped-col-hdr" style="grid-column:3">Eltern</div>
+      <div style="grid-column:4"></div>
+      <div class="ped-col-hdr" style="grid-column:5">Großeltern</div>
+      <div style="grid-column:6"></div>
+      <div class="ped-col-hdr" style="grid-column:7">Urgroßeltern</div>
 
-    // Diff-Vorschau
-    let diffHtml = '';
-    if(m && act==='update'){
-      const FLDS=[{k:'name',l:'Name'},{k:'color',l:'Farbe'},{k:'race',l:'Rasse'},
-                  {k:'strain',l:'Linie'},{k:'breeder',l:'Züchter'},
-                  {k:'ringnumberfather',l:'Vater'},{k:'ringnumbermother',l:'Mutter'},
-                  {k:'info',l:'Info'}];
-      const diffs=FLDS.filter(f=>p[f.k]&&String(p[f.k])!==String(m[f.k]||''));
-      diffHtml = diffs.length
-        ? `<div style="margin-top:5px;font-size:11px;line-height:1.6">`+
-          diffs.map(f=>`<span style="margin-right:6px;color:var(--text3)">${f.l}: `+
-            (m[f.k]?`<s style="opacity:.5">${escH(m[f.k])}</s> `:'')+
-            `<span style="color:var(--green)">${escH(p[f.k])}</span></span>`).join('')+`</div>`
-        : `<div style="margin-top:4px;font-size:11px;color:var(--text3)">Keine neuen Felder</div>`;
-    }
+      <div style="grid-column:1;grid-row:2/10;display:flex;align-items:center;justify-content:center;padding:4px">${scanNode('proband')}</div>
 
-    return `<tr>
-      <td style="font-size:11px;font-weight:500;color:var(--text3);white-space:nowrap;padding:8px 10px;vertical-align:top">${PED_LABEL[k]}</td>
-      <td style="padding:8px 10px;vertical-align:top">
-        <div style="font-family:monospace;font-size:12px;color:var(--green);font-weight:600">${escH(p.ringnumber)}</div>
-        ${p.name?`<div style="font-size:12px;color:var(--text);margin-top:1px">${escH(p.name)}</div>`:''}
-        <div style="font-size:11px;color:var(--text3);margin-top:1px">${[sx,p.date_year,p.color,p.race,p.strain].filter(Boolean).join(' · ')}</div>
-        ${p.breeder?`<div style="font-size:11px;color:var(--text3)">Z: ${escH(p.breeder)}</div>`:''}
-        ${p.info?`<div style="font-size:11px;color:var(--text3);margin-top:3px;max-width:380px;white-space:pre-wrap">📝 ${escH(p.info.length>180?p.info.slice(0,180)+'…':p.info)}</div>`:''}
-        ${genderWarn}
-        ${plausibilityError}
-        ${plausibilityWarn}
-        ${diffHtml}
-      </td>
-      <td style="padding:8px 10px;vertical-align:top">${badge}</td>
-      <td style="padding:8px 10px;vertical-align:top">
-        ${actSel}
-        <button class="btn btn-outline btn-sm" style="margin-top:6px;width:100%" onclick="toggleScanEdit('${k}')">${SCAN.expandedKey===k?'▲ Schließen':'✏️ Bearbeiten'}</button>
-      </td>
-    </tr>${SCAN.expandedKey===k ? `<tr><td colspan="4" style="background:var(--bg3);padding:14px 16px">${renderScanEditPanel(k,p)}</td></tr>` : ''}`;
-  }).join('');
+      ${scanConnector(2,6,2)}
+      ${scanConnector(6,10,2)}
 
-  const toSave = keys.filter(k=>(SCAN.actions[k]??'x')!=='skip').length;
+      <div style="grid-column:3;grid-row:2/6;display:flex;align-items:center;padding:4px 0">${scanNode('father')}</div>
+      <div style="grid-column:3;grid-row:6/10;display:flex;align-items:center;padding:4px 0">${scanNode('mother')}</div>
+
+      ${scanConnector(2,4,4)}${scanConnector(4,6,4)}${scanConnector(6,8,4)}${scanConnector(8,10,4)}
+
+      <div style="grid-column:5;grid-row:2/4;display:flex;align-items:center;padding:4px 0">${scanNode('ff')}</div>
+      <div style="grid-column:5;grid-row:4/6;display:flex;align-items:center;padding:4px 0">${scanNode('fm')}</div>
+      <div style="grid-column:5;grid-row:6/8;display:flex;align-items:center;padding:4px 0">${scanNode('mf')}</div>
+      <div style="grid-column:5;grid-row:8/10;display:flex;align-items:center;padding:4px 0">${scanNode('mm')}</div>
+
+      ${scanConnector(2,3,6)}${scanConnector(3,4,6)}${scanConnector(4,5,6)}${scanConnector(5,6,6)}
+      ${scanConnector(6,7,6)}${scanConnector(7,8,6)}${scanConnector(8,9,6)}${scanConnector(9,10,6)}
+
+      <div style="grid-column:7;grid-row:2/3;display:flex;align-items:center;padding:4px 0">${scanNode('fff')}</div>
+      <div style="grid-column:7;grid-row:3/4;display:flex;align-items:center;padding:4px 0">${scanNode('ffm')}</div>
+      <div style="grid-column:7;grid-row:4/5;display:flex;align-items:center;padding:4px 0">${scanNode('fmf')}</div>
+      <div style="grid-column:7;grid-row:5/6;display:flex;align-items:center;padding:4px 0">${scanNode('fmm')}</div>
+      <div style="grid-column:7;grid-row:6/7;display:flex;align-items:center;padding:4px 0">${scanNode('mff')}</div>
+      <div style="grid-column:7;grid-row:7/8;display:flex;align-items:center;padding:4px 0">${scanNode('mfm')}</div>
+      <div style="grid-column:7;grid-row:8/9;display:flex;align-items:center;padding:4px 0">${scanNode('mmf')}</div>
+      <div style="grid-column:7;grid-row:9/10;display:flex;align-items:center;padding:4px 0">${scanNode('mmm')}</div>
+    </div>
+  </div>`;
+
+  const legend = `<div style="display:flex;gap:12px;margin:10px 0 14px;flex-wrap:wrap;font-size:11px;color:var(--text3)">
+    <span>✅ in DB</span><span>🆕 neu</span><span>⚠️ Warnung</span><span>🚫 Datenfehler (wird übersprungen)</span>
+    <span style="margin-left:auto">Klick auf eine Taube → bearbeiten</span>
+  </div>`;
+
+  const editHtml = SCAN.expandedKey && SCAN.pigeons[SCAN.expandedKey]
+    ? `<div class="card" style="background:var(--bg3);margin-top:4px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:13px;font-weight:600">✏️ ${escH(PED_LABEL[SCAN.expandedKey]||'')}</div>
+          <button class="btn btn-outline btn-sm" onclick="toggleScanEdit('${SCAN.expandedKey}')">✕ Schließen</button>
+        </div>
+        ${renderScanEditPanel(SCAN.expandedKey, SCAN.pigeons[SCAN.expandedKey])}
+      </div>`
+    : '';
 
   return `<div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
@@ -2868,7 +2942,7 @@ function renderScanResult(){
       </div>
     </div>
     ${SCAN.imagePreview?`<img id="scan-img" src="${SCAN.imagePreview}" class="scan-preview" style="display:none" alt="Scan">`:''}
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap">
       <div style="background:rgba(91,134,89,.12);border:1px solid rgba(91,134,89,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
         <strong style="color:var(--green)">${inDb}</strong> <span style="color:var(--text2)">in DB</span>
       </div>
@@ -2879,15 +2953,9 @@ function renderScanResult(){
         <strong style="color:var(--text)">${keys.length}</strong> <span style="color:var(--text2)">Tauben erkannt</span>
       </div>
     </div>
-    <div class="table-wrap">
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr>
-          <th style="width:110px">Generation</th><th>Taube</th>
-          <th style="width:80px">Status</th><th style="width:140px">Aktion</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
+    ${legend}
+    ${treeHtml}
+    ${editHtml}
     <div class="form-actions" style="margin-top:14px">
       <button class="btn btn-outline" onclick="scanReset();render()">Abbrechen</button>
       <button class="btn" onclick="executeScanSave()" ${toSave===0?'disabled':''}>
@@ -2982,6 +3050,10 @@ async function runScanAI(){
       if(!p?.ringnumber) return;
       SCAN.matches[k] = findInDb(p.ringnumber);
       SCAN.actions[k] = p._genderMismatch ? 'skip' : (SCAN.matches[k] ? 'update' : 'new');
+      // Standardmäßig AUS: importierte Abstammungen werden erstmal nur als Ahnen-Datensätze
+      // gespeichert, nicht automatisch als Bestandstaube geführt. Kann pro Position vor dem
+      // Speichern in der Vorschau umgeschaltet werden.
+      if(SCAN.instock[k]===undefined) SCAN.instock[k] = false;
     });
 
     SCAN.step = 'result';
@@ -3046,7 +3118,9 @@ async function executeScanSave(){
     try {
       if(act==='new'){
         const newId = crypto.randomUUID();
-        row.pigeonid=newId; row.deleted=false; row.instock=true;
+        // "Als Bestandstaube erfassen" wird pro Position in der Vorschau festgelegt
+        // (Standard: AUS) — importierte Abstammungen sind erstmal nur Ahnen-Datensätze.
+        row.pigeonid=newId; row.deleted=false; row.instock=!!SCAN.instock[k];
         await apiPost('pigeons', row);
         uuidMap[normRing(p.ringnumber)] = newId;
       } else if(act==='update'){
@@ -3055,6 +3129,8 @@ async function executeScanSave(){
         Object.keys(row).forEach(f=>{
           if(row[f]!==undefined && String(row[f])!==String(m[f]||'')) updates[f]=row[f];
         });
+        // Bestandstaube-Umschaltung greift auch beim Ergänzen bestehender Tauben
+        if(SCAN.instock[k] && !m.instock) updates.instock = true;
         if(Object.keys(updates).length) await apiPatch('pigeons',m.pigeonid,updates);
         uuidMap[normRing(p.ringnumber)] = m.pigeonid;
       }
