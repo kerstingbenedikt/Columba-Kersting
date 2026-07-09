@@ -174,6 +174,11 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .bar-track{flex:1;background:var(--bg3);border-radius:4px;height:18px;overflow:hidden}
 .bar-fill{background:linear-gradient(90deg,var(--green3),var(--green2));height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;min-width:30px;transition:width .4s ease}
 .bar-fill span{font-size:11px;color:#e8f0e8;white-space:nowrap}
+.bar-row.clickable{cursor:pointer;border-radius:4px;transition:background .12s}
+.bar-row.clickable:hover{background:var(--bg3)}
+.bar-row.clickable:hover .bar-fill{filter:brightness(1.15)}
+.tag.clickable{cursor:pointer;transition:border-color .12s,color .12s}
+.tag.clickable:hover{border-color:var(--green);color:var(--green)}
 
 /* ── Neue Taube / Formular ── */
 .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
@@ -439,7 +444,7 @@ const S = {
   tab: 'tauben', pigeons: [], filtered: [],
   page: 0, pageSize: 50,
   search: '', sexFilter: 'all', yearFilter: 'all', inStockFilter: 'yes', colorFilter: 'all', stateFilter: 'all', typeFilter: 'all', standortFilter: 'all',
-  filtersOpen: false,
+  filtersOpen: false, taubenView: 'liste',
   pigeonStates: [],
   uniqueColors: [], uniqueRaces: [], uniqueStrains: [], uniqueBreeders: [],
   sortCol: 'ringnumber', sortDir: 1,
@@ -1474,11 +1479,11 @@ function sortBy(col){ S.sortCol===col ? S.sortDir*=-1 : (S.sortCol=col,S.sortDir
 // 'tauben'  = Tauben-Übersicht + alles rund um eine ausgewählte Taube
 //             (Details, Stammbaum, Nachkommen, Paarungscheck)
 // 'add'     = alle Wege, neue Tauben ins System zu bringen (manuell/Scan/Import)
-// 'reisen'  = alles rund um Flüge & Auswertungen (Reisen, Bestenliste, Züchter, Statistik)
+// 'reisen'  = alles rund um Flüge & Auswertungen (Reisen, Bestenliste, Züchter)
 const TAB_GROUP = {
   tauben:'tauben', stammbaum:'tauben', paarung:'tauben', nachkommen:'tauben',
   neu:'add', scan:'add', import:'add',
-  reisen:'reisen', bestenliste:'reisen', zuechter:'reisen', statistik:'reisen'
+  reisen:'reisen', bestenliste:'reisen', zuechter:'reisen'
 };
 function setActiveNav(tab){
   const grp = TAB_GROUP[tab] || tab;
@@ -1506,11 +1511,18 @@ function renderTaubenSubnav(active, p){
     ${btn('paarung','Paarungscheck','💑',`setPaarungVogel('${p.pigeonid}')`)}
   </div>`;
 }
-// Subnav: Reisen-Themenkreis (Flüge, Bestenliste, Züchter, Statistik)
+// Subnav: Reisen-Themenkreis (Flüge, Bestenliste, Züchter)
 function renderReisenSubnav(active){
   const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="showTab('${key}')">${icon} ${label}</button>`;
   return `<div class="subnav">
-    ${btn('reisen','Reisen','🏁')}${btn('bestenliste','Bestenliste','🏆')}${btn('zuechter','Züchter','🧑‍🌾')}${btn('statistik','Statistik','📊')}
+    ${btn('reisen','Reisen','🏁')}${btn('bestenliste','Bestenliste','🏆')}${btn('zuechter','Züchter','🧑‍🌾')}
+  </div>`;
+}
+// Subnav: Tauben-Übersicht (Liste / Statistik)
+function renderTaubenOverviewNav(active){
+  const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="S.taubenView='${key}';render();window.scrollTo(0,0)">${icon} ${label}</button>`;
+  return `<div class="subnav">
+    ${btn('liste','Liste','📋')}${btn('statistik','Statistik','📊')}
   </div>`;
 }
 // Subnav: Wege, eine neue Taube anzulegen (manuell, per Scan, per Datei-Import)
@@ -1525,7 +1537,7 @@ function renderAddSubnav(active){
 function render(){
   const m=document.getElementById('main');
   if(S.loading){ m.innerHTML='<div class="loading"><div class="spinner"></div>Lade Tauben…</div>'; return; }
-  if(S.tab==='tauben')     m.innerHTML=S.selected ? renderTaubenSubnav('detail',S.selected)+renderDetail(S.selected) : renderList();
+  if(S.tab==='tauben')     m.innerHTML=S.selected ? renderTaubenSubnav('detail',S.selected)+renderDetail(S.selected) : renderTaubenOverviewNav(S.taubenView)+(S.taubenView==='statistik'?renderStats():renderList());
   else if(S.tab==='stammbaum')  m.innerHTML=S.selectedPed ? renderTaubenSubnav('stammbaum',findById(S.selectedPed))+renderPedigree(S.selectedPed) : (showTab('tauben'),'');
   else if(S.tab==='nachkommen') m.innerHTML=S.selectedNach ? renderTaubenSubnav('nachkommen',findById(S.selectedNach))+renderNachkommen(S.selectedNach) : renderTaubenSubnav('nachkommen',null)+renderNachSearch();
   else if(S.tab==='paarung')    m.innerHTML=renderTaubenSubnav('paarung', S.paarungM||S.paarungF||null) + renderPaarung();
@@ -1535,8 +1547,7 @@ function render(){
   else if(S.tab==='reisen')     m.innerHTML=renderReisenSubnav('reisen')+renderReisen();
   else if(S.tab==='zuechter')   m.innerHTML=renderReisenSubnav('zuechter')+renderZuechter();
   else if(S.tab==='bestenliste') m.innerHTML=renderReisenSubnav('bestenliste')+renderBestenliste();
-  else if(S.tab==='statistik') m.innerHTML=renderReisenSubnav('statistik')+renderStats();
-  else                          m.innerHTML=renderStats();
+  else                          m.innerHTML=renderTaubenOverviewNav('statistik')+renderStats();
   bindAutocomplete();
   bindNachSearch();
 }
@@ -5350,6 +5361,36 @@ const _ldRT=loadData;
 loadData=async function(){ await _ldRT(); await loadTrips(); };
 
 // ── STATISTIK ──────────────────────────────────────────────────
+// Kleiner Helfer, um beliebige Strings sicher als Argument in ein inline
+// onclick-Attribut einzubetten (JSON-Stringify + HTML-Escaping der Quotes).
+function jsAttr(v){ return escH(JSON.stringify(String(v))); }
+
+// Zurück zur Tauben-Liste springen, bevor ein Statistik-Filter angewendet wird.
+function statsGoToListe(){
+  S.tab='tauben'; S.selected=null; S.taubenView='liste';
+  setActiveNav('tauben');
+}
+function statsFilterYear(year){
+  statsGoToListe(); resetTaubenFilter();
+  S.yearFilter=String(year);
+  applyFilter(); window.scrollTo(0,0);
+}
+function statsFilterColor(color){
+  statsGoToListe(); resetTaubenFilter();
+  S.colorFilter=String(color);
+  applyFilter(); window.scrollTo(0,0);
+}
+function statsFilterStrain(strain){
+  statsGoToListe(); resetTaubenFilter();
+  S.search=String(strain);
+  applyFilter(); window.scrollTo(0,0);
+}
+function statsFilterType(type){
+  statsGoToListe(); resetTaubenFilter();
+  S.typeFilter=String(type);
+  applyFilter(); window.scrollTo(0,0);
+}
+
 function renderStats(){
   const total=S.pigeons.length,males=S.pigeons.filter(p=>sex_(p)==='M').length,females=S.pigeons.filter(p=>sex_(p)==='F').length;
   const instock=S.pigeons.filter(p=>p.instock).length;
@@ -5361,6 +5402,22 @@ function renderStats(){
   const topColors=Object.entries(colors).sort((a,b)=>b[1]-a[1]).slice(0,10);
   const strains={};S.pigeons.forEach(p=>{if(p.strain)strains[p.strain]=(strains[p.strain]||0)+1;});
   const topStrains=Object.entries(strains).sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+  // Top-Vererber: Tauben mit den meisten direkten Nachkommen (Kindern) in der Datenbank.
+  // Zählung über die verlinkten Eltern-IDs (fatherid/motherid) — das ist die verlässlichste
+  // Verknüpfung, da sie unabhängig von Ringnummer-Schreibweisen funktioniert.
+  const parentCounts=new Map();
+  S.pigeons.forEach(p=>{
+    if(p.fatherid) parentCounts.set(p.fatherid,(parentCounts.get(p.fatherid)||0)+1);
+    if(p.motherid) parentCounts.set(p.motherid,(parentCounts.get(p.motherid)||0)+1);
+  });
+  const topVererber=[...parentCounts.entries()]
+    .map(([id,n])=>({p:findById(id),n}))
+    .filter(x=>x.p)
+    .sort((a,b)=>b.n-a.n)
+    .slice(0,15);
+  const maxV=Math.max(...topVererber.map(x=>x.n),1);
+
   return `
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-num">${total.toLocaleString('de')}</div><div class="stat-label">Tauben gesamt</div></div>
@@ -5373,12 +5430,16 @@ function renderStats(){
       <div class="stat-card"><div class="stat-num" style="font-size:24px">${Object.keys(years).length}</div><div class="stat-label">Jahrgänge</div></div>
     </div>
     <div class="card">
-      <div class="card-title">Tauben pro Jahrgang</div>
-      ${topYears.map(([y,n])=>`<div class="bar-row"><span class="bar-label">${y}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/maxY*100)}%"><span>${n}</span></div></div></div>`).join('')}
+      <div class="card-title">Tauben pro Jahrgang <span style="color:var(--text3);font-weight:400;font-size:11px">(anklicken zum Filtern)</span></div>
+      ${topYears.map(([y,n])=>`<div class="bar-row clickable" onclick="statsFilterYear(${jsAttr(y)})" title="Nach Jahrgang ${escH(y)} filtern"><span class="bar-label">${escH(y)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/maxY*100)}%"><span>${n}</span></div></div></div>`).join('')}
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      ${topColors.length?`<div class="card"><div class="card-title">Farben</div><div class="tag-list">${topColors.map(([c,n])=>`<div class="tag">${escH(c)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
-      ${topStrains.length?`<div class="card"><div class="card-title">Linien / Stämme</div><div class="tag-list">${topStrains.map(([s,n])=>`<div class="tag">${escH(s)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      ${topColors.length?`<div class="card"><div class="card-title">Farben <span style="color:var(--text3);font-weight:400;font-size:11px">(anklicken zum Filtern)</span></div><div class="tag-list">${topColors.map(([c,n])=>`<div class="tag clickable" onclick="statsFilterColor(${jsAttr(c)})" title="Nach Farbe ${escH(c)} filtern">${escH(c)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+      ${topStrains.length?`<div class="card"><div class="card-title">Linien / Stämme <span style="color:var(--text3);font-weight:400;font-size:11px">(anklicken zum Filtern)</span></div><div class="tag-list">${topStrains.map(([s,n])=>`<div class="tag clickable" onclick="statsFilterStrain(${jsAttr(s)})" title="Nach Linie/Stamm ${escH(s)} filtern">${escH(s)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+    </div>
+    <div class="card">
+      <div class="card-title">🏆 Top-Vererber <span style="color:var(--text3);font-weight:400;font-size:11px">— Tauben mit den meisten Nachkommen in der Datenbank (anklicken für Details)</span></div>
+      ${topVererber.length?topVererber.map(x=>`<div class="bar-row clickable" onclick="showNachkommen('${x.p.pigeonid}')" title="Nachkommen von ${escH(ring(x.p))} anzeigen"><span class="bar-label" style="width:auto;min-width:90px;text-align:left;padding-right:8px">${escH(ring(x.p))}${x.p.name?` · ${escH(x.p.name)}`:''}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(x.n/maxV*100)}%"><span>${x.n}</span></div></div></div>`).join(''):'<div style="color:var(--text3);font-size:13px;padding:8px 0">Keine Abstammungsdaten (Eltern-Verknüpfungen) vorhanden.</div>'}
     </div>`;
 }
 
