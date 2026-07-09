@@ -786,8 +786,22 @@ document.addEventListener('click', (e)=>{
 });
 
 
-function findFather(p){ return p.fatherid ? S.pigeons.find(x=>x.pigeonid===p.fatherid)||null : p.ringnumberfather ? S.pigeons.find(x=>x.ringnumber===p.ringnumberfather)||null : null; }
-function findMother(p){ return p.motherid ? S.pigeons.find(x=>x.pigeonid===p.motherid)||null : p.ringnumbermother ? S.pigeons.find(x=>x.ringnumber===p.ringnumbermother)||null : null; }
+function findFather(p){
+  if(!p) return null;
+  if(p.fatherid){ const byId=S.pigeons.find(x=>x.pigeonid===p.fatherid); if(byId) return byId; }
+  if(!p.ringnumberfather) return null;
+  const target=normRing(p.ringnumberfather);
+  if(!target) return null;
+  return S.pigeons.find(x=>normRing(x.ringnumber)===target || normRing(x.ringnumberold||'')===target) || null;
+}
+function findMother(p){
+  if(!p) return null;
+  if(p.motherid){ const byId=S.pigeons.find(x=>x.pigeonid===p.motherid); if(byId) return byId; }
+  if(!p.ringnumbermother) return null;
+  const target=normRing(p.ringnumbermother);
+  if(!target) return null;
+  return S.pigeons.find(x=>normRing(x.ringnumber)===target || normRing(x.ringnumberold||'')===target) || null;
+}
 function findById(id){ if(!id)return null; return S.pigeons.find(p=>p.pigeonid===id||p.ringnumber===String(id))||null; }
 function getAncestors(p, depth=4){
   if(!p||depth===0) return new Set();
@@ -2064,6 +2078,15 @@ function renderPedigree(pid, opts){
   const embedded = opts.embedded===true;
   const root=findById(pid);
   if(!root) return '<div style="padding:20px;color:var(--text3)">Taube nicht gefunden.</div>';
+  try{
+  return renderPedigreeInner(root, opts, embedded);
+  } catch(e){
+    console.error('Fehler beim Rendern des Stammbaums:', e);
+    return `<div class="card"><div class="error-box">⚠️ Der Stammbaum konnte nicht angezeigt werden: ${escH(e.message)}</div>
+      <button class="back-btn" onclick="S.selected=null;S.tab='tauben';setActiveNav('tauben');render()">← Zur Übersicht</button></div>`;
+  }
+}
+function renderPedigreeInner(root, opts, embedded){
   function node(p,isRoot=false){
     if(!p) return `<div class="ped-box empty" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:11px">—<br>Unbekannt</div></div>`;
     const sx=sex_(p);
@@ -2080,7 +2103,7 @@ function renderPedigree(pid, opts){
     const infoShort = infoFull.length>80 ? infoFull.slice(0,80)+'…' : infoFull;
     const infoHtml  = infoFull ? (isRoot
       ? `<div style="margin-top:5px;font-size:11px;color:var(--text2);line-height:1.5;max-height:80px;overflow-y:auto;border-top:1px solid var(--border);padding-top:4px;white-space:pre-wrap">${escH(infoFull)}</div>`
-      : `<div title="${escH(infoFull)}" style="margin-top:3px;font-size:9px;color:var(--text3);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;cursor:help;border-top:1px solid var(--border);padding-top:3px">${escH(infoShort)}</div>`)
+      : `<div title="${escH(infoFull)}" onclick="showPedigree('${p.pigeonid}')" style="margin-top:3px;font-size:9px;color:var(--text3);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;cursor:pointer;border-top:1px solid var(--border);padding-top:3px">${escH(infoShort)}</div>`)
       : '';
     return `<div class="ped-box ${sx==='M'?'male':sx==='F'?'female':''} ${isRoot?'root':''}" onclick="showPedigree('${p.pigeonid}')" style="width:100%;box-sizing:border-box">
       <div style="display:flex;align-items:center;gap:4px;margin-bottom:1px">
@@ -2111,8 +2134,11 @@ function renderPedigree(pid, opts){
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span style="font-size:11px;color:var(--text3)">Druck:</span>
-            <button class="btn btn-outline btn-sm" onclick="printPedigree('${root.pigeonid}',4)">🖨 4 Gen.</button>
-            <button class="btn btn-outline btn-sm" onclick="printPedigree('${root.pigeonid}',5)">🖨 5 Gen.</button>
+            <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);cursor:pointer">
+              <input type="checkbox" id="ped-print-photo" style="width:14px;height:14px;cursor:pointer"> Mit Foto
+            </label>
+            <button class="btn btn-outline btn-sm" onclick="printPedigree('${root.pigeonid}',4,document.getElementById('ped-print-photo').checked)">🖨 4 Gen.</button>
+            <button class="btn btn-outline btn-sm" onclick="printPedigree('${root.pigeonid}',5,document.getElementById('ped-print-photo').checked)">🖨 5 Gen.</button>
           </div>
         </div>
       </div>
@@ -2266,15 +2292,16 @@ function renderPedigree(pid, opts){
 }
 
 // ── DRUCK / PDF ────────────────────────────────────────────────
-function printPedigree(pid, gens){
+function printPedigree(pid, gens, withPhoto){
   try{
     gens = parseInt(gens)||4;
+    withPhoto = !!withPhoto;
     const root = findById(pid);
     if(!root){ alert('Taube nicht gefunden'); return; }
 
     const _esc    = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const _ring   = p => p?(p.ringnumber||p.ringnumberold||'—'):'—';
-    const _sex    = p => { if(!p) return '?'; const g=(p.gender||p.sex||'').toUpperCase(); return g==='M'||g==='MALE'||g==='COCK'?'M':g==='F'||g==='FEMALE'||g==='HEN'?'F':'?'; };
+    const _sex    = p => { if(!p) return '?'; const g=String(p.gender||p.sex||'').trim().toLowerCase(); if(['m','1','male','cock'].includes(g))return'M'; if(['f','2','w','female','hen'].includes(g))return'F'; return '?'; };
     const _father = p => { if(!p) return null; if(p.fatherid) return S.pigeons.find(x=>x.pigeonid===p.fatherid)||null; if(p.ringnumberfather) return S.pigeons.find(x=>x.ringnumber===p.ringnumberfather)||null; return null; };
     const _mother = p => { if(!p) return null; if(p.motherid) return S.pigeons.find(x=>x.pigeonid===p.motherid)||null; if(p.ringnumbermother) return S.pigeons.find(x=>x.ringnumber===p.ringnumbermother)||null; return null; };
 
@@ -2321,11 +2348,20 @@ function printPedigree(pid, gens){
       const showInfo = gen<=2 && info;  // Info nur bei Proband, Eltern, Großeltern
       const showName = gen<=3 || !landscape;  // bei 5 Gen (16 Zeilen, wenig Höhe) Name bei tiefster Ebene weglassen — Ringnummer hat Vorrang
 
+      // Foto nur einbetten, wenn "Mit Foto" aktiv ist UND die Taube tatsächlich ein
+      // eigenes hochgeladenes Foto hat (kein Farb-Platzhalterbild — der farbige
+      // linke Rand markiert das Geschlecht bereits eindeutig).
+      const photoSize = gen===0?'15mm':gen===1?'11mm':'8mm';
+      const photoHtml = (withPhoto && p.photo)
+        ? `<img src="${p.photo}" style="width:${photoSize};height:${photoSize};object-fit:cover;border-radius:1mm;border:.2mm solid #ddd;float:left;margin:0 2mm 1mm 0;background:#fff">`
+        : '';
+
       // Info-Feld bekommt flex:1 → füllt restliche Box-Höhe vollständig aus
       // kein max-height, kein Zeichenlimit → voller Text
       // Ringnummer darf bei Bedarf auf 2 Zeilen umbrechen statt mit "…" abgeschnitten zu
       // werden — eine unvollständige Ringnummer ist im Zweifel nutzlos, ein Umbruch nicht.
       return `<div style="border-left:2mm solid ${col};padding:1.5mm 2mm;background:#fafafa;border-radius:.8mm;width:100%;height:100%;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column">
+        ${photoHtml}
         <div style="font-family:monospace;font-size:${szRing};font-weight:700;color:#1a6b1a;white-space:normal;word-break:break-word;line-height:1.2;flex-shrink:0">
           ${sx==='M'?'♂':sx==='F'?'♀':'?'} ${_esc(rn)}</div>
         ${p.name&&showName?`<div style="font-size:${szName};font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:.3mm;flex-shrink:0">${_esc(p.name)}</div>`:''}
