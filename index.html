@@ -2290,11 +2290,17 @@ function printPedigree(pid, gens){
     buildTree(root, 0, 0, tree);
 
     const rows   = Math.pow(2, gens-1);   // 8 (4gen) oder 16 (5gen)
-    const rowHmm = Math.floor(272/rows);  // volle Seitenhöhe nutzen
+    // Ab 5 Generationen reicht Hochformat nicht mehr aus (Spalten würden zu schmal für
+    // vollständige Ringnummern) → automatisch auf Querformat wechseln, das gibt ca. 45%
+    // mehr nutzbare Breite pro Spalte.
+    const landscape = gens>=5;
+    const pageWmm   = landscape ? 281 : 194;  // nutzbare Breite (A4 minus Ränder)
+    const pageHmm   = landscape ? 185 : 272;  // nutzbare Höhe (A4 minus Ränder/Kopfzeile)
+    const rowHmm = Math.floor(pageHmm/rows);  // volle Seitenhöhe nutzen
     // Spaltenbreiten: kein Header-Overhead mehr → volle Breite für Daten
     // Verbinder: 5mm, Rest gleichmäßig auf Datenspalten
     const totalConn = (gens-1)*5;
-    const datWmm    = Math.floor((190 - totalConn) / gens);
+    const datWmm    = Math.floor((pageWmm - totalConn) / gens);
     const conWmm    = 5;
 
     // Box-HTML — Infomenge abhängig von Generation und verfügbarem Platz
@@ -2307,19 +2313,22 @@ function printPedigree(pid, gens){
       const rn   = _ring(p);
 
       // Schriftgrößen je nach Generation
-      const szRing = gen===0?'8pt':gen===1?'7.5pt':gen===2?'7pt':'6.5pt';
+      const szRing = gen===0?'8pt':gen===1?'7.5pt':gen===2?'7pt':gen===3?'6.5pt':'6pt';
       const szName = gen===0?'9pt':gen===1?'8pt':gen===2?'7.5pt':'6.5pt';
       const szTag  = gen===0?'7pt':gen===1?'6.5pt':'6pt';
       const szInfo = gen===0?'7.5pt':gen===1?'7pt':gen===2?'6.5pt':'6pt';
       const showTags = gen<=3;
       const showInfo = gen<=2 && info;  // Info nur bei Proband, Eltern, Großeltern
+      const showName = gen<=3 || !landscape;  // bei 5 Gen (16 Zeilen, wenig Höhe) Name bei tiefster Ebene weglassen — Ringnummer hat Vorrang
 
       // Info-Feld bekommt flex:1 → füllt restliche Box-Höhe vollständig aus
       // kein max-height, kein Zeichenlimit → voller Text
+      // Ringnummer darf bei Bedarf auf 2 Zeilen umbrechen statt mit "…" abgeschnitten zu
+      // werden — eine unvollständige Ringnummer ist im Zweifel nutzlos, ein Umbruch nicht.
       return `<div style="border-left:2mm solid ${col};padding:1.5mm 2mm;background:#fafafa;border-radius:.8mm;width:100%;height:100%;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column">
-        <div style="font-family:monospace;font-size:${szRing};font-weight:700;color:#1a6b1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">
+        <div style="font-family:monospace;font-size:${szRing};font-weight:700;color:#1a6b1a;white-space:normal;word-break:break-word;line-height:1.2;flex-shrink:0">
           ${sx==='M'?'♂':sx==='F'?'♀':'?'} ${_esc(rn)}</div>
-        ${p.name?`<div style="font-size:${szName};font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:.3mm;flex-shrink:0">${_esc(p.name)}</div>`:''}
+        ${p.name&&showName?`<div style="font-size:${szName};font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:.3mm;flex-shrink:0">${_esc(p.name)}</div>`:''}
         ${showTags&&tags.length?`<div style="font-size:${szTag};color:#666;margin-top:.4mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">${tags.map(_esc).join(' · ')}</div>`:''}
         ${showInfo?`<div style="font-size:${szInfo};color:#333;margin-top:1mm;border-top:.2mm solid #ddd;padding-top:.5mm;line-height:1.45;overflow:hidden;flex:1;word-break:break-word">${_esc(info)}</div>`:''}
       </div>`;
@@ -2367,9 +2376,9 @@ function printPedigree(pid, gens){
     const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
 <title>Stammbaum – ${_esc(root.name||_ring(root))}</title>
 <style>
-  @page{size:A4 portrait;margin:8mm 8mm 8mm 8mm}
+  @page{size:A4 ${landscape?'landscape':'portrait'};margin:8mm 8mm 8mm 8mm}
   *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
-  body{width:194mm;background:#fff;color:#111}
+  body{width:${pageWmm}mm;background:#fff;color:#111}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
 </head><body>
@@ -2386,7 +2395,7 @@ function printPedigree(pid, gens){
   </div>
   <div style="font-size:7pt;color:#aaa">${today} · Brieftauben-Verwaltung</div>
 </div>
-<div style="display:grid;grid-template-columns:${gtc};grid-template-rows:${gtr};border:.3mm solid #ccc;width:194mm">
+<div style="display:grid;grid-template-columns:${gtc};grid-template-rows:${gtr};border:.3mm solid #ccc;width:${pageWmm}mm">
   ${cells}
 </div>
 </body></html>`;
