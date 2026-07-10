@@ -450,7 +450,7 @@ const S = {
   pigeonStates: [],
   uniqueColors: [], uniqueRaces: [], uniqueStrains: [], uniqueBreeders: [],
   sortCol: 'ringnumber', sortDir: 1,
-  selected: null, selectedPed: null, pigeonTripYear: null, breederProfileEditing: false,
+  selected: null, selectedPed: null, pigeonTripYear: null, breederProfileEditing: false, printPrep: null,
   loading: true, error: null, _loadingMore: false,
   paarungM: null, paarungF: null, selectedNach: null,
   neuMode: 'full',
@@ -2150,13 +2150,14 @@ function renderPedigreeInner(root, opts, embedded){
             <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);cursor:pointer">
               <input type="checkbox" id="ped-print-photo" style="width:14px;height:14px;cursor:pointer"> Mit Foto
             </label>
-            <button class="btn btn-outline btn-sm" onclick="printPedigree('${root.pigeonid}',4,document.getElementById('ped-print-photo').checked)">🖨 4 Gen.</button>
-            <button class="btn btn-outline btn-sm" onclick="printPedigree('${root.pigeonid}',5,document.getElementById('ped-print-photo').checked)">🖨 5 Gen.</button>
-            ${!embedded?`<button class="btn btn-outline btn-sm" onclick="S.breederProfileEditing=!S.breederProfileEditing;render()">🧑‍🌾 Züchterdaten</button>`:''}
+            <button class="btn btn-outline btn-sm" onclick="openPrintPrep('${root.pigeonid}',4,document.getElementById('ped-print-photo').checked)">🖨 4 Gen.</button>
+            <button class="btn btn-outline btn-sm" onclick="openPrintPrep('${root.pigeonid}',5,document.getElementById('ped-print-photo').checked)">🖨 5 Gen.</button>
+            ${!embedded?`<button class="btn btn-outline btn-sm" onclick="toggleBreederProfileEditor()">🧑‍🌾 Züchterdaten</button>`:''}
           </div>
         </div>
       </div>
       ${!embedded && S.breederProfileEditing ? renderBreederProfileForm() : ''}
+      ${!embedded && S.printPrep ? renderPrintPrepPanel() : ''}
       <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap">
         <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--blue)"></span>Täuber</span>
         <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--purple)"></span>Täubin</span>
@@ -2307,7 +2308,7 @@ function renderPedigreeInner(root, opts, embedded){
 }
 
 // ── DRUCK / PDF ────────────────────────────────────────────────
-async function printPedigree(pid, gens, withPhoto){
+async function printPedigree(pid, gens, withPhoto, erfolgeText){
   try{
     gens = parseInt(gens)||4;
     withPhoto = !!withPhoto;
@@ -2337,8 +2338,8 @@ async function printPedigree(pid, gens, withPhoto){
     [0,1,2].forEach(g=>{ (tree[g]||[]).forEach(p=>{ if(p&&p.pigeonid) travelIds.push(p.pigeonid); }); });
     await loadPigeonTripsBatch(travelIds);
 
-    // Züchterdaten für die Kopfzeile laden (frei erfasste Angaben inkl. Erfolge).
-    const breederProf = loadBreederProfile();
+    // Züchterdaten für die Kopfzeile (bereits über openPrintPrep geladen).
+    const breederProf = BREEDER_PROFILE || {};
 
     const rows   = Math.pow(2, gens-1);   // 8 (4gen) oder 16 (5gen)
     // Ab 5 Generationen reicht Hochformat nicht mehr aus (Spalten würden zu schmal für
@@ -2447,22 +2448,26 @@ async function printPedigree(pid, gens, withPhoto){
     const sx=_sex(root);
     const today=new Date().toLocaleDateString('de-DE');
 
-    // Kopfzeile: Züchterdaten + frei erfasste Züchtererfolge (Textfeld aus den Züchterdaten).
+    // Kopfzeile: Züchterdaten links, Logo/Foto mittig, im Druckdialog ausgewählte
+    // Züchtererfolge rechts. Grid statt flex-space-between, damit das Logo unabhängig
+    // von der Breite der Nachbarspalten exakt mittig steht.
     function buildBreederHeader(){
       const p = breederProf;
-      if(!p.name && !p.strasse && !p.ort && !p.verein && !p.erfolge) return '';
+      if(!p.name && !p.strasse && !p.ort && !p.verein && !p.logo && !erfolgeText) return '';
       const addr = [p.strasse, p.ort].filter(Boolean).join(', ');
-      return `<div style="margin-bottom:2.5mm;padding-bottom:2mm;border-bottom:.3mm solid #ccc;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4mm">
-        <div>
-          ${p.name?`<div style="font-size:11pt;font-weight:700">${_esc(p.name)}</div>`:''}
-          ${addr?`<div style="font-size:7pt;color:#555;margin-top:.5mm">${_esc(addr)}</div>`:''}
-          ${p.verein?`<div style="font-size:7pt;color:#555">${_esc(p.verein)}</div>`:''}
-          ${p.telefon?`<div style="font-size:7pt;color:#555">Tel. ${_esc(p.telefon)}</div>`:''}
-        </div>
-        ${p.erfolge?`<div style="font-size:7pt;color:#555;text-align:right;max-width:90mm">
-          <div style="font-size:8pt;font-weight:700;color:#1a6b1a;margin-bottom:.5mm">Züchtererfolge</div>
-          ${_esc(p.erfolge).replace(/\n/g,'<br>')}
-        </div>`:''}
+      const left = `<div>
+        ${p.name?`<div style="font-size:11pt;font-weight:700">${_esc(p.name)}</div>`:''}
+        ${addr?`<div style="font-size:7pt;color:#555;margin-top:.5mm">${_esc(addr)}</div>`:''}
+        ${p.verein?`<div style="font-size:7pt;color:#555">${_esc(p.verein)}</div>`:''}
+        ${p.telefon?`<div style="font-size:7pt;color:#555">Tel. ${_esc(p.telefon)}</div>`:''}
+      </div>`;
+      const mid = p.logo?`<div style="text-align:center"><img src="${p.logo}" style="max-height:18mm;max-width:40mm;object-fit:contain"></div>`:'<div></div>';
+      const right = erfolgeText?`<div style="font-size:7pt;color:#555;text-align:right;max-width:90mm">
+        <div style="font-size:8pt;font-weight:700;color:#1a6b1a;margin-bottom:.5mm">Züchtererfolge</div>
+        ${_esc(erfolgeText).replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>')}
+      </div>`:'<div></div>';
+      return `<div style="margin-bottom:2.5mm;padding-bottom:2mm;border-bottom:.3mm solid #ccc;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:4mm">
+        ${left}${mid}${right}
       </div>`;
     }
 
@@ -4355,28 +4360,67 @@ let RT = {
 };
 
 // ── Züchterprofil für die Kopfzeile im Abstammungsdruck ──────────
-// Lokal (localStorage) gespeichert, da es sich um Stammdaten des Nutzers selbst
-// handelt (Name/Adresse/Verein), nicht um Taubendaten in der Datenbank.
+// In Supabase gespeichert (Tabelle breederprofile, eine Zeile), damit die Angaben
+// geräteübergreifend verfügbar sind.
 let BREEDER_PROFILE = null;
-function loadBreederProfile(){
-  if(BREEDER_PROFILE) return BREEDER_PROFILE;
-  try{ BREEDER_PROFILE = JSON.parse(localStorage.getItem('bv_breeder_profile')||'null') || {}; }
-  catch(e){ BREEDER_PROFILE = {}; }
+let BREEDER_PROFILE_LOADED = false;
+async function loadBreederProfile(){
+  if(BREEDER_PROFILE_LOADED) return BREEDER_PROFILE;
+  try{
+    const rows = await apiGet('/breederprofile?select=*&limit=1');
+    BREEDER_PROFILE = (rows && rows[0]) || {};
+  }catch(e){ BREEDER_PROFILE = {}; }
+  BREEDER_PROFILE_LOADED = true;
   return BREEDER_PROFILE;
 }
-function saveBreederProfileForm(){
+async function toggleBreederProfileEditor(){
+  if(S.breederProfileEditing){ S.breederProfileEditing=false; render(); return; }
+  if(!BREEDER_PROFILE_LOADED) await loadBreederProfile();
+  S.breederProfileEditing = true;
+  render();
+}
+async function upsertBreederProfile(partial){
+  if(BREEDER_PROFILE && BREEDER_PROFILE.id){
+    await apiPatchBy('breederprofile', 'id=eq.'+BREEDER_PROFILE.id, partial);
+    BREEDER_PROFILE = {...BREEDER_PROFILE, ...partial};
+  } else {
+    const inserted = await apiPost('breederprofile', partial);
+    BREEDER_PROFILE = (inserted && inserted[0]) || {...partial};
+  }
+  return BREEDER_PROFILE;
+}
+async function saveBreederProfileForm(){
   const v = id => (document.getElementById(id)?.value||'').trim();
-  const prof = { name:v('bp_name'), strasse:v('bp_strasse'), ort:v('bp_ort'), verein:v('bp_verein'), telefon:v('bp_telefon'), erfolge:v('bp_erfolge') };
-  BREEDER_PROFILE = prof;
-  try{ localStorage.setItem('bv_breeder_profile', JSON.stringify(prof)); }catch(e){}
+  const prof = { name:v('bp_name'), strasse:v('bp_strasse'), ort:v('bp_ort'), verein:v('bp_verein'), telefon:v('bp_telefon') };
+  try{ await upsertBreederProfile(prof); }
+  catch(e){ alert('Speichern fehlgeschlagen: '+e.message); return; }
   S.breederProfileEditing = false;
   render();
 }
+async function uploadBreederLogo(file){
+  if(!file) return;
+  if(file.size>15*1024*1024){ alert('Datei zu groß (max. 15 MB).'); return; }
+  const imgEl = document.getElementById('bp-logo-img');
+  try{
+    if(imgEl){ imgEl.style.opacity='.4'; imgEl.style.display='block'; }
+    const dataUrl = await compressImageFile(file, 300, .85);
+    await upsertBreederProfile({logo: dataUrl});
+    render();
+  }catch(err){
+    if(imgEl) imgEl.style.opacity='1';
+    alert('Logo konnte nicht gespeichert werden: '+err.message+'\n\nHinweis: In Supabase muss die Tabelle "breederprofile" eine Text-Spalte "logo" besitzen.');
+  }
+}
+async function removeBreederLogo(){
+  if(!confirm('Logo/Foto aus den Züchterdaten entfernen?')) return;
+  try{ await upsertBreederProfile({logo:null}); render(); }
+  catch(e){ alert('Entfernen fehlgeschlagen: '+e.message); }
+}
 function renderBreederProfileForm(){
-  const p = loadBreederProfile();
+  const p = BREEDER_PROFILE || {};
   return `<div class="card" style="margin-bottom:14px">
     <div class="card-title">🧑‍🌾 Züchterdaten für die Druck-Kopfzeile</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Diese Angaben erscheinen als Kopfzeile auf dem Abstammungsdruck.</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Name/Adresse für die Kopfzeile des Abstammungsdrucks (geräteübergreifend gespeichert). Die Züchtererfolge wählst du beim Drucken direkt aus deinen Erfolge-Einträgen aus.</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="form-field"><label>Name</label><input id="bp_name" value="${escH(p.name||'')}"></div>
       <div class="form-field"><label>Verein / Verband</label><input id="bp_verein" value="${escH(p.verein||'')}"></div>
@@ -4384,12 +4428,65 @@ function renderBreederProfileForm(){
       <div class="form-field"><label>PLZ / Ort</label><input id="bp_ort" value="${escH(p.ort||'')}"></div>
       <div class="form-field"><label>Telefon</label><input id="bp_telefon" value="${escH(p.telefon||'')}"></div>
     </div>
-    <div class="form-field" style="margin-top:10px"><label>Züchtererfolge (frei formulierbar, erscheint in der Kopfzeile)</label>
-      <textarea id="bp_erfolge" rows="3" style="width:100%;font-family:'DM Sans',sans-serif;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg2);color:var(--text);resize:vertical">${escH(p.erfolge||'')}</textarea>
+    <div class="form-field" style="margin-top:10px">
+      <label>Logo / Foto (erscheint mittig in der Druck-Kopfzeile)</label>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+        <img id="bp-logo-img" src="${p.logo||''}" style="width:56px;height:56px;object-fit:contain;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg2);${p.logo?'':'display:none'}">
+        <input type="file" accept="image/*" onchange="uploadBreederLogo(this.files[0])">
+        ${p.logo?`<button class="btn btn-outline btn-sm" onclick="removeBreederLogo()">Entfernen</button>`:''}
+      </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn btn-sm" onclick="saveBreederProfileForm()">Speichern</button>
       <button class="btn btn-outline btn-sm" onclick="S.breederProfileEditing=false;render()">Abbrechen</button>
+    </div>
+  </div>`;
+}
+
+// ── Erfolge-Auswahl für den Druck (aus der Tabelle breedersdata) ─────────────
+let BREEDERSDATA_CACHE = null;
+async function loadBreedersdata(){
+  if(BREEDERSDATA_CACHE) return BREEDERSDATA_CACHE;
+  try{ BREEDERSDATA_CACHE = await apiGet('/breedersdata?select=breederdataid,name,info,createdby,createdon&order=createdon.desc&limit=500') || []; }
+  catch(e){ BREEDERSDATA_CACHE = []; }
+  return BREEDERSDATA_CACHE;
+}
+async function openPrintPrep(pid, gens, withPhoto){
+  await loadBreedersdata();
+  if(!BREEDER_PROFILE_LOADED) await loadBreederProfile();
+  S.printPrep = {pid, gens, withPhoto, selected:new Set()};
+  render();
+}
+function togglePrintPrepEntry(id){
+  if(!S.printPrep) return;
+  if(S.printPrep.selected.has(id)) S.printPrep.selected.delete(id); else S.printPrep.selected.add(id);
+  render();
+}
+function closePrintPrep(){ S.printPrep=null; render(); }
+function confirmPrintPrep(){
+  const pp = S.printPrep;
+  if(!pp) return;
+  const chosen = (BREEDERSDATA_CACHE||[]).filter(r=>pp.selected.has(r.breederdataid));
+  const erfolgeText = chosen.map(r=>`${r.name}: ${r.info}`).join('\n\n');
+  S.printPrep = null;
+  printPedigree(pp.pid, pp.gens, pp.withPhoto, erfolgeText);
+}
+function renderPrintPrepPanel(){
+  const pp = S.printPrep;
+  if(!pp) return '';
+  const rows = BREEDERSDATA_CACHE||[];
+  return `<div class="card" style="margin-bottom:14px">
+    <div class="card-title">🏆 Erfolge für den Druck auswählen</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Wähle die Einträge, die in der Druck-Kopfzeile erscheinen sollen.</div>
+    <div style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">
+      ${rows.length?rows.map(r=>`<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer">
+        <input type="checkbox" ${pp.selected.has(r.breederdataid)?'checked':''} onchange="togglePrintPrepEntry('${r.breederdataid}')" style="margin-top:2px">
+        <span><b>${escH(r.name||'')}</b> — <span style="color:var(--text3)">${escH((r.info||'').slice(0,140))}${(r.info||'').length>140?'…':''}</span></span>
+      </label>`).join(''):'<div style="color:var(--text3);font-size:13px">Keine Erfolge-Einträge gefunden.</div>'}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-sm" onclick="confirmPrintPrep()">🖨 Drucken</button>
+      <button class="btn btn-outline btn-sm" onclick="closePrintPrep()">Abbrechen (ohne Erfolge drucken)</button>
     </div>
   </div>`;
 }
