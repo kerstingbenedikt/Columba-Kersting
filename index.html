@@ -2351,8 +2351,12 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
     // mehr nutzbare Breite pro Spalte.
     const landscape = gens>=5;
     const pageWmm   = landscape ? 281 : 194;  // nutzbare Breite (A4 minus Ränder)
-    const pageHmm   = landscape ? 185 : 272;  // nutzbare Höhe (A4 minus Ränder/Kopfzeile)
-    const rowHmm = Math.floor(pageHmm/rows);  // volle Seitenhöhe nutzen
+    const pageHmm   = landscape ? 194 : 281;  // nutzbare Gesamthöhe (A4 minus Rändern, inkl. Kopfzeile)
+    // Die Zeilenhöhe wird NICHT mehr fix in mm vorberechnet, sondern per Flexbox erst im
+    // Browser ermittelt: Kopfzeile(n) bekommen ihre natürliche Höhe, der Stammbaum-Raster
+    // erhält den kompletten Rest der Seite (flex:1) und teilt ihn per 1fr gleichmäßig auf
+    // die Zeilen auf. So passt der Ausdruck garantiert auf eine A4-Seite, unabhängig davon
+    // wie hoch die Züchter-Kopfzeile (Adresse/Logo/Erfolge) tatsächlich ausfällt.
     // Spaltenbreiten: kein Header-Overhead mehr → volle Breite für Daten
     // Verbinder: 5mm, Rest gleichmäßig auf Datenspalten
     const totalConn = (gens-1)*5;
@@ -2417,7 +2421,7 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
     // Grid-Template ohne Header-Zeile
     let gtc='';
     for(let g=0;g<gens;g++){ gtc+=datWmm+'mm'; if(g<gens-1) gtc+=' '+conWmm+'mm '; }
-    const gtr = 'repeat('+rows+','+rowHmm+'mm)';  // keine Header-Zeile!
+    const gtr = 'repeat('+rows+',1fr)';  // keine Header-Zeile! Höhe verteilt sich per Flexbox auf Restplatz der Seite
 
     let cells='';
     for(let g=0;g<gens;g++){
@@ -2480,10 +2484,12 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
 <style>
   @page{size:A4 ${landscape?'landscape':'portrait'};margin:8mm 8mm 8mm 8mm}
   *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
-  body{width:${pageWmm}mm;background:#fff;color:#111}
+  html,body{height:100%}
+  body{width:${pageWmm}mm;height:${pageHmm}mm;background:#fff;color:#111;display:flex;flex-direction:column;overflow:hidden}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
 </head><body>
+<div style="flex-shrink:0">
 ${buildBreederHeader()}
 <div style="margin-bottom:2.5mm;border-bottom:.3mm solid #ccc;padding-bottom:2mm;display:flex;justify-content:space-between;align-items:flex-end">
   <div>
@@ -2498,7 +2504,8 @@ ${buildBreederHeader()}
   </div>
   <div style="font-size:7pt;color:#aaa">${today} · Brieftauben-Verwaltung</div>
 </div>
-<div style="display:grid;grid-template-columns:${gtc};grid-template-rows:${gtr};border:.3mm solid #ccc;width:${pageWmm}mm">
+</div>
+<div style="flex:1;min-height:0;display:grid;grid-template-columns:${gtc};grid-template-rows:${gtr};border:.3mm solid #ccc;width:${pageWmm}mm;overflow:hidden">
   ${cells}
 </div>
 </body></html>`;
