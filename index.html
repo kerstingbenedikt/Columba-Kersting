@@ -450,7 +450,7 @@ const S = {
   pigeonStates: [],
   uniqueColors: [], uniqueRaces: [], uniqueStrains: [], uniqueBreeders: [],
   sortCol: 'ringnumber', sortDir: 1,
-  selected: null, selectedPed: null, pigeonTripYear: null, breederProfileEditing: false, printPrep: null,
+  selected: null, selectedPed: null, pigeonTripYear: null, breederProfileEditing: false, erfolgeEditingId: null,
   loading: true, error: null, _loadingMore: false,
   paarungM: null, paarungF: null, selectedNach: null,
   neuMode: 'full',
@@ -895,6 +895,11 @@ async function apiPatchBy(table, filter, body){
 }
 async function apiDelete(table, id){
   const r = await fetch(SUPA_URL+'/'+table+'?pigeonid=eq.'+id,{method:'DELETE',headers:H()});
+  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  return true;
+}
+async function apiDeleteBy(table, filter){
+  const r = await fetch(SUPA_URL+'/'+table+'?'+filter,{method:'DELETE',headers:H()});
   if(!r.ok){ const t=await r.text(); throw new Error(t); }
   return true;
 }
@@ -2150,14 +2155,13 @@ function renderPedigreeInner(root, opts, embedded){
             <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);cursor:pointer">
               <input type="checkbox" id="ped-print-photo" style="width:14px;height:14px;cursor:pointer"> Mit Foto
             </label>
-            <button class="btn btn-outline btn-sm" onclick="openPrintPrep('${root.pigeonid}',4,document.getElementById('ped-print-photo').checked)">🖨 4 Gen.</button>
-            <button class="btn btn-outline btn-sm" onclick="openPrintPrep('${root.pigeonid}',5,document.getElementById('ped-print-photo').checked)">🖨 5 Gen.</button>
+            <button class="btn btn-outline btn-sm" onclick="triggerPrint('${root.pigeonid}',4,document.getElementById('ped-print-photo').checked)">🖨 4 Gen.</button>
+            <button class="btn btn-outline btn-sm" onclick="triggerPrint('${root.pigeonid}',5,document.getElementById('ped-print-photo').checked)">🖨 5 Gen.</button>
             ${!embedded?`<button class="btn btn-outline btn-sm" onclick="toggleBreederProfileEditor()">🧑‍🌾 Züchterdaten</button>`:''}
           </div>
         </div>
       </div>
       ${!embedded && S.breederProfileEditing ? renderBreederProfileForm() : ''}
-      ${!embedded && S.printPrep ? renderPrintPrepPanel() : ''}
       <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap">
         <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--blue)"></span>Täuber</span>
         <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--purple)"></span>Täubin</span>
@@ -2338,7 +2342,7 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
     [0,1,2].forEach(g=>{ (tree[g]||[]).forEach(p=>{ if(p&&p.pigeonid) travelIds.push(p.pigeonid); }); });
     await loadPigeonTripsBatch(travelIds);
 
-    // Züchterdaten für die Kopfzeile (bereits über openPrintPrep geladen).
+    // Züchterdaten für die Kopfzeile (bereits über triggerPrint geladen).
     const breederProf = BREEDER_PROFILE || {};
 
     const rows   = Math.pow(2, gens-1);   // 8 (4gen) oder 16 (5gen)
@@ -4374,9 +4378,11 @@ async function loadBreederProfile(){
   return BREEDER_PROFILE;
 }
 async function toggleBreederProfileEditor(){
-  if(S.breederProfileEditing){ S.breederProfileEditing=false; render(); return; }
+  if(S.breederProfileEditing){ S.breederProfileEditing=false; S.erfolgeEditingId=null; render(); return; }
   if(!BREEDER_PROFILE_LOADED) await loadBreederProfile();
+  await loadBreedersdata();
   S.breederProfileEditing = true;
+  S.erfolgeEditingId = null;
   render();
 }
 async function upsertBreederProfile(partial){
@@ -4420,7 +4426,7 @@ function renderBreederProfileForm(){
   const p = BREEDER_PROFILE || {};
   return `<div class="card" style="margin-bottom:14px">
     <div class="card-title">🧑‍🌾 Züchterdaten für die Druck-Kopfzeile</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Name/Adresse für die Kopfzeile des Abstammungsdrucks (geräteübergreifend gespeichert). Die Züchtererfolge wählst du beim Drucken direkt aus deinen Erfolge-Einträgen aus.</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Name/Adresse für die Kopfzeile des Abstammungsdrucks (geräteübergreifend gespeichert). Weiter unten verwaltest du die Züchtererfolge und legst fest, welche davon standardmäßig mitgedruckt werden.</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="form-field"><label>Name</label><input id="bp_name" value="${escH(p.name||'')}"></div>
       <div class="form-field"><label>Verein / Verband</label><input id="bp_verein" value="${escH(p.verein||'')}"></div>
@@ -4438,12 +4444,18 @@ function renderBreederProfileForm(){
     </div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn btn-sm" onclick="saveBreederProfileForm()">Speichern</button>
-      <button class="btn btn-outline btn-sm" onclick="S.breederProfileEditing=false;render()">Abbrechen</button>
+      <button class="btn btn-outline btn-sm" onclick="S.breederProfileEditing=false;S.erfolgeEditingId=null;render()">Abbrechen</button>
     </div>
+    ${renderErfolgeSection()}
   </div>`;
 }
 
-// ── Erfolge-Auswahl für den Druck (aus der Tabelle breedersdata) ─────────────
+// ── Züchtererfolge (Tabelle breedersdata) ─────────────────────────────────
+// Erfolge werden hier verwaltet (anlegen/bearbeiten/löschen) und die für den
+// Druck vorgesehene Auswahl wird als Standard im Züchterprofil gespeichert
+// (Spalte erfolge_ids, kommagetrennte Liste von breederdataid). Damit muss
+// die Auswahl nur einmal getroffen werden — jeder Druck nutzt automatisch
+// diesen Standard, bis er über "Züchterdaten" bewusst geändert wird.
 let BREEDERSDATA_CACHE = null;
 let BREEDERSDATA_ERROR = null;
 async function loadBreedersdata(force){
@@ -4453,54 +4465,118 @@ async function loadBreedersdata(force){
   catch(e){ BREEDERSDATA_CACHE = []; BREEDERSDATA_ERROR = e.message; }
   return BREEDERSDATA_CACHE;
 }
-async function reloadPrintPrepData(){
-  await loadBreedersdata(true);
+function getDefaultErfolgeIds(){
+  const raw = (BREEDER_PROFILE && BREEDER_PROFILE.erfolge_ids) || '';
+  return raw.split(',').map(s=>s.trim()).filter(Boolean);
+}
+async function saveDefaultErfolgeIds(ids){
+  try{ await upsertBreederProfile({erfolge_ids: ids.join(',')}); }
+  catch(e){
+    alert('Auswahl konnte nicht gespeichert werden: '+e.message+'\n\nHinweis: In Supabase muss die Tabelle "breederprofile" eine Text-Spalte "erfolge_ids" besitzen.');
+    throw e;
+  }
+}
+async function toggleDefaultErfolg(id){
+  const cur = new Set(getDefaultErfolgeIds());
+  if(cur.has(id)) cur.delete(id); else cur.add(id);
+  try{ await saveDefaultErfolgeIds([...cur]); } catch(e){ return; }
   render();
 }
-async function openPrintPrep(pid, gens, withPhoto){
-  await loadBreedersdata();
-  if(!BREEDER_PROFILE_LOADED) await loadBreederProfile();
-  S.printPrep = {pid, gens, withPhoto, selected:new Set()};
+function openErfolgAddForm(){ S.erfolgeEditingId='new'; render(); }
+function startEditErfolg(id){ S.erfolgeEditingId=id; render(); }
+function cancelEditErfolg(){ S.erfolgeEditingId=null; render(); }
+async function addErfolgEntry(){
+  const name = (document.getElementById('erf_new_name')?.value||'').trim();
+  const info = (document.getElementById('erf_new_info')?.value||'').trim();
+  if(!name && !info) return;
+  try{
+    const inserted = await apiPost('breedersdata', {name, info});
+    await loadBreedersdata(true);
+    const row = inserted && inserted[0];
+    if(row && row.breederdataid){
+      const cur = new Set(getDefaultErfolgeIds());
+      cur.add(row.breederdataid);
+      await saveDefaultErfolgeIds([...cur]);
+    }
+  }catch(e){ alert('Erfolg konnte nicht gespeichert werden: '+e.message); return; }
+  S.erfolgeEditingId=null;
   render();
 }
-function togglePrintPrepEntry(id){
-  if(!S.printPrep) return;
-  if(S.printPrep.selected.has(id)) S.printPrep.selected.delete(id); else S.printPrep.selected.add(id);
+async function saveEditErfolg(id){
+  const name = (document.getElementById('erf_edit_name_'+id)?.value||'').trim();
+  const info = (document.getElementById('erf_edit_info_'+id)?.value||'').trim();
+  try{
+    await apiPatchBy('breedersdata','breederdataid=eq.'+id,{name, info});
+    await loadBreedersdata(true);
+  }catch(e){ alert('Änderung konnte nicht gespeichert werden: '+e.message); return; }
+  S.erfolgeEditingId=null;
   render();
 }
-function closePrintPrep(){ S.printPrep=null; render(); }
-function confirmPrintPrep(){
-  const pp = S.printPrep;
-  if(!pp) return;
-  const chosen = (BREEDERSDATA_CACHE||[]).filter(r=>pp.selected.has(r.breederdataid));
-  const erfolgeText = chosen.map(r=>`${r.name}: ${r.info}`).join('\n\n');
-  S.printPrep = null;
-  printPedigree(pp.pid, pp.gens, pp.withPhoto, erfolgeText);
+async function deleteErfolgEntry(id){
+  if(!confirm('Diesen Erfolgs-Eintrag wirklich löschen?')) return;
+  try{
+    await apiDeleteBy('breedersdata','breederdataid=eq.'+id);
+    await loadBreedersdata(true);
+    const cur = new Set(getDefaultErfolgeIds());
+    if(cur.has(id)){ cur.delete(id); await saveDefaultErfolgeIds([...cur]); }
+  }catch(e){ alert('Löschen fehlgeschlagen: '+e.message); return; }
+  render();
 }
-function renderPrintPrepPanel(){
-  const pp = S.printPrep;
-  if(!pp) return '';
+function renderErfolgeSection(){
   const rows = BREEDERSDATA_CACHE||[];
-  return `<div class="card" style="margin-bottom:14px">
-    <div class="card-title">🏆 Erfolge für den Druck auswählen
-      <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="reloadPrintPrepData()">🔄 Neu laden</button>
+  const defaultIds = new Set(getDefaultErfolgeIds());
+  const editingId = S.erfolgeEditingId;
+  return `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="font-weight:700;font-size:13px">🏆 Züchtererfolge</div>
+      <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="loadBreedersdata(true).then(render)">🔄 Neu laden</button>
+      ${editingId!=='new'?`<button class="btn btn-sm" onclick="openErfolgAddForm()">+ Neuer Erfolg</button>`:''}
     </div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Wähle die Einträge, die in der Druck-Kopfzeile erscheinen sollen.</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Hier legst du neue Erfolge der aktuellen Reisesaison an, bearbeitest oder löschst bestehende. Die angehakten Einträge sind der <b>Standard für jeden Druck</b> — du musst sie nicht bei jedem Ausdruck erneut bestätigen. Ändere die Auswahl nur, wenn du hier bewusst etwas anpassen willst.</div>
     ${BREEDERSDATA_ERROR?`<div style="font-size:12px;color:#b3261e;background:#fbeaea;border:1px solid #eecccc;border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:10px">
       ⚠️ Abruf von "breedersdata" fehlgeschlagen: ${escH(BREEDERSDATA_ERROR)}<br>
-      Meist liegt das an einer fehlenden RLS-Policy für lesenden Zugriff auf diese Tabelle.
+      Meist liegt das an einer fehlenden RLS-Policy für lesenden/schreibenden Zugriff auf diese Tabelle.
     </div>`:''}
-    <div style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">
-      ${rows.length?rows.map(r=>`<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer">
-        <input type="checkbox" ${pp.selected.has(r.breederdataid)?'checked':''} onchange="togglePrintPrepEntry('${r.breederdataid}')" style="margin-top:2px">
-        <span><b>${escH(r.name||'')}</b> — <span style="color:var(--text3)">${escH((r.info||'').slice(0,140))}${(r.info||'').length>140?'…':''}</span></span>
-      </label>`).join(''):(BREEDERSDATA_ERROR?'':'<div style="color:var(--text3);font-size:13px">Keine Erfolge-Einträge gefunden.</div>')}
-    </div>
-    <div style="display:flex;gap:8px;margin-top:12px">
-      <button class="btn btn-sm" onclick="confirmPrintPrep()">🖨 Drucken</button>
-      <button class="btn btn-outline btn-sm" onclick="closePrintPrep()">Abbrechen (ohne Erfolge drucken)</button>
+    ${editingId==='new'?`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:10px">
+      <div class="form-field"><label>Titel</label><input id="erf_new_name" placeholder="z.B. Preisliste 2026" autofocus></div>
+      <div class="form-field" style="margin-top:6px"><label>Text</label><textarea id="erf_new_info" rows="3" placeholder="z.B. 1., 3., 7. Preis Nationale, 120 km"></textarea></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-sm" onclick="addErfolgEntry()">Hinzufügen</button>
+        <button class="btn btn-outline btn-sm" onclick="cancelEditErfolg()">Abbrechen</button>
+      </div>
+    </div>`:''}
+    <div style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">
+      ${rows.length?rows.map(r=>{
+        if(editingId===r.breederdataid){
+          return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px">
+            <div class="form-field"><label>Titel</label><input id="erf_edit_name_${r.breederdataid}" value="${escH(r.name||'')}"></div>
+            <div class="form-field" style="margin-top:6px"><label>Text</label><textarea id="erf_edit_info_${r.breederdataid}" rows="3">${escH(r.info||'')}</textarea></div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button class="btn btn-sm" onclick="saveEditErfolg('${r.breederdataid}')">Speichern</button>
+              <button class="btn btn-outline btn-sm" onclick="cancelEditErfolg()">Abbrechen</button>
+            </div>
+          </div>`;
+        }
+        return `<div style="display:flex;gap:8px;align-items:flex-start;font-size:13px;padding:4px 0">
+          <input type="checkbox" ${defaultIds.has(r.breederdataid)?'checked':''} onchange="toggleDefaultErfolg('${r.breederdataid}')" style="margin-top:3px;cursor:pointer" title="Als Standard für den Druck verwenden">
+          <span style="flex:1"><b>${escH(r.name||'')}</b> — <span style="color:var(--text3)">${escH((r.info||'').slice(0,140))}${(r.info||'').length>140?'…':''}</span></span>
+          <button class="btn btn-outline btn-sm" onclick="startEditErfolg('${r.breederdataid}')" title="Bearbeiten">✏️</button>
+          <button class="btn btn-outline btn-sm" onclick="deleteErfolgEntry('${r.breederdataid}')" title="Löschen">🗑</button>
+        </div>`;
+      }).join(''):(BREEDERSDATA_ERROR?'':'<div style="color:var(--text3);font-size:13px">Noch keine Erfolge-Einträge angelegt.</div>')}
     </div>
   </div>`;
+}
+// Druckt direkt mit der gespeicherten Standard-Erfolge-Auswahl — keine
+// Bestätigung pro Druck mehr nötig. Anpassungen erfolgen ausschließlich
+// über "Züchterdaten" (renderErfolgeSection).
+async function triggerPrint(pid, gens, withPhoto){
+  if(!BREEDER_PROFILE_LOADED) await loadBreederProfile();
+  await loadBreedersdata();
+  const ids = new Set(getDefaultErfolgeIds());
+  const chosen = (BREEDERSDATA_CACHE||[]).filter(r=>ids.has(r.breederdataid));
+  const erfolgeText = chosen.map(r=>`${r.name}: ${r.info}`).join('\n\n');
+  printPedigree(pid, gens, withPhoto, erfolgeText);
 }
 
 async function loadTrips(){
