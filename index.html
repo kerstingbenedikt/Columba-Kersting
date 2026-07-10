@@ -2379,9 +2379,9 @@ async function printPedigree(pid, gens, withPhoto){
       const travelLines = (gen<=2 && p.pigeonid) ? pigeonTravelCompactLines(p.pigeonid, travelMaxYears) : [];
       const szTravel = gen===0?'7pt':gen===1?'6.5pt':'6pt';
 
-      // Top-20-Platzierungen (ohne Dopplungen) — nur Proband + Eltern, direkt unterhalb
+      // Beste Platzierungen (ohne Dopplungen) — nur Proband + Eltern, direkt unterhalb
       // der Reiseleistungszeilen.
-      const topLines = (gen<=1 && p.pigeonid) ? pigeonTopPlacementsCompactLines(p.pigeonid, 20) : [];
+      const topLines = (gen<=1 && p.pigeonid) ? pigeonTopPlacementsCompactLines(p.pigeonid) : [];
       const szTop = gen===0?'7pt':'6.5pt';
 
       // Foto nur einbetten, wenn "Mit Foto" aktiv ist UND die Taube tatsächlich ein
@@ -4548,12 +4548,24 @@ function pigeonTravelCompactLines(pigeonid, maxYears){
   });
 }
 
+// Auswahl der Platzierungen für den Druck: normalerweise die 5 besten. Gibt es darüber
+// hinaus weitere einstellige Plätze (1.-9.) gegen hohe Taubenzahlen, werden bis zu
+// insgesamt 10 Platzierungen gezeigt. "Hohe Taubenzahl" = ab HIGH_PIGEON_COUNT (aktuell
+// 1000 gesetzte Tauben — bei Bedarf einfach anpassen).
+const HIGH_PIGEON_COUNT = 1000;
+function selectPrintPlacements(list){
+  const top5 = list.slice(0,5);
+  const bonus = list.slice(5).filter(t=>t.platz<=9 && t.gesetzt!=null && t.gesetzt>=HIGH_PIGEON_COUNT);
+  return top5.concat(bonus).slice(0,10);
+}
+
 // Kompakte Top-Platzierungszeilen für die Stammbaum-Box (ohne Dopplungen), z.B.
 // "1. von 2356 Tauben · 420 km" — eine Zeile pro Platzierung.
-function pigeonTopPlacementsCompactLines(pigeonid, n){
+function pigeonTopPlacementsCompactLines(pigeonid){
   const rows = PT_CACHE[pigeonid];
   if(!rows || !rows.length) return [];
-  return getTopPlacementsDeduped(rows, n).map(t=>
+  const full = getTopPlacementsDeduped(rows, 50);  // großzügiger Pool für die Auswahl
+  return selectPrintPlacements(full).map(t=>
     `${t.platz}. von ${t.gesetzt??'—'} Tauben${t.distance!=null?' · '+t.distance.toFixed(1)+' km':''}`
   );
 }
