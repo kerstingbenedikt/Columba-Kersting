@@ -450,7 +450,7 @@ const S = {
   pigeonStates: [],
   uniqueColors: [], uniqueRaces: [], uniqueStrains: [], uniqueBreeders: [],
   sortCol: 'ringnumber', sortDir: 1,
-  selected: null, selectedPed: null, pigeonTripYear: null,
+  selected: null, selectedPed: null, pigeonTripYear: null, breederProfileEditing: false,
   loading: true, error: null, _loadingMore: false,
   paarungM: null, paarungF: null, selectedNach: null,
   neuMode: 'full',
@@ -2152,9 +2152,11 @@ function renderPedigreeInner(root, opts, embedded){
             </label>
             <button class="btn btn-outline btn-sm" onclick="printPedigree('${root.pigeonid}',4,document.getElementById('ped-print-photo').checked)">🖨 4 Gen.</button>
             <button class="btn btn-outline btn-sm" onclick="printPedigree('${root.pigeonid}',5,document.getElementById('ped-print-photo').checked)">🖨 5 Gen.</button>
+            ${!embedded?`<button class="btn btn-outline btn-sm" onclick="S.breederProfileEditing=!S.breederProfileEditing;render()">🧑‍🌾 Züchterdaten</button>`:''}
           </div>
         </div>
       </div>
+      ${!embedded && S.breederProfileEditing ? renderBreederProfileForm() : ''}
       <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap">
         <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--blue)"></span>Täuber</span>
         <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--purple)"></span>Täubin</span>
@@ -2305,7 +2307,7 @@ function renderPedigreeInner(root, opts, embedded){
 }
 
 // ── DRUCK / PDF ────────────────────────────────────────────────
-function printPedigree(pid, gens, withPhoto){
+async function printPedigree(pid, gens, withPhoto){
   try{
     gens = parseInt(gens)||4;
     withPhoto = !!withPhoto;
@@ -2328,6 +2330,16 @@ function printPedigree(pid, gens, withPhoto){
     }
     const tree=[];
     buildTree(root, 0, 0, tree);
+
+    // Reiseleistung für Proband, Eltern und Großeltern laden (kompakte Jahreszeilen in
+    // den Boxen bis Gen. 2, ausführliche Top-20-Liste für Proband + Eltern).
+    const travelIds=[];
+    [0,1,2].forEach(g=>{ (tree[g]||[]).forEach(p=>{ if(p&&p.pigeonid) travelIds.push(p.pigeonid); }); });
+    await loadPigeonTripsBatch(travelIds);
+
+    // Züchterdaten/-erfolge für die Kopfzeile laden (nur falls ein Profil hinterlegt ist).
+    const breederProf = loadBreederProfile();
+    if(breederProf.name && !ZT.loaded){ try{ await loadZuechterData(); }catch(e){} }
 
     const rows   = Math.pow(2, gens-1);   // 8 (4gen) oder 16 (5gen)
     // Ab 5 Generationen reicht Hochformat nicht mehr aus (Spalten würden zu schmal für
@@ -2361,6 +2373,13 @@ function printPedigree(pid, gens, withPhoto){
       const showInfo = gen<=2 && info;  // Info nur bei Proband, Eltern, Großeltern
       const showName = gen<=3 || !landscape;  // bei 5 Gen (16 Zeilen, wenig Höhe) Name bei tiefster Ebene weglassen — Ringnummer hat Vorrang
 
+      // Reiseleistung kompakt (nur Proband/Eltern/Großeltern — Gen. 0-2): z.B.
+      // "2025: 13/11 Preise 1.-2.-3.-Preis". Anzahl Jahre je Ebene begrenzt, damit die Box
+      // nicht überläuft (Proband 3 Jahre, Eltern 2, Großeltern 1).
+      const travelMaxYears = gen===0?3:gen===1?2:1;
+      const travelLines = (gen<=2 && p.pigeonid) ? pigeonTravelCompactLines(p.pigeonid, travelMaxYears) : [];
+      const szTravel = gen===0?'7pt':gen===1?'6.5pt':'6pt';
+
       // Foto nur einbetten, wenn "Mit Foto" aktiv ist UND die Taube tatsächlich ein
       // eigenes hochgeladenes Foto hat (kein Farb-Platzhalterbild — der farbige
       // linke Rand markiert das Geschlecht bereits eindeutig).
@@ -2380,6 +2399,7 @@ function printPedigree(pid, gens, withPhoto){
         ${p.name&&showName?`<div style="font-size:${szName};font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:.3mm;flex-shrink:0">${_esc(p.name)}</div>`:''}
         ${showTags&&tags.length?`<div style="font-size:${szTag};color:#666;margin-top:.4mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">${tags.map(_esc).join(' · ')}</div>`:''}
         ${showInfo?`<div style="font-size:${szInfo};color:#333;margin-top:1mm;border-top:.2mm solid #ddd;padding-top:.5mm;line-height:1.45;overflow:hidden;flex:1;word-break:break-word">${_esc(info)}</div>`:''}
+        ${travelLines.length?`<div style="font-size:${szTravel};color:#1a6b1a;margin-top:.6mm;border-top:.2mm solid #ddd;padding-top:.4mm;line-height:1.35;flex-shrink:0">${travelLines.map(_esc).join('<br>')}</div>`:''}
       </div>`;
     }
 
@@ -2422,6 +2442,50 @@ function printPedigree(pid, gens, withPhoto){
     const sx=_sex(root);
     const today=new Date().toLocaleDateString('de-DE');
 
+    // Kopfzeile: Züchterdaten + automatisch ermittelte Züchtererfolge (Abgleich über den
+    // in den Züchterdaten hinterlegten Namen gegen die importierten Reisedaten).
+    function buildBreederHeader(){
+      const p = breederProf;
+      if(!p.name && !p.strasse && !p.ort && !p.verein) return '';
+      const succ = ZT.loaded && p.name
+        ? zuechterAgg().find(b=>String(b.name).toLowerCase().trim()===String(p.name).toLowerCase().trim())
+        : null;
+      const addr = [p.strasse, p.ort].filter(Boolean).join(', ');
+      return `<div style="margin-bottom:2.5mm;padding-bottom:2mm;border-bottom:.3mm solid #ccc;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4mm">
+        <div>
+          ${p.name?`<div style="font-size:11pt;font-weight:700">${_esc(p.name)}</div>`:''}
+          ${addr?`<div style="font-size:7pt;color:#555;margin-top:.5mm">${_esc(addr)}</div>`:''}
+          ${p.verein?`<div style="font-size:7pt;color:#555">${_esc(p.verein)}</div>`:''}
+          ${p.telefon?`<div style="font-size:7pt;color:#555">Tel. ${_esc(p.telefon)}</div>`:''}
+        </div>
+        ${succ?`<div style="font-size:7pt;color:#555;text-align:right">
+          <div style="font-size:8pt;font-weight:700;color:#1a6b1a;margin-bottom:.5mm">Züchtererfolge</div>
+          Reisen: ${succ.tripCount} &nbsp;·&nbsp; Tauben ges.: ${succ.total}<br>
+          Ø RV ${succ.pctRV!=null?succ.pctRV.toFixed(0)+'%':'—'} &nbsp;·&nbsp; Ø RegGr ${succ.pctRegGr!=null?succ.pctRegGr.toFixed(0)+'%':'—'} &nbsp;·&nbsp; Ø Reg ${succ.pctReg!=null?succ.pctReg.toFixed(0)+'%':'—'}<br>
+          Bester AS: ${succ.bestAS?succ.bestAS.toFixed(2):'—'}
+        </div>`:''}
+      </div>`;
+    }
+
+    // Ausführliche Top-20-Platzierungsliste (Proband + Eltern), ohne Dopplungen, eine
+    // Platzierung pro Zeile, mit Entfernung und Taubenzahl.
+    function buildTopList(p){
+      if(!p || !p.pigeonid) return '';
+      const list = getTopPlacementsDeduped(PT_CACHE[p.pigeonid]||[], 20);
+      if(!list.length) return '';
+      const rowsHtml = list.map(t=>`<div style="display:flex;align-items:baseline;gap:2mm;padding:.7mm 0;border-bottom:.15mm solid #eee;font-size:7.5pt">
+          <span style="font-weight:700;color:#1a6b1a;min-width:7mm">${t.platz}.</span>
+          <span style="flex:1;color:#333">von ${t.gesetzt??'—'} Tauben${t.distance!=null?' · '+t.distance.toFixed(1)+' km':''}</span>
+          <span style="color:#999;white-space:nowrap;font-size:6.5pt">${_esc(t.location||'')}${t.tripdate?' · '+_esc(t.tripdate):''}</span>
+        </div>`).join('');
+      return `<div style="break-inside:avoid">
+        <div style="font-size:8.5pt;font-weight:700;border-bottom:.3mm solid #ccc;padding-bottom:1mm;margin-bottom:1mm">🏆 Top-Platzierungen — ${_esc(p.name||_ring(p))} (${_esc(_ring(p))})</div>
+        ${rowsHtml}
+      </div>`;
+    }
+    const topListsHtml = [buildTopList(tree[0]&&tree[0][0]), buildTopList(tree[1]&&tree[1][0]), buildTopList(tree[1]&&tree[1][1])]
+      .filter(Boolean);
+
     const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
 <title>Stammbaum – ${_esc(root.name||_ring(root))}</title>
 <style>
@@ -2431,6 +2495,7 @@ function printPedigree(pid, gens, withPhoto){
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
 </head><body>
+${buildBreederHeader()}
 <div style="margin-bottom:2.5mm;border-bottom:.3mm solid #ccc;padding-bottom:2mm;display:flex;justify-content:space-between;align-items:flex-end">
   <div>
     <div style="font-size:12pt;font-weight:700">🕊 ${_esc(root.name||_ring(root))}</div>
@@ -2447,6 +2512,9 @@ function printPedigree(pid, gens, withPhoto){
 <div style="display:grid;grid-template-columns:${gtc};grid-template-rows:${gtr};border:.3mm solid #ccc;width:${pageWmm}mm">
   ${cells}
 </div>
+${topListsHtml.length?`<div style="display:flex;gap:5mm;margin-top:4mm;flex-wrap:wrap;page-break-inside:avoid">
+  ${topListsHtml.map(h=>`<div style="flex:1;min-width:55mm">${h}</div>`).join('')}
+</div>`:''}
 </body></html>`;
 
     const blob=new Blob([html],{type:'text/html;charset=utf-8'});
@@ -4309,6 +4377,43 @@ let RT = {
   imp:{ step:'upload', rows:[], breeders:[], stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0} }
 };
 
+// ── Züchterprofil für die Kopfzeile im Abstammungsdruck ──────────
+// Lokal (localStorage) gespeichert, da es sich um Stammdaten des Nutzers selbst
+// handelt (Name/Adresse/Verein), nicht um Taubendaten in der Datenbank.
+let BREEDER_PROFILE = null;
+function loadBreederProfile(){
+  if(BREEDER_PROFILE) return BREEDER_PROFILE;
+  try{ BREEDER_PROFILE = JSON.parse(localStorage.getItem('bv_breeder_profile')||'null') || {}; }
+  catch(e){ BREEDER_PROFILE = {}; }
+  return BREEDER_PROFILE;
+}
+function saveBreederProfileForm(){
+  const v = id => (document.getElementById(id)?.value||'').trim();
+  const prof = { name:v('bp_name'), strasse:v('bp_strasse'), ort:v('bp_ort'), verein:v('bp_verein'), telefon:v('bp_telefon') };
+  BREEDER_PROFILE = prof;
+  try{ localStorage.setItem('bv_breeder_profile', JSON.stringify(prof)); }catch(e){}
+  S.breederProfileEditing = false;
+  render();
+}
+function renderBreederProfileForm(){
+  const p = loadBreederProfile();
+  return `<div class="card" style="margin-bottom:14px">
+    <div class="card-title">🧑‍🌾 Züchterdaten für die Druck-Kopfzeile</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Diese Angaben erscheinen als Kopfzeile auf dem Abstammungsdruck. Die Züchtererfolge werden automatisch aus den importierten Reisedaten ermittelt (Abgleich über den Namen).</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-field"><label>Name</label><input id="bp_name" value="${escH(p.name||'')}"></div>
+      <div class="form-field"><label>Verein / Verband</label><input id="bp_verein" value="${escH(p.verein||'')}"></div>
+      <div class="form-field"><label>Straße</label><input id="bp_strasse" value="${escH(p.strasse||'')}"></div>
+      <div class="form-field"><label>PLZ / Ort</label><input id="bp_ort" value="${escH(p.ort||'')}"></div>
+      <div class="form-field"><label>Telefon</label><input id="bp_telefon" value="${escH(p.telefon||'')}"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-sm" onclick="saveBreederProfileForm()">Speichern</button>
+      <button class="btn btn-outline btn-sm" onclick="S.breederProfileEditing=false;render()">Abbrechen</button>
+    </div>
+  </div>`;
+}
+
 async function loadTrips(){
   try{ RT.trips = await apiGet('/trips?order=tripdate.desc,number.asc&limit=500')||[]; }
   catch(e){ RT.trips=[]; }
@@ -4425,6 +4530,42 @@ function getTop10Placements(rows){
     });
   });
   return out.sort((a,b)=> a.platz-b.platz || String(b.tripdate).localeCompare(String(a.tripdate)));
+}
+
+// Wie getTop10Placements, aber ohne Dopplungen (max. 1 Eintrag pro Flug — die beste
+// Platzierung über RV/RegGr/Reg gewinnt) und mit konfigurierbarer Obergrenze. Für den
+// Abstammungsdruck (Top-20-Liste je Taube).
+function getTopPlacementsDeduped(rows, n){
+  n = n||20;
+  const CATS=[['prize_rv','pigeonsset_rv'],['prize_reggr','pigeonsset_reggr'],['prize_reg','pigeonsset_reg']];
+  const out=[];
+  rows.forEach(r=>{
+    let best=null;
+    CATS.forEach(([field,gesetztField])=>{
+      const platz=r[field];
+      if(platz!=null && platz>0 && (best===null || platz<best.platz)){
+        best={platz, gesetzt:r[gesetztField]!=null?r[gesetztField]:r.pigeonsset};
+      }
+    });
+    if(best && best.platz<=n){
+      out.push({platz:best.platz, gesetzt:best.gesetzt, tripnumber:r.tripnumber,
+        location:r.location, tripdate:r.tripdate, vintage:r.vintage, distance:r.distance});
+    }
+  });
+  return out.sort((a,b)=> a.platz-b.platz || String(b.tripdate).localeCompare(String(a.tripdate))).slice(0,n);
+}
+
+// Kompakte Jahreszeilen für die Stammbaum-Boxen im Druck, z.B. "2025: 13/11 Preise 1.-2.-3.-Preis"
+// (gesetzt/Preise je Jahr, plus die erzielten 1.-3. Plätze desselben Jahres, falls vorhanden).
+function pigeonTravelCompactLines(pigeonid, maxYears){
+  const rows = PT_CACHE[pigeonid];
+  if(!rows || !rows.length) return [];
+  const years = groupPigeonTripsByYear(rows).slice(0, maxYears);
+  return years.map(y=>{
+    const top3 = y.top10.filter(v=>v<=3).sort((a,b)=>a-b);
+    const top3Str = top3.length ? ' '+top3.map(v=>v+'.').join('-')+'-Preis' : '';
+    return `${y.yr}: ${y.gesetzt}/${y.preise} Preise${top3Str}`;
+  });
 }
 
 function openPigeonTripYear(yr){ S.pigeonTripYear=yr; render(); }
