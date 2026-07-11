@@ -4948,7 +4948,19 @@ async function openTrip(tripid,breederName){
 
 // Ergebnisse einer Reise ggf. auf einen Züchter gefiltert, sortiert nach
 // Ankunftsreihenfolge = Geschwindigkeit (m/min) absteigend.
+// "Pl." (r.placement) ist die Gesamtreihenfolge über alle Züchter der Reise.
+// Zusätzlich wird hier je Ergebnis die Platzierung INNERHALB des jeweiligen
+// Züchters berechnet (r._breederRank), unabhängig vom aktuellen Filter.
 function tripDetailRows(){
+  const byBreeder={};
+  RT.results.forEach(r=>{
+    const key=r.breedername||'Unbekannt';
+    (byBreeder[key]=byBreeder[key]||[]).push(r);
+  });
+  Object.values(byBreeder).forEach(list=>{
+    list.sort((a,b)=>(Number(b.speed)||-Infinity)-(Number(a.speed)||-Infinity));
+    list.forEach((r,i)=>{ r._breederRank=i+1; });
+  });
   const base=RT.breederFilter?RT.results.filter(r=>(r.breedername||'Unbekannt')===RT.breederFilter):RT.results;
   return base.slice().sort((a,b)=>(Number(b.speed)||-Infinity)-(Number(a.speed)||-Infinity));
 }
@@ -4961,6 +4973,7 @@ function renderTripDetail(){
     const p=S.pigeons.find(x=>x.pigeonid===r.pigeonid||(r.ringnumber&&x.ringnumber===r.ringnumber));
     return '<tr onclick="'+(p?'selectPigeon(\''+p.pigeonid+'\')':'')+'" style="'+(p?'cursor:pointer':'')+'">'
       +'<td style="font-weight:600;color:var(--green);font-size:12px">'+(r.placement||'—')+'</td>'
+      +'<td style="font-weight:600;color:var(--text2);font-size:12px">'+(r._breederRank||'—')+'</td>'
       +'<td style="font-family:monospace;font-size:11px'+(p?';color:var(--green);cursor:pointer':'')+'"'+(p?' onclick="event.stopPropagation();selectPigeon(\''+p.pigeonid+'\')"':'')+'>'+escH(r.ringnumber||'—')+'</td>'
       +'<td>'+(p?escH(p.name||'—'):'<span style="color:var(--text3)">—</span>')+'</td>'
       +(RT.breederFilter?'':'<td style="color:var(--text2)">'+escH(r.breedername||'—')+'</td>')
@@ -4994,7 +5007,7 @@ function renderTripDetail(){
     +(RT.results.length===0
       ?'<div style="text-align:center;padding:24px;color:var(--text3)">Lade Ergebnisse…</div>'
       :'<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-      +'<thead><tr><th>Pl.</th><th>Ringnummer</th><th>Name</th>'+(RT.breederFilter?'':'<th>Züchter</th>')+'<th>m/min</th>'
+      +'<thead><tr><th>Pl.</th><th>Pl. Züchter</th><th>Ringnummer</th><th>Name</th>'+(RT.breederFilter?'':'<th>Züchter</th>')+'<th>m/min</th>'
       +'<th>Pr.RV</th><th>Pr.FG</th><th>Pr.RegGr</th><th>Pr.Reg</th><th>AS Reg</th></tr></thead>'
       +'<tbody>'+rows+'</tbody></table></div>')
     +'</div></div>';
