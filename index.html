@@ -4413,7 +4413,7 @@ function fixUmlauts(s){
 }
 
 let RT = {
-  step:'list', trips:[], selected:null, results:[],
+  step:'list', trips:[], selected:null, results:[], breederFilter:null,
   imp:{ step:'upload', rows:[], breeders:[], stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0} }
 };
 
@@ -4909,7 +4909,7 @@ function renderTripsList(){
           </div>
           ${breeders.length?`<div style="margin-top:10px;display:flex;flex-direction:column;gap:5px">
             ${breeders.map(b=>`
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;background:var(--bg2);border-radius:8px;padding:5px 9px">
+              <div onclick="event.stopPropagation();openTrip('${t.tripid}',${jsAttr(b.name)})" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;background:var(--bg2);border-radius:8px;padding:5px 9px" title="Nur Tauben von ${escH(b.name)} anzeigen (Ankunftsreihenfolge)">
                 <span style="color:var(--text2)">🧑‍🌾 ${escH(b.name)}${b.number?' <span style="color:var(--text3)">· '+escH(b.number)+'</span>':''} <span style="color:var(--text3)">· ${b.gesetzt} Tauben</span></span>
                 <span style="display:flex;gap:5px;flex-wrap:wrap">
                   ${b.rv>0?'<span class="badge badge-u">RV: '+b.rv+'</span>':''}
@@ -4940,30 +4940,47 @@ function tripBreederRows(tripid){
   return Object.values(g).sort((a,b)=>a.name.localeCompare(b.name));
 }
 
-async function openTrip(tripid){
+async function openTrip(tripid,breederName){
   RT.selected=RT.trips.find(t=>t.tripid===tripid);
-  RT.step='detail'; RT.results=[]; render();
+  RT.step='detail'; RT.results=[]; RT.breederFilter=breederName||null; render();
   await loadTripResults(tripid); render();
 }
 
+// Ergebnisse einer Reise ggf. auf einen Züchter gefiltert, sortiert nach
+// Ankunftsreihenfolge = Geschwindigkeit (m/min) absteigend.
+function tripDetailRows(){
+  const base=RT.breederFilter?RT.results.filter(r=>(r.breedername||'Unbekannt')===RT.breederFilter):RT.results;
+  return base.slice().sort((a,b)=>(Number(b.speed)||-Infinity)-(Number(a.speed)||-Infinity));
+}
+function setTripBreederFilter(name){ RT.breederFilter=name||null; render(); }
+
 function renderTripDetail(){
   const t=RT.selected; if(!t) return renderTripsList();
-  const rows=RT.results.map(r=>{
+  const sorted=tripDetailRows();
+  const rows=sorted.map(r=>{
     const p=S.pigeons.find(x=>x.pigeonid===r.pigeonid||(r.ringnumber&&x.ringnumber===r.ringnumber));
     return '<tr onclick="'+(p?'selectPigeon(\''+p.pigeonid+'\')':'')+'" style="'+(p?'cursor:pointer':'')+'">'
       +'<td style="font-weight:600;color:var(--green);font-size:12px">'+(r.placement||'—')+'</td>'
       +'<td style="font-family:monospace;font-size:11px'+(p?';color:var(--green);cursor:pointer':'')+'"'+(p?' onclick="event.stopPropagation();selectPigeon(\''+p.pigeonid+'\')"':'')+'>'+escH(r.ringnumber||'—')+'</td>'
       +'<td>'+(p?escH(p.name||'—'):'<span style="color:var(--text3)">—</span>')+'</td>'
+      +(RT.breederFilter?'':'<td style="color:var(--text2)">'+escH(r.breedername||'—')+'</td>')
       +'<td>'+(r.speed?Number(r.speed).toFixed(3):'—')+'</td>'
       +'<td>'+(r.prize_rv||'—')+'</td><td>'+(r.prize_fg||'—')+'</td>'
       +'<td>'+(r.prize_reggr||'—')+'</td><td>'+(r.prize_reg||'—')+'</td>'
       +'<td>'+(r.as_reg>0?Number(r.as_reg).toFixed(2):'—')+'</td></tr>';
   }).join('');
 
-  return '<div><button class="back-btn" onclick="RT.step=\'list\';render()">← Alle Reisen</button>'
+  // Züchter-Chips zum Umschalten des Filters (inkl. "Alle Züchter")
+  const breederNames=[...new Set(RT.results.map(r=>r.breedername||'Unbekannt'))].sort((a,b)=>a.localeCompare(b));
+  const chips=breederNames.length>1?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'
+    +'<span class="badge'+(!RT.breederFilter?' badge-u':'')+'" style="cursor:pointer'+(!RT.breederFilter?'':';opacity:.6')+'" onclick="setTripBreederFilter(null)">Alle Züchter</span>'
+    +breederNames.map(n=>'<span class="badge'+(RT.breederFilter===n?' badge-u':'')+'" style="cursor:pointer'+(RT.breederFilter===n?'':';opacity:.6')+'" onclick="setTripBreederFilter('+jsAttr(n)+')">🧑‍🌾 '+escH(n)+'</span>').join('')
+    +'</div>':'';
+
+  return '<div><button class="back-btn" onclick="RT.step=\'list\';RT.breederFilter=null;render()">← Alle Reisen</button>'
     +'<div class="card"><div style="margin-bottom:14px">'
-    +'<div class="serif" style="font-size:22px">Reise '+t.number+' — '+escH(t.location||'')+'</div>'
-    +'<div style="color:var(--text3);font-size:13px;margin-top:4px">'+(t.tripdate||'')+' · Saison '+(t.vintage||'')+'</div>'
+    +'<div class="serif" style="font-size:22px;cursor:pointer" onclick="setTripBreederFilter(null)" title="Alle Züchter anzeigen">Reise '+t.number+' — '+escH(t.location||'')+'</div>'
+    +'<div style="color:var(--text3);font-size:13px;margin-top:4px">'+(t.tripdate||'')+' · Saison '+(t.vintage||'')+(RT.breederFilter?' · gefiltert auf 🧑‍🌾 '+escH(RT.breederFilter):'')+'</div>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">'
     +(t.pigeonsset?'<span class="badge badge-u">'+t.pigeonsset+' aufgesetzt</span>':'')
     +(t.prices1?'<span class="badge badge-u">RV: '+t.prices1+'</span>':'')
@@ -4971,11 +4988,13 @@ function renderTripDetail(){
     +(t.prices3?'<span class="badge badge-u">RegGr: '+t.prices3+'</span>':'')
     +(t.prices4?'<span class="badge badge-u">Reg: '+t.prices4+'</span>':'')
     +(t.averagedistance3?'<span class="badge badge-u">⌀ '+Number(t.averagedistance3).toFixed(1)+' km</span>':'')
-    +'</div></div>'
+    +'</div>'
+    +chips
+    +'</div>'
     +(RT.results.length===0
       ?'<div style="text-align:center;padding:24px;color:var(--text3)">Lade Ergebnisse…</div>'
       :'<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-      +'<thead><tr><th>Pl.</th><th>Ringnummer</th><th>Name</th><th>m/min</th>'
+      +'<thead><tr><th>Pl.</th><th>Ringnummer</th><th>Name</th>'+(RT.breederFilter?'':'<th>Züchter</th>')+'<th>m/min</th>'
       +'<th>Pr.RV</th><th>Pr.FG</th><th>Pr.RegGr</th><th>Pr.Reg</th><th>AS Reg</th></tr></thead>'
       +'<tbody>'+rows+'</tbody></table></div>')
     +'</div></div>';
@@ -5497,9 +5516,9 @@ function zuechterAgg(){
 
 function selectZuechter(name){ ZT.selected=name; render(); window.scrollTo(0,0); }
 
-async function openTripFromZuechter(tripid){
+async function openTripFromZuechter(tripid,breederName){
   const t=RT.trips.find(x=>x.tripid===tripid); if(!t) return;
-  RT.selected=t; RT.step='detail'; RT.results=[];
+  RT.selected=t; RT.step='detail'; RT.results=[]; RT.breederFilter=breederName||null;
   S.tab='reisen'; setActiveNav('reisen'); render();
   await loadTripResults(tripid); render();
 }
@@ -5551,7 +5570,7 @@ function renderZuechterDetail(name){
       const reggrCell = t.trip.pigeonsset_reggr>0 ? t.reggr+' ('+(t.reggr/t.total*100).toFixed(0)+'%)' : '—';
       const regCell   = t.trip.pigeonsset_reg>0   ? t.reg+' ('+(t.reg/t.total*100).toFixed(0)+'%)'     : '—';
       return `
-      <tr data-tripid="${t.tripid}" onclick="openTripFromZuechter(this.dataset.tripid)" style="cursor:pointer">
+      <tr data-tripid="${t.tripid}" onclick="openTripFromZuechter(this.dataset.tripid,${jsAttr(name)})" style="cursor:pointer">
         <td>${t.trip.number}</td><td>${escH(t.trip.location||'')}</td><td>${t.trip.tripdate||'—'}</td>
         <td style="text-align:center">${t.total}</td>
         <td style="text-align:center">${rvCell}</td>
