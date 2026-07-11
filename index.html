@@ -5475,6 +5475,27 @@ async function runTripsImport(){
       } catch(e){ RT.imp.stats.err++; }
       if(RT.imp.stats.results%25===0) updP();
     }
+
+    // Gesamtreihenfolge ("Pl.") über ALLE Züchter dieser Reise neu berechnen —
+    // nicht nur über die gerade importierte Sitzung. Sonst bekommt jede
+    // getrennt importierte Züchter-Datei ihre eigene 1,2,3…-Zählung und die
+    // Spalte "Pl." stimmt nicht mehr, sobald mehrere Züchter zu unterschied-
+    // lichen Zeitpunkten importiert wurden.
+    try{
+      const allForTrip = await apiGet('/pigeontrips?tripid=eq.'+tripid+'&select=id,speed,placement&limit=2000') || [];
+      const ranked = allForTrip.slice().sort((a,b)=>{
+        if(a.speed!=null && b.speed!=null) return b.speed-a.speed;
+        if(a.speed!=null) return -1;
+        if(b.speed!=null) return 1;
+        return 0;
+      });
+      for(let i=0;i<ranked.length;i++){
+        const newPl=i+1;
+        if(ranked[i].placement!==newPl){
+          try{ await apiPatchBy('pigeontrips','id=eq.'+ranked[i].id,{placement:newPl}); }catch(e2){}
+        }
+      }
+    }catch(e){ console.error('Gesamtplatzierung neu berechnen fehlgeschlagen:',e.message); }
   }
   updP();
   await loadTrips();
