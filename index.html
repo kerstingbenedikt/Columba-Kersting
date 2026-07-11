@@ -2656,6 +2656,21 @@ function ancestorKeysOf(key){
 // statt sie unbemerkt durchzuspeichern. Verdächtige aber theoretisch mögliche
 // Fälle (z.B. Inzucht: gleicher Großvater auf beiden Seiten) werden nur als
 // Warnung markiert, nicht blockiert — die Entscheidung bleibt beim Nutzer.
+// Chronologie-Check: ein Elternteil (Vater/Mutter-Position laut PARENT_MAP)
+// darf nicht gleich alt oder jünger sein als sein Nachkomme — das ist
+// biologisch unmöglich und ein starkes Indiz für eine Fehlverknüpfung
+// (z.B. Ringnummer-Kollision zwischen zwei Tieren unterschiedlicher Jahrgänge).
+function checkParentChronology(childPigeon, parentPigeon){
+  if(!childPigeon || !parentPigeon) return null;
+  const childYear = childPigeon.date_year!=null ? Number(childPigeon.date_year) : null;
+  const parentYear = parentPigeon.date_year!=null ? Number(parentPigeon.date_year) : null;
+  if(childYear==null || parentYear==null) return null;
+  if(parentYear >= childYear){
+    return `Jahrgang ${parentYear} kann nicht gleich alt oder jünger sein als Nachkomme (Jahrgang ${childYear}) — Verknüpfung vermutlich fehlerhaft (Ringnummer-Kollision?).`;
+  }
+  return null;
+}
+
 function checkScanPlausibility(){
   const keysWithRing = PED_KEYS.filter(k => SCAN.pigeons[k]?.ringnumber);
   keysWithRing.forEach(k => {
@@ -2685,6 +2700,25 @@ function checkScanPlausibility(){
           `Gleiche Ringnummer wie "${PED_LABEL[other]}" — nur plausibel bei starker Inzucht, sonst bitte im Original prüfen.`;
       }
     });
+
+    // NEU: Eltern-Chronologie prüfen — der Elternteil an dieser Position darf
+    // nicht gleich alt oder jünger sein als sein Nachkomme.
+    if(!SCAN.pigeons[k]._plausibilityError){
+      const par = PARENT_MAP[k];
+      if(par){
+        const father = SCAN.pigeons[par.f], mother = SCAN.pigeons[par.m];
+        const fatherMsg = checkParentChronology(SCAN.pigeons[k], father);
+        const motherMsg = checkParentChronology(SCAN.pigeons[k], mother);
+        if(fatherMsg && father?.ringnumber){
+          father._plausibilityError = `${PED_LABEL[par.f]}: ${fatherMsg}`;
+          SCAN.actions[par.f] = 'skip';
+        }
+        if(motherMsg && mother?.ringnumber){
+          mother._plausibilityError = `${PED_LABEL[par.m]}: ${motherMsg}`;
+          SCAN.actions[par.m] = 'skip';
+        }
+      }
+    }
 
     // Fehlerhafte Positionen sicherheitshalber vom automatischen Speichern ausschließen,
     // bis der Nutzer die Angabe bestätigt/korrigiert hat.
@@ -4088,13 +4122,14 @@ async function doImport() {
 
     // Eltern-UUIDs nachschlagen
     let fatherid=null, motherid=null, ringnumberfather=null, ringnumbermother=null;
+    let fp=null, mp=null;
     if(fatherRaw){
-      const fp = findInDb(fatherRaw);
+      fp = findInDb(fatherRaw);
       if(fp){ fatherid=fp.pigeonid; ringnumberfather=ring(fp); }
       else ringnumberfather = fmtRingnumber(fatherRaw)||fatherRaw;
     }
     if(motherRaw){
-      const mp = findInDb(motherRaw);
+      mp = findInDb(motherRaw);
       if(mp){ motherid=mp.pigeonid; ringnumbermother=ring(mp); }
       else ringnumbermother = fmtRingnumber(motherRaw)||motherRaw;
     }
@@ -4125,6 +4160,18 @@ async function doImport() {
     if(fNorm && rNorm===fNorm) plausibilityMsg = 'Ringnummer identisch mit Vater — das ist biologisch unmöglich.';
     else if(mNorm && rNorm===mNorm) plausibilityMsg = 'Ringnummer identisch mit Mutter — das ist biologisch unmöglich.';
     else if(fNorm && mNorm && fNorm===mNorm) plausibilityMsg = 'Vater und Mutter haben dieselbe Ringnummer — bitte prüfen.';
+
+    // NEU: Eltern-Chronologie prüfen — nur möglich, wenn Vater/Mutter über
+    // findInDb() aufgelöst werden konnten (fp/mp) und dort ein Jahrgang vorliegt.
+    // Ein Elternteil, der gleich alt oder jünger ist als das Kind, ist
+    // biologisch unmöglich (z.B. Ringnummer-Kollision zwischen zwei Jahrgängen).
+    if(!plausibilityMsg){
+      const childForCheck = { date_year: parsed.date_year || (jahrgang?Number(jahrgang):null) };
+      const fChronMsg = checkParentChronology(childForCheck, fp);
+      const mChronMsg = checkParentChronology(childForCheck, mp);
+      if(fChronMsg) plausibilityMsg = `Vater: ${fChronMsg}`;
+      else if(mChronMsg) plausibilityMsg = `Mutter: ${mChronMsg}`;
+    }
 
     return {
       _idx: idx,
