@@ -5520,7 +5520,7 @@ let ZT = { rows:[], loaded:false, selected:null };
 
 async function loadZuechterData(){
   try{
-    ZT.rows = await apiGet('/pigeontrips?breedername=not.is.null&select=breedername,breedernumber,tripid,pigeonid,ringnumber,sex,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat&limit=10000') || [];
+    ZT.rows = await apiGet('/pigeontrips?breedername=not.is.null&select=breedername,breedernumber,tripid,pigeonid,ringnumber,sex,speed,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat&limit=10000') || [];
   }catch(e){
     // Fallback: sex-Spalte evtl. noch nicht angelegt
     try{
@@ -5594,13 +5594,14 @@ function renderZuechterDetail(name){
   const myRows=ZT.rows.filter(r=>(r.breedername||'Unbekannt')===name);
   const byTrip={};
   myRows.forEach(r=>{
-    if(!byTrip[r.tripid]) byTrip[r.tripid]={tripid:r.tripid, total:0, rv:0, reggr:0, reg:0, bestAS:0};
+    if(!byTrip[r.tripid]) byTrip[r.tripid]={tripid:r.tripid, total:0, rv:0, reggr:0, reg:0, bestAS:0, bestSpeed:null};
     const t=byTrip[r.tripid];
     t.total++;
     if(r.prize_rv)    t.rv++;
     if(r.prize_reggr) t.reggr++;
     if(r.prize_reg)   t.reg++;
     [r.as_rv,r.as_reg].forEach(v=>{ if(v&&v>t.bestAS) t.bestAS=v; });
+    if(r.speed!=null && (t.bestSpeed==null || Number(r.speed)>t.bestSpeed)) t.bestSpeed=Number(r.speed);
   });
   const tripRows=Object.values(byTrip).map(t=>({...t, trip:tripById[t.tripid]}))
     .filter(t=>t.trip)
@@ -5619,6 +5620,7 @@ function renderZuechterDetail(name){
         <td style="text-align:center">${reggrCell}</td>
         <td style="text-align:center">${regCell}</td>
         <td style="text-align:center;font-weight:600;color:var(--green)">${t.bestAS?t.bestAS.toFixed(2):'—'}</td>
+        <td style="text-align:center;font-weight:600">${t.bestSpeed!=null?t.bestSpeed.toFixed(3):'—'}</td>
       </tr>`;}).join('');
   const totalTauben=myRows.length;
   const agg=zuechterAgg().find(b=>b.name===name)||{pctRV:null,pctRegGr:null,pctReg:null};
@@ -5633,7 +5635,7 @@ function renderZuechterDetail(name){
     <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr><th>Reise</th><th>Ort</th><th>Datum</th><th style="text-align:center">Tauben</th>
         <th style="text-align:center">RV</th><th style="text-align:center">RegGr</th><th style="text-align:center">Reg</th>
-        <th style="text-align:center">Bester AS</th></tr></thead>
+        <th style="text-align:center">Bester AS</th><th style="text-align:center">Flugmeter (m/min)</th></tr></thead>
       <tbody>${tripRows}</tbody></table></div>
     </div></div>`;
 }
@@ -5679,7 +5681,7 @@ function bestenliste(breederFilter){
     if(r.sex==='M'||r.sex==='F') b.sexVotes[r.sex]++;
     b.flights.push({
       tripNumber: trip.number, location: trip.location, tripdate: trip.tripdate,
-      platz: best?best.platz:null, as: flightAS, hasPreis
+      platz: best?best.platz:null, as: flightAS, hasPreis, speed: r.speed!=null?Number(r.speed):null
     });
   });
 
@@ -5742,6 +5744,7 @@ function renderBestenliste(){
         <div style="font-size:10px;color:var(--text3);margin-bottom:2px">F${String(i+1).padStart(2,'0')}</div>
         <div style="font-size:12px;font-weight:500">${f.platz!=null?f.platz:'—'}</div>
         <div style="font-size:11px;color:var(--green)">${f.as!=null?f.as.toFixed(2):'—'}</div>
+        <div style="font-size:10px;color:var(--text3)">${f.speed!=null?f.speed.toFixed(3)+' m/min':'—'}</div>
       </div>`;
     }).join('');
     const sumCheck=e.flights.reduce((s,f)=>s+(f.as||0),0);
