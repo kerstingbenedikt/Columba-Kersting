@@ -5105,10 +5105,15 @@ async function handleTripsFiles(fileList){
 
 // Führt neu geparste Reisen/Ergebnisse mit bereits vorhandenen (aus zuvor in
 // diesem Import-Vorgang gelesenen Dateien) zusammen. Abgleich über
-// Jahrgang+Reisenummer+Ort; Kopfdaten werden nur ergänzt, wenn noch leer;
-// Ergebnisse werden dedupliziert über Ringnummer+Züchtername.
+// Jahrgang+Ort+Datum (NICHT Reisenummer — die "0xx"-Nummer im EDV-Kraus-
+// Export ist die züchtereigene, fortlaufende Zählung seiner eigenen Reisen
+// und kann bei zwei Züchtern für dieselbe physische Reise unterschiedlich
+// ausfallen, z.B. wenn einer eine frühere Reise ausgelassen hat). Kopfdaten
+// werden nur ergänzt, wenn noch leer; Ergebnisse werden dedupliziert über
+// Ringnummer+Züchtername.
 function mergeTripRows(existing, incoming){
-  const keyOf = t => (t.vintage||'')+'|'+t.number+'|'+String(t.location||'').toLowerCase().trim().replace(/\s+/g,' ');
+  const normL = s => String(s||'').toLowerCase().trim().replace(/\s+/g,' ');
+  const keyOf = t => (t.vintage||'')+'|'+normL(t.location)+'|'+(t.tripdate||'');
   const list = [...existing];
   const byKey = {};
   list.forEach(item=>{ byKey[keyOf(item.trip)] = item; });
@@ -5376,9 +5381,12 @@ async function runTripsImport(){
     const t=item.trip;
     setS('Reise '+t.number+' — '+t.location+'…');
     const normL=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
+    // Abgleich über Jahrgang+Ort+Datum, NICHT über die Reisenummer (die ist
+    // je Züchter-Datei eine eigene, fortlaufende Zählung und kann für
+    // dieselbe physische Reise zwischen Züchtern abweichen).
     const existing=sessionTrips.find(x=>
-      x.vintage===t.vintage && x.number===t.number &&
-      normL(x.location)===normL(t.location)
+      x.vintage===t.vintage && normL(x.location)===normL(t.location) &&
+      (x.tripdate||'')===(t.tripdate||'')
     );
     let tripid;
     if(existing){
