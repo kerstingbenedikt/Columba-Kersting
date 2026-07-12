@@ -291,12 +291,13 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
     </div>
   </div>
   <div class="header-right" id="headerStats"></div>
+  <div id="langSwitch" style="display:flex;margin-left:10px"></div>
 </header>
 
 <nav id="nav">
-  <button data-group="tauben" class="active" onclick="showTab('tauben')">🐦 Tauben</button>
-  <button data-group="add" onclick="showTab('neu')">＋ Hinzufügen</button>
-  <button data-group="reisen" onclick="showTab('reisen')">🏁 Reisen</button>
+  <button data-group="tauben" class="active" onclick="showTab('tauben')">🐦 <span id="navPigeonsLabel">Tauben</span></button>
+  <button data-group="add" onclick="showTab('neu')">＋ <span id="navAddLabel">Hinzufügen</span></button>
+  <button data-group="reisen" onclick="showTab('reisen')">🏁 <span id="navRacingLabel">Reisen</span></button>
 </nav>
 
 <main id="main">
@@ -307,6 +308,47 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 const SUPA_URL      = 'https://vwdqqdmtjztduzqrdbpc.supabase.co/rest/v1';
 const SUPA_AUTH_URL = 'https://vwdqqdmtjztduzqrdbpc.supabase.co/auth/v1';
 const SUPA_KEY      = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3ZHFxZG10anp0ZHV6cXJkYnBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NDM2NzEsImV4cCI6MjA4MDUxOTY3MX0.igi8KVrlMvc5EuHkNTS0WsQm5ySq6eK7lawASWVxdJg';
+
+// ── Sprache / i18n ────────────────────────────────────────────────
+// Umschaltbar über den Button im Header. Wird in localStorage gemerkt.
+// Ergänzt/erweitert werden weitere Bereiche der App schrittweise (aktuell
+// vollständig übersetzt: Hauptnavigation + Reisen/Racing-Bereich).
+let LANG = localStorage.getItem('lang') || 'de';
+const I18N = {
+  de: {
+    nav_pigeons:'Tauben', nav_add:'Hinzufügen', nav_racing:'Reisen',
+    sub_racing:'Reisen', sub_best:'Bestenliste', sub_breeders:'Züchter',
+    trip_word:'Reise', trips_word:'Reisen', all_trips:'Alle Reisen',
+    all_breeders:'Alle Züchter', breeders_word:'Züchter',
+    import_perf:'Leistungsdaten importieren', import_now:'Jetzt importieren',
+    no_trips:'Noch keine Reisen.', pigeons_set:'aufgesetzt',
+    loading_results:'Lade Ergebnisse…', back:'Zurück',
+    th_placement:'Pl.', th_placement_breeder:'Pl. Züchter', th_ring:'Ringnummer',
+    th_name:'Name', th_breeder:'Züchter', th_speed:'m/min', th_prize:'Pr.',
+    th_as:'AS', filtered_on:'gefiltert auf', season:'Saison',
+    show_all_breeders:'Alle Züchter anzeigen',
+  },
+  en: {
+    nav_pigeons:'Pigeons', nav_add:'Add', nav_racing:'Racing',
+    sub_racing:'Racing', sub_best:'Leaderboard', sub_breeders:'Breeders',
+    trip_word:'Race', trips_word:'Races', all_trips:'All Races',
+    all_breeders:'All Breeders', breeders_word:'Breeders',
+    import_perf:'Import performance data', import_now:'Import now',
+    no_trips:'No races yet.', pigeons_set:'entered',
+    loading_results:'Loading results…', back:'Back',
+    th_placement:'Pl.', th_placement_breeder:'Pl. (Breeder)', th_ring:'Ring No.',
+    th_name:'Name', th_breeder:'Breeder', th_speed:'m/min', th_prize:'Prize',
+    th_as:'AS', filtered_on:'filtered on', season:'Season',
+    show_all_breeders:'Show all breeders',
+  }
+};
+function t(key){ return (I18N[LANG]&&I18N[LANG][key]) || I18N.de[key] || key; }
+function setLang(l){ LANG=l; localStorage.setItem('lang',l); renderLangSwitch(); render(); }
+function renderLangSwitch(){
+  const el=document.getElementById('langSwitch'); if(!el) return;
+  el.innerHTML = ['de','en'].map(l=>`<button onclick="setLang('${l}')" style="cursor:pointer;border:1px solid var(--border);background:${LANG===l?'var(--green)':'var(--bg3)'};color:${LANG===l?'#0b1210':'var(--text2)'};font-weight:600;font-size:11px;padding:4px 9px;border-radius:20px 0 0 20px;border-radius:${l==='de'?'20px 0 0 20px':'0 20px 20px 0'}">${l.toUpperCase()}</button>`).join('');
+}
+
 
 // Auth-State
 let AUTH = { token: null, user: null };
@@ -1522,7 +1564,7 @@ function renderTaubenSubnav(active, p){
 function renderReisenSubnav(active){
   const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="showTab('${key}')">${icon} ${label}</button>`;
   return `<div class="subnav">
-    ${btn('reisen','Reisen','🏁')}${btn('bestenliste','Bestenliste','🏆')}${btn('zuechter','Züchter','🧑‍🌾')}
+    ${btn('reisen',t('sub_racing'),'🏁')}${btn('bestenliste',t('sub_best'),'🏆')}${btn('zuechter',t('sub_breeders'),'🧑‍🌾')}
   </div>`;
 }
 // Subnav: Tauben-Übersicht (Liste / Statistik)
@@ -1543,6 +1585,10 @@ function renderAddSubnav(active){
 // ── RENDER ─────────────────────────────────────────────────────
 function render(){
   const m=document.getElementById('main');
+  const npl=document.getElementById('navPigeonsLabel'); if(npl) npl.textContent=t('nav_pigeons');
+  const nal=document.getElementById('navAddLabel'); if(nal) nal.textContent=t('nav_add');
+  const nrl=document.getElementById('navRacingLabel'); if(nrl) nrl.textContent=t('nav_racing');
+  const lsw=document.getElementById('langSwitch'); if(lsw && !lsw.innerHTML) renderLangSwitch();
   if(S.loading){ m.innerHTML='<div class="loading"><div class="spinner"></div>Lade Tauben…</div>'; return; }
   if(S.tab==='tauben')     m.innerHTML=S.selected ? renderTaubenSubnav('detail',S.selected)+renderDetail(S.selected) : renderTaubenOverviewNav(S.taubenView)+(S.taubenView==='statistik'?renderStats():renderList());
   else if(S.tab==='stammbaum')  m.innerHTML=S.selectedPed ? renderTaubenSubnav('stammbaum',findById(S.selectedPed))+renderPedigree(S.selectedPed) : (showTab('tauben'),'');
@@ -4896,14 +4942,14 @@ function renderTripsList(){
   RT.trips.forEach(t=>{ const yr=t.vintage||'?'; if(!grouped[yr]) grouped[yr]=[]; grouped[yr].push(t); });
   const cards=Object.keys(grouped).sort((a,b)=>b-a).map(yr=>`
     <div style="margin-bottom:16px">
-      <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Saison ${yr}</div>
+      <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('season')} ${yr}</div>
       ${grouped[yr].map(t=>{
         const breeders=ZT.loaded?tripBreederRows(t.tripid):[];
         return `
         <div class="trip-card" onclick="openTrip('${t.tripid}')">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             <div>
-              <div style="font-family:'Playfair Display',serif;font-size:15px">Reise ${t.number} — ${escH(t.location||'?')}</div>
+              <div style="font-family:'Playfair Display',serif;font-size:15px">${I18N[LANG].trip_word} ${t.number} — ${escH(t.location||'?')}</div>
               <div style="font-size:12px;color:var(--text3);margin-top:3px">${t.tripdate||'?'}${t.averagedistance3?' · ⌀ '+Number(t.averagedistance3).toFixed(1)+' km':''}</div>
             </div>
           </div>
@@ -4922,7 +4968,7 @@ function renderTripsList(){
       }).join('')}
     </div>`).join('');
 
-  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' Reisen</div><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0}};render()">📥 Leistungsdaten importieren</button></div>'+(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">Noch keine Reisen.<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 Jetzt importieren</button></div>':cards)+'</div>';
+  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0}};render()">📥 '+t('import_perf')+'</button></div>'+(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
 }
 
 // Fasst die je Reise importierten Züchter mit gesetzten Tauben und Preisen zusammen
@@ -4967,7 +5013,7 @@ function tripDetailRows(){
 function setTripBreederFilter(name){ RT.breederFilter=name||null; render(); }
 
 function renderTripDetail(){
-  const t=RT.selected; if(!t) return renderTripsList();
+  const trip=RT.selected; if(!trip) return renderTripsList();
   const sorted=tripDetailRows();
   const rows=sorted.map(r=>{
     const p=S.pigeons.find(x=>x.pigeonid===r.pigeonid||(r.ringnumber&&x.ringnumber===r.ringnumber));
@@ -4986,29 +5032,29 @@ function renderTripDetail(){
   // Züchter-Chips zum Umschalten des Filters (inkl. "Alle Züchter")
   const breederNames=[...new Set(RT.results.map(r=>r.breedername||'Unbekannt'))].sort((a,b)=>a.localeCompare(b));
   const chips=breederNames.length>1?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'
-    +'<span class="badge'+(!RT.breederFilter?' badge-u':'')+'" style="cursor:pointer'+(!RT.breederFilter?'':';opacity:.6')+'" onclick="setTripBreederFilter(null)">Alle Züchter</span>'
+    +'<span class="badge'+(!RT.breederFilter?' badge-u':'')+'" style="cursor:pointer'+(!RT.breederFilter?'':';opacity:.6')+'" onclick="setTripBreederFilter(null)">'+t('all_breeders')+'</span>'
     +breederNames.map(n=>'<span class="badge'+(RT.breederFilter===n?' badge-u':'')+'" style="cursor:pointer'+(RT.breederFilter===n?'':';opacity:.6')+'" onclick="setTripBreederFilter('+jsAttr(n)+')">🧑‍🌾 '+escH(n)+'</span>').join('')
     +'</div>':'';
 
-  return '<div><button class="back-btn" onclick="RT.step=\'list\';RT.breederFilter=null;render()">← Alle Reisen</button>'
+  return '<div><button class="back-btn" onclick="RT.step=\'list\';RT.breederFilter=null;render()">← '+t('all_trips')+'</button>'
     +'<div class="card"><div style="margin-bottom:14px">'
-    +'<div class="serif" style="font-size:22px;cursor:pointer" onclick="setTripBreederFilter(null)" title="Alle Züchter anzeigen">Reise '+t.number+' — '+escH(t.location||'')+'</div>'
-    +'<div style="color:var(--text3);font-size:13px;margin-top:4px">'+(t.tripdate||'')+' · Saison '+(t.vintage||'')+(RT.breederFilter?' · gefiltert auf 🧑‍🌾 '+escH(RT.breederFilter):'')+'</div>'
+    +'<div class="serif" style="font-size:22px;cursor:pointer" onclick="setTripBreederFilter(null)" title="'+t('show_all_breeders')+'">'+I18N[LANG].trip_word+' '+trip.number+' — '+escH(trip.location||'')+'</div>'
+    +'<div style="color:var(--text3);font-size:13px;margin-top:4px">'+(trip.tripdate||'')+' · '+t('season')+' '+(trip.vintage||'')+(RT.breederFilter?' · '+t('filtered_on')+' 🧑‍🌾 '+escH(RT.breederFilter):'')+'</div>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">'
-    +(t.pigeonsset?'<span class="badge badge-u">'+t.pigeonsset+' aufgesetzt</span>':'')
-    +(t.prices1?'<span class="badge badge-u">RV: '+t.prices1+'</span>':'')
-    +(t.prices2?'<span class="badge badge-u">FG: '+t.prices2+'</span>':'')
-    +(t.prices3?'<span class="badge badge-u">RegGr: '+t.prices3+'</span>':'')
-    +(t.prices4?'<span class="badge badge-u">Reg: '+t.prices4+'</span>':'')
-    +(t.averagedistance3?'<span class="badge badge-u">⌀ '+Number(t.averagedistance3).toFixed(1)+' km</span>':'')
+    +(trip.pigeonsset?'<span class="badge badge-u">'+trip.pigeonsset+' '+t('pigeons_set')+'</span>':'')
+    +(trip.prices1?'<span class="badge badge-u">RV: '+trip.prices1+'</span>':'')
+    +(trip.prices2?'<span class="badge badge-u">FG: '+trip.prices2+'</span>':'')
+    +(trip.prices3?'<span class="badge badge-u">RegGr: '+trip.prices3+'</span>':'')
+    +(trip.prices4?'<span class="badge badge-u">Reg: '+trip.prices4+'</span>':'')
+    +(trip.averagedistance3?'<span class="badge badge-u">⌀ '+Number(trip.averagedistance3).toFixed(1)+' km</span>':'')
     +'</div>'
     +chips
     +'</div>'
     +(RT.results.length===0
-      ?'<div style="text-align:center;padding:24px;color:var(--text3)">Lade Ergebnisse…</div>'
+      ?'<div style="text-align:center;padding:24px;color:var(--text3)">'+t('loading_results')+'</div>'
       :'<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-      +'<thead><tr><th>Pl.</th><th>Pl. Züchter</th><th>Ringnummer</th><th>Name</th>'+(RT.breederFilter?'':'<th>Züchter</th>')+'<th>m/min</th>'
-      +'<th>Pr.RV</th><th>Pr.FG</th><th>Pr.RegGr</th><th>Pr.Reg</th><th>AS Reg</th></tr></thead>'
+      +'<thead><tr><th>'+t('th_placement')+'</th><th>'+t('th_placement_breeder')+'</th><th>'+t('th_ring')+'</th><th>'+t('th_name')+'</th>'+(RT.breederFilter?'':'<th>'+t('th_breeder')+'</th>')+'<th>'+t('th_speed')+'</th>'
+      +'<th>'+t('th_prize')+'RV</th><th>'+t('th_prize')+'FG</th><th>'+t('th_prize')+'RegGr</th><th>'+t('th_prize')+'Reg</th><th>'+t('th_as')+' Reg</th></tr></thead>'
       +'<tbody>'+rows+'</tbody></table></div>')
     +'</div></div>';
 }
