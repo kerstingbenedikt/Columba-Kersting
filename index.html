@@ -333,6 +333,27 @@ const I18N = {
     print_label:'Druck:', with_photo:'Mit Foto', breeder_data_btn:'Züchterdaten',
     legend_click:'Klick → Stammbaum wechseln', pedigree_not_found:'Taube nicht gefunden.',
     gens:'Gen.',
+    sub_details:'Details', sub_pedigree:'Stammbaum', sub_offspring:'Nachkommen', sub_pairing:'Paarungscheck',
+    back_overview:'← Übersicht',
+    fld_ring:'Ringnummer', fld_ring_old:'Alte Ringnr.', fld_name:'Name', fld_year:'Jahrgang',
+    fld_gender:'Geschlecht', gender_cock:'Täuber', gender_hen:'Täubin', gender_choose:'— wählen —',
+    fld_color:'Farbe', fld_race:'Rasse', fld_strain:'Linie / Stamm', fld_breeder:'Züchter', fld_owner:'Besitzer',
+    fld_location:'Standort / akt. Besitzer', fld_status:'Status', status_none:'— kein Status —',
+    fld_country:'Land', fld_assocno:'Verbandsnr.', fld_birthday:'Geburtstag', fld_died:'Verstorben',
+    fld_bought:'Gekauft', fld_sold:'Verkauft', fld_instock:'Im Bestand', yes_word:'Ja', no_word:'Nein',
+    fld_pigeontype:'Taubentyp', type_unset:'— nicht festgelegt —', type_racing:'Reisetaube',
+    type_breeding:'Zuchttaube', type_home:'Heimtaube',
+    fld_info:'Info', fld_internal_info:'Interne Info', sec_parents:'Eltern',
+    fld_father_ring:'Vater (Ringnummer)', fld_mother_ring:'Mutter (Ringnummer)', ph_ring_input:'Ringnummer eingeben…',
+    edit_title:'Taube bearbeiten', btn_save:'Speichern', btn_cancel:'Abbrechen', btn_back_cancel:'← Abbrechen',
+    add_title:'＋ Neue Taube erfassen', sec_ring:'Ringnummer', sec_status_stock:'Status & Bestand',
+    sec_pigeon_info:'Angaben zur Taube', sec_info:'Informationen',
+    fld_ring_req:'Ringnummer *', fld_father:'Vater', fld_mother:'Mutter', fld_name_short:'Name / Kurzbezeichnung',
+    ph_ring_search:'Ringnummer oder Name suchen…', ph_name_short:'Spitzname oder Bezeichnung',
+    ph_color:'z. B. blau, gescheckt', ph_race:'z. B. Brieftaube', ph_strain:'z. B. Janssen, van Loon',
+    ph_breeder:'Name des Züchters', ph_owner:'Name des Besitzers', ph_location:'z.B. eigener Schlag, Name des Halters…',
+    ph_info:'Erfolge, Herkunft, Abstammungsbeschreibung…', ph_internal_info:'Interne Notizen…',
+    fld_info_notes:'Info / Notizen', btn_reset:'Zurücksetzen', btn_save_pigeon:'🕊 Taube speichern',
   },
   en: {
     nav_pigeons:'Pigeons', nav_add:'Add', nav_racing:'Racing',
@@ -352,6 +373,27 @@ const I18N = {
     print_label:'Print:', with_photo:'With photo', breeder_data_btn:'Breeder data',
     legend_click:'Click → switch pedigree', pedigree_not_found:'Pigeon not found.',
     gens:'gen.',
+    sub_details:'Details', sub_pedigree:'Pedigree', sub_offspring:'Offspring', sub_pairing:'Pairing Check',
+    back_overview:'← Overview',
+    fld_ring:'Ring Number', fld_ring_old:'Old Ring No.', fld_name:'Name', fld_year:'Year',
+    fld_gender:'Gender', gender_cock:'Cock', gender_hen:'Hen', gender_choose:'— select —',
+    fld_color:'Color', fld_race:'Breed', fld_strain:'Line / Strain', fld_breeder:'Breeder', fld_owner:'Owner',
+    fld_location:'Location / Current Keeper', fld_status:'Status', status_none:'— no status —',
+    fld_country:'Country', fld_assocno:'Association No.', fld_birthday:'Birthday', fld_died:'Died',
+    fld_bought:'Bought', fld_sold:'Sold', fld_instock:'In Stock', yes_word:'Yes', no_word:'No',
+    fld_pigeontype:'Pigeon Type', type_unset:'— not set —', type_racing:'Racing Pigeon',
+    type_breeding:'Breeding Pigeon', type_home:'Home Pigeon',
+    fld_info:'Info', fld_internal_info:'Internal Info', sec_parents:'Parents',
+    fld_father_ring:'Father (Ring Number)', fld_mother_ring:'Mother (Ring Number)', ph_ring_input:'Enter ring number…',
+    edit_title:'Edit Pigeon', btn_save:'Save', btn_cancel:'Cancel', btn_back_cancel:'← Cancel',
+    add_title:'＋ Add New Pigeon', sec_ring:'Ring Number', sec_status_stock:'Status & Stock',
+    sec_pigeon_info:'Pigeon Details', sec_info:'Information',
+    fld_ring_req:'Ring Number *', fld_father:'Father', fld_mother:'Mother', fld_name_short:'Name / Short Label',
+    ph_ring_search:'Search ring number or name…', ph_name_short:'Nickname or label',
+    ph_color:'e.g. blue, pied', ph_race:'e.g. racing pigeon', ph_strain:'e.g. Janssen, van Loon',
+    ph_breeder:'Breeder name', ph_owner:'Owner name', ph_location:'e.g. own loft, keeper name…',
+    ph_info:'Achievements, origin, pedigree notes…', ph_internal_info:'Internal notes…',
+    fld_info_notes:'Info / Notes', btn_reset:'Reset', btn_save_pigeon:'🕊 Save Pigeon',
   }
 };
 function t(key){ return (I18N[LANG]&&I18N[LANG][key]) || I18N.de[key] || key; }
@@ -1562,14 +1604,14 @@ function showPedigree(id){ S.selectedPed=id; S.tab='stammbaum'; setActiveNav('st
 // Paarungscheck sind bewusst KEINE eigenen Hauptreiter mehr, sondern nur erreichbar,
 // nachdem man in der Tauben-Übersicht eine Taube ausgewählt hat.
 function renderTaubenSubnav(active, p){
-  const back = `<button class="subnav-btn" onclick="S.selected=null;S.tab='tauben';setActiveNav('tauben');render();window.scrollTo(0,0)">← Übersicht</button>`;
+  const back = `<button class="subnav-btn" onclick="S.selected=null;S.tab='tauben';setActiveNav('tauben');render();window.scrollTo(0,0)">${t('back_overview')}</button>`;
   if(!p) return `<div class="subnav">${back}</div>`;
   const btn=(key,label,icon,fn)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="${fn}">${icon} ${label}</button>`;
   return `<div class="subnav">${back}
-    ${btn('detail','Details','📋',`selectPigeon('${p.pigeonid}')`)}
-    ${btn('stammbaum','Stammbaum','🌳',`showPedigree('${p.pigeonid}')`)}
-    ${btn('nachkommen','Nachkommen','🐣',`showNachkommen('${p.pigeonid}')`)}
-    ${btn('paarung','Paarungscheck','💑',`setPaarungVogel('${p.pigeonid}')`)}
+    ${btn('detail',t('sub_details'),'📋',`selectPigeon('${p.pigeonid}')`)}
+    ${btn('stammbaum',t('sub_pedigree'),'🌳',`showPedigree('${p.pigeonid}')`)}
+    ${btn('nachkommen',t('sub_offspring'),'🐣',`showNachkommen('${p.pigeonid}')`)}
+    ${btn('paarung',t('sub_pairing'),'💑',`setPaarungVogel('${p.pigeonid}')`)}
   </div>`;
 }
 // Subnav: Reisen-Themenkreis (Flüge, Bestenliste, Züchter)
@@ -1977,92 +2019,92 @@ function renderDetailEdit(p){
   const fR=f?ring(f):(p.ringnumberfather||'');
   const mR=mo?ring(mo):(p.ringnumbermother||'');
   return `
-    <button class="back-btn" onclick="cancelEdit('${p.pigeonid}')">← Abbrechen</button>
+    <button class="back-btn" onclick="cancelEdit('${p.pigeonid}')">${t('btn_back_cancel')}</button>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
-        <div class="serif" style="font-size:20px">✏️ Taube bearbeiten</div>
+        <div class="serif" style="font-size:20px">✏️ ${t('edit_title')}</div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-sm" onclick="saveEdit('${p.pigeonid}')">💾 Speichern</button>
-          <button class="btn btn-outline btn-sm" onclick="cancelEdit('${p.pigeonid}')">Abbrechen</button>
+          <button class="btn btn-sm" onclick="saveEdit('${p.pigeonid}')">💾 ${t('btn_save')}</button>
+          <button class="btn btn-outline btn-sm" onclick="cancelEdit('${p.pigeonid}')">${t('btn_cancel')}</button>
         </div>
       </div>
       <div id="edit-msg" style="display:none;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:14px;font-size:13px"></div>
       <div class="form-grid">
-        <div class="form-field"><label>Ringnummer</label><input id="e_ringnumber" value="${fv(p,'ringnumber')}"></div>
-        <div class="form-field"><label>Alte Ringnr.</label><input id="e_ringnumberold" value="${fv(p,'ringnumberold')}"></div>
-        <div class="form-field"><label>Name</label><input id="e_name" value="${fv(p,'name')}"></div>
-        <div class="form-field"><label>Jahrgang</label><input id="e_date_year" type="number" value="${fv(p,'date_year')}"></div>
-        <div class="form-field"><label>Geschlecht</label>
+        <div class="form-field"><label>${t('fld_ring')}</label><input id="e_ringnumber" value="${fv(p,'ringnumber')}"></div>
+        <div class="form-field"><label>${t('fld_ring_old')}</label><input id="e_ringnumberold" value="${fv(p,'ringnumberold')}"></div>
+        <div class="form-field"><label>${t('fld_name')}</label><input id="e_name" value="${fv(p,'name')}"></div>
+        <div class="form-field"><label>${t('fld_year')}</label><input id="e_date_year" type="number" value="${fv(p,'date_year')}"></div>
+        <div class="form-field"><label>${t('fld_gender')}</label>
           <select id="e_gender">
             <option value="">—</option>
-            <option value="1" ${String(p.gender)==='1'?'selected':''}>♂ Täuber</option>
-            <option value="2" ${String(p.gender)==='2'?'selected':''}>♀ Täubin</option>
+            <option value="1" ${String(p.gender)==='1'?'selected':''}>♂ ${t('gender_cock')}</option>
+            <option value="2" ${String(p.gender)==='2'?'selected':''}>♀ ${t('gender_hen')}</option>
           </select>
         </div>
-        <div class="form-field"><label>Farbe</label>
-          <input id="e_color" list="dl-colors" value="${fv(p,'color')}" autocomplete="off" placeholder="z.B. blau, gescheckt…">
+        <div class="form-field"><label>${t('fld_color')}</label>
+          <input id="e_color" list="dl-colors" value="${fv(p,'color')}" autocomplete="off" placeholder="${t('ph_color')}">
           <datalist id="dl-colors">${[...new Set(S.pigeons.map(p=>p.color).filter(Boolean))].sort().map(c=>`<option value="${escH(c)}">`).join('')}</datalist>
         </div>
-        <div class="form-field"><label>Rasse</label>
-          <input id="e_race" list="dl-races" value="${fv(p,'race')}" autocomplete="off" placeholder="z.B. Brieftaube…">
+        <div class="form-field"><label>${t('fld_race')}</label>
+          <input id="e_race" list="dl-races" value="${fv(p,'race')}" autocomplete="off" placeholder="${t('ph_race')}">
           <datalist id="dl-races">${[...new Set(S.pigeons.map(p=>p.race).filter(Boolean))].sort().map(r=>`<option value="${escH(r)}">`).join('')}</datalist>
         </div>
-        <div class="form-field"><label>Linie / Stamm</label>
-          <input id="e_strain" list="dl-strains" value="${fv(p,'strain')}" autocomplete="off" placeholder="z.B. Janssen, van Loon…">
+        <div class="form-field"><label>${t('fld_strain')}</label>
+          <input id="e_strain" list="dl-strains" value="${fv(p,'strain')}" autocomplete="off" placeholder="${t('ph_strain')}">
           <datalist id="dl-strains">${[...new Set(S.pigeons.map(p=>p.strain).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}">`).join('')}</datalist>
         </div>
-        <div class="form-field"><label>Züchter</label>
-          <input id="e_breeder" list="dl-breeders" value="${fv(p,'breeder')}" autocomplete="off" placeholder="Name des Züchters…">
+        <div class="form-field"><label>${t('fld_breeder')}</label>
+          <input id="e_breeder" list="dl-breeders" value="${fv(p,'breeder')}" autocomplete="off" placeholder="${t('ph_breeder')}">
           <datalist id="dl-breeders">${[...new Set(S.pigeons.map(p=>p.breeder).filter(Boolean))].sort().map(b=>`<option value="${escH(b)}">`).join('')}</datalist>
         </div>
-        <div class="form-field"><label>Besitzer</label><input id="e_owner" value="${fv(p,'owner')}"></div>
-        <div class="form-field"><label>Standort / akt. Besitzer</label>
-          <input id="e_standort" list="dl-standorte" value="${fv(p,'standort')}" autocomplete="off" placeholder="z.B. eigener Schlag, Name des Halters…">
+        <div class="form-field"><label>${t('fld_owner')}</label><input id="e_owner" value="${fv(p,'owner')}"></div>
+        <div class="form-field"><label>${t('fld_location')}</label>
+          <input id="e_standort" list="dl-standorte" value="${fv(p,'standort')}" autocomplete="off" placeholder="${t('ph_location')}">
           <datalist id="dl-standorte">${[...new Set(S.pigeons.map(p=>p.standort).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}">`).join('')}</datalist>
         </div>
-        <div class="form-field"><label>Status</label>
+        <div class="form-field"><label>${t('fld_status')}</label>
           <select id="e_pigeonstateid">
-            <option value="">— kein Status —</option>
+            <option value="">${t('status_none')}</option>
             ${S.pigeonStates.map(s=>`<option value="${escH(s.pigeonstateid)}"${p.pigeonstateid===s.pigeonstateid?' selected':''}>${escH(s.name)}</option>`).join('')}
           </select>
         </div>
-        <div class="form-field"><label>Land</label><input id="e_countrycode" value="${fv(p,'countrycode')}"></div>
-        <div class="form-field"><label>Verbandsnr.</label><input id="e_associationno" value="${fv(p,'associationno')}"></div>
-        <div class="form-field"><label>Geburtstag</label><input id="e_birthday" type="date" value="${fv(p,'birthday')}"></div>
-        <div class="form-field"><label>Verstorben</label><input id="e_died" type="date" value="${fv(p,'died')}"></div>
-        <div class="form-field"><label>Gekauft</label><input id="e_bought" type="date" value="${fv(p,'bought')}"></div>
-        <div class="form-field"><label>Verkauft</label><input id="e_sold" type="date" value="${fv(p,'sold')}"></div>
-        <div class="form-field"><label>Im Bestand</label>
+        <div class="form-field"><label>${t('fld_country')}</label><input id="e_countrycode" value="${fv(p,'countrycode')}"></div>
+        <div class="form-field"><label>${t('fld_assocno')}</label><input id="e_associationno" value="${fv(p,'associationno')}"></div>
+        <div class="form-field"><label>${t('fld_birthday')}</label><input id="e_birthday" type="date" value="${fv(p,'birthday')}"></div>
+        <div class="form-field"><label>${t('fld_died')}</label><input id="e_died" type="date" value="${fv(p,'died')}"></div>
+        <div class="form-field"><label>${t('fld_bought')}</label><input id="e_bought" type="date" value="${fv(p,'bought')}"></div>
+        <div class="form-field"><label>${t('fld_sold')}</label><input id="e_sold" type="date" value="${fv(p,'sold')}"></div>
+        <div class="form-field"><label>${t('fld_instock')}</label>
           <select id="e_instock">
-            <option value="true" ${p.instock!==false?'selected':''}>Ja</option>
-            <option value="false" ${p.instock===false?'selected':''}>Nein</option>
+            <option value="true" ${p.instock!==false?'selected':''}>${t('yes_word')}</option>
+            <option value="false" ${p.instock===false?'selected':''}>${t('no_word')}</option>
           </select>
         </div>
-        <div class="form-field"><label>Taubentyp</label>
+        <div class="form-field"><label>${t('fld_pigeontype')}</label>
           <select id="e_pigeontype">
-            <option value="" ${!p.pigeontype?'selected':''}>— nicht festgelegt —</option>
-            <option value="Reisetaube" ${p.pigeontype==='Reisetaube'?'selected':''}>✈ Reisetaube</option>
-            <option value="Zuchttaube" ${p.pigeontype==='Zuchttaube'?'selected':''}>🥚 Zuchttaube</option>
-            <option value="Heimtaube" ${p.pigeontype==='Heimtaube'?'selected':''}>🏠 Heimtaube</option>
+            <option value="" ${!p.pigeontype?'selected':''}>${t('type_unset')}</option>
+            <option value="Reisetaube" ${p.pigeontype==='Reisetaube'?'selected':''}>✈ ${t('type_racing')}</option>
+            <option value="Zuchttaube" ${p.pigeontype==='Zuchttaube'?'selected':''}>🥚 ${t('type_breeding')}</option>
+            <option value="Heimtaube" ${p.pigeontype==='Heimtaube'?'selected':''}>🏠 ${t('type_home')}</option>
           </select>
         </div>
-        <div class="form-field" style="grid-column:1/-1"><label>Info</label><textarea id="e_info" rows="3" style="width:100%;resize:vertical">${fv(p,'info')}</textarea></div>
-        <div class="form-field" style="grid-column:1/-1"><label>Interne Info</label><input id="e_internalinfo" value="${fv(p,'internalinfo')}"></div>
+        <div class="form-field" style="grid-column:1/-1"><label>${t('fld_info')}</label><textarea id="e_info" rows="3" style="width:100%;resize:vertical">${fv(p,'info')}</textarea></div>
+        <div class="form-field" style="grid-column:1/-1"><label>${t('fld_internal_info')}</label><input id="e_internalinfo" value="${fv(p,'internalinfo')}"></div>
       </div>
-      <div class="section-label">Eltern</div>
+      <div class="section-label">${t('sec_parents')}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-field">
-          <label>Vater (Ringnummer)</label>
+          <label>${t('fld_father_ring')}</label>
           <div style="position:relative">
-            <input id="e_father_inp" value="${escH(fR)}" autocomplete="off" placeholder="Ringnummer eingeben…">
+            <input id="e_father_inp" value="${escH(fR)}" autocomplete="off" placeholder="${t('ph_ring_input')}">
             <input type="hidden" id="e_father_id" value="${escH(p.fatherid||'')}">
             <div id="e_father_drop" class="ac-drop"></div>
           </div>
         </div>
         <div class="form-field">
-          <label>Mutter (Ringnummer)</label>
+          <label>${t('fld_mother_ring')}</label>
           <div style="position:relative">
-            <input id="e_mother_inp" value="${escH(mR)}" autocomplete="off" placeholder="Ringnummer eingeben…">
+            <input id="e_mother_inp" value="${escH(mR)}" autocomplete="off" placeholder="${t('ph_ring_input')}">
             <input type="hidden" id="e_mother_id" value="${escH(p.motherid||'')}">
             <div id="e_mother_drop" class="ac-drop"></div>
           </div>
@@ -2070,8 +2112,8 @@ function renderDetailEdit(p){
       </div>
       <div style="display:flex;gap:8px;margin-top:20px;justify-content:space-between">
         <div style="display:flex;gap:8px">
-          <button class="btn" onclick="saveEdit('${p.pigeonid}')">💾 Speichern</button>
-          <button class="btn btn-outline" onclick="cancelEdit('${p.pigeonid}')">Abbrechen</button>
+          <button class="btn" onclick="saveEdit('${p.pigeonid}')">💾 ${t('btn_save')}</button>
+          <button class="btn btn-outline" onclick="cancelEdit('${p.pigeonid}')">${t('btn_cancel')}</button>
         </div>
         <button class="btn btn-outline" style="color:#d9534f;border-color:#d9534f" onclick="deletePigeon('${p.pigeonid}')">🗑 Taube löschen</button>
       </div>
@@ -3404,126 +3446,126 @@ function setNeuMode(mode){ S.neuMode=mode; QUICK={ringnumber:'',duplicateMatch:n
 
 function renderNeu(){
   return `<div class="card">
-    <div class="card-title serif" style="font-size:18px">＋ Neue Taube erfassen</div>
+    <div class="card-title serif" style="font-size:18px">${t('add_title')}</div>
     <div id="form-msg" style="display:none"></div>
 
-    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Ringnummer</div>
+    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('sec_ring')}</div>
     <div class="form-grid" style="margin-bottom:6px">
       <div class="form-field form-full">
-        <label>Ringnummer *</label>
+        <label>${t('fld_ring_req')}</label>
         <input id="neu_ring" placeholder="z. B. DE-06559-26-170 oder B-22-6106458" autocomplete="off" oninput="neuRingChanged(this.value)">
       </div>
     </div>
     <div id="neu-ring-preview" style="margin-bottom:16px"></div>
 
-    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Eltern</div>
+    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('sec_parents')}</div>
     <div class="form-grid" style="margin-bottom:16px">
       <div class="form-field">
-        <label>Vater</label>
+        <label>${t('fld_father')}</label>
         <div class="autocomplete-wrap">
-          <input id="neu_father_inp" placeholder="Ringnummer oder Name suchen…" autocomplete="off">
+          <input id="neu_father_inp" placeholder="${t('ph_ring_search')}" autocomplete="off">
           <div class="autocomplete-drop" id="neu_father_drop"></div>
           <input type="hidden" id="neu_father_id">
         </div>
       </div>
       <div class="form-field">
-        <label>Mutter</label>
+        <label>${t('fld_mother')}</label>
         <div class="autocomplete-wrap">
-          <input id="neu_mother_inp" placeholder="Ringnummer oder Name suchen…" autocomplete="off">
+          <input id="neu_mother_inp" placeholder="${t('ph_ring_search')}" autocomplete="off">
           <div class="autocomplete-drop" id="neu_mother_drop"></div>
           <input type="hidden" id="neu_mother_id">
         </div>
       </div>
     </div>
 
-    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Status & Bestand</div>
+    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('sec_status_stock')}</div>
     <div class="form-grid" style="margin-bottom:16px">
       <div class="form-field">
-        <label>Status</label>
+        <label>${t('fld_status')}</label>
         <select id="neu_pigeonstateid">
-          <option value="">— kein Status —</option>
+          <option value="">${t('status_none')}</option>
           ${S.pigeonStates.map(s=>`<option value="${escH(s.pigeonstateid)}">${escH(s.name)}</option>`).join('')}
         </select>
       </div>
       <div class="form-field">
-        <label>Im Bestand</label>
+        <label>${t('fld_instock')}</label>
         <select id="neu_instock">
-          <option value="true">Ja</option>
-          <option value="false">Nein</option>
+          <option value="true">${t('yes_word')}</option>
+          <option value="false">${t('no_word')}</option>
         </select>
       </div>
       <div class="form-field">
-        <label>Taubentyp</label>
+        <label>${t('fld_pigeontype')}</label>
         <select id="neu_pigeontype">
-          <option value="">— nicht festgelegt —</option>
-          <option value="Reisetaube">✈ Reisetaube</option>
-          <option value="Zuchttaube">🥚 Zuchttaube</option>
-          <option value="Heimtaube">🏠 Heimtaube</option>
+          <option value="">${t('type_unset')}</option>
+          <option value="Reisetaube">✈ ${t('type_racing')}</option>
+          <option value="Zuchttaube">🥚 ${t('type_breeding')}</option>
+          <option value="Heimtaube">🏠 ${t('type_home')}</option>
         </select>
       </div>
     </div>
 
-    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Angaben zur Taube</div>
+    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('sec_pigeon_info')}</div>
     <div class="form-grid" style="margin-bottom:16px">
       <div class="form-field">
-        <label>Name / Kurzbezeichnung</label>
-        <input id="neu_name" placeholder="Spitzname oder Bezeichnung">
+        <label>${t('fld_name_short')}</label>
+        <input id="neu_name" placeholder="${t('ph_name_short')}">
       </div>
       <div class="form-field">
-        <label>Geschlecht</label>
+        <label>${t('fld_gender')}</label>
         <select id="neu_gender">
-          <option value="">— wählen —</option>
-          <option value="M">♂ Täuber</option>
-          <option value="F">♀ Täubin</option>
+          <option value="">${t('gender_choose')}</option>
+          <option value="M">♂ ${t('gender_cock')}</option>
+          <option value="F">♀ ${t('gender_hen')}</option>
         </select>
       </div>
       <div class="form-field">
-        <label>Farbe</label>
-        <input id="neu_color" list="neu-dl-colors" placeholder="z. B. blau, gescheckt" autocomplete="off">
+        <label>${t('fld_color')}</label>
+        <input id="neu_color" list="neu-dl-colors" placeholder="${t('ph_color')}" autocomplete="off">
         <datalist id="neu-dl-colors">${[...new Set(S.pigeons.map(p=>p.color).filter(Boolean))].sort().map(c=>`<option value="${escH(c)}">`).join('')}</datalist>
       </div>
       <div class="form-field">
-        <label>Rasse</label>
-        <input id="neu_race" list="neu-dl-races" placeholder="z. B. Brieftaube" autocomplete="off">
+        <label>${t('fld_race')}</label>
+        <input id="neu_race" list="neu-dl-races" placeholder="${t('ph_race')}" autocomplete="off">
         <datalist id="neu-dl-races">${[...new Set(S.pigeons.map(p=>p.race).filter(Boolean))].sort().map(r=>`<option value="${escH(r)}">`).join('')}</datalist>
       </div>
       <div class="form-field">
-        <label>Linie / Stamm</label>
-        <input id="neu_strain" list="neu-dl-strains" placeholder="z. B. Janssen, van Loon" autocomplete="off">
+        <label>${t('fld_strain')}</label>
+        <input id="neu_strain" list="neu-dl-strains" placeholder="${t('ph_strain')}" autocomplete="off">
         <datalist id="neu-dl-strains">${[...new Set(S.pigeons.map(p=>p.strain).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}">`).join('')}</datalist>
       </div>
       <div class="form-field">
-        <label>Züchter</label>
-        <input id="neu_breeder" list="neu-dl-breeders" placeholder="Name des Züchters" autocomplete="off">
+        <label>${t('fld_breeder')}</label>
+        <input id="neu_breeder" list="neu-dl-breeders" placeholder="${t('ph_breeder')}" autocomplete="off">
         <datalist id="neu-dl-breeders">${[...new Set(S.pigeons.map(p=>p.breeder).filter(Boolean))].sort().map(b=>`<option value="${escH(b)}">`).join('')}</datalist>
       </div>
       <div class="form-field">
-        <label>Besitzer</label>
-        <input id="neu_owner" list="neu-dl-owners" placeholder="Name des Besitzers" autocomplete="off">
+        <label>${t('fld_owner')}</label>
+        <input id="neu_owner" list="neu-dl-owners" placeholder="${t('ph_owner')}" autocomplete="off">
         <datalist id="neu-dl-owners">${[...new Set(S.pigeons.map(p=>p.owner).filter(Boolean))].sort().map(o=>`<option value="${escH(o)}">`).join('')}</datalist>
       </div>
       <div class="form-field">
-        <label>Standort / akt. Besitzer</label>
-        <input id="neu_standort" list="neu-dl-standorte" placeholder="z.B. eigener Schlag, Name des Halters…" autocomplete="off">
+        <label>${t('fld_location')}</label>
+        <input id="neu_standort" list="neu-dl-standorte" placeholder="${t('ph_location')}" autocomplete="off">
         <datalist id="neu-dl-standorte">${[...new Set(S.pigeons.map(p=>p.standort).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}">`).join('')}</datalist>
       </div>
     </div>
 
-    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Informationen</div>
+    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('sec_info')}</div>
     <div class="form-grid" style="margin-bottom:16px">
       <div class="form-field form-full">
-        <label>Info / Notizen</label>
-        <textarea id="neu_info" placeholder="Erfolge, Herkunft, Abstammungsbeschreibung…" rows="3"></textarea>
+        <label>${t('fld_info_notes')}</label>
+        <textarea id="neu_info" placeholder="${t('ph_info')}" rows="3"></textarea>
       </div>
       <div class="form-field form-full">
-        <label>Interne Info</label>
-        <textarea id="neu_internalinfo" placeholder="Interne Notizen…" rows="2"></textarea>
+        <label>${t('fld_internal_info')}</label>
+        <textarea id="neu_internalinfo" placeholder="${t('ph_internal_info')}" rows="2"></textarea>
       </div>
     </div>
 
     <div class="form-actions">
-      <button type="button" class="btn btn-outline" onclick="neuFormReset()">Zurücksetzen</button>
-      <button type="button" class="btn" id="neu-submit-btn" onclick="submitNeu()">🕊 Taube speichern</button>
+      <button type="button" class="btn btn-outline" onclick="neuFormReset()">${t('btn_reset')}</button>
+      <button type="button" class="btn" id="neu-submit-btn" onclick="submitNeu()">${t('btn_save_pigeon')}</button>
     </div>
   </div>`;
 }
