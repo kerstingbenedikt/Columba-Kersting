@@ -374,6 +374,37 @@ const I18N = {
     btn_edit_pigeon:'✏️ Bearbeiten', detail_not_instock:'Nicht im Bestand',
     fld_inbreedcoeff:'Inzuchtkoeff.', fld_calc_inbreed:'Ber. Inzucht',
     fld_user1:'Benutzer 1', fld_user2:'Benutzer 2', fld_user3:'Benutzer 3',
+
+    // ── Tauben-Übersicht: Liste/Statistik-Umschalter ──
+    sub_liste:'Liste', sub_statistik:'Statistik',
+
+    // ── Status-Badges (Nachkommen-Ansicht) ──
+    status_died:'Verstorben', status_sold:'Verkauft', status_not_instock:'Nicht im Bestand',
+    status_cock_active:'Täuber (aktiv)', status_hen_active:'Täubin (aktiv)', status_instock:'Im Bestand',
+    filter_chip_color:'Farbe', filter_chip_status:'Status',
+
+    // ── Statistik-Ansicht (komplett) ──
+    stats_click_filter:'(anklicken zum Filtern)',
+    stats_total:'Tauben gesamt', stats_title_total:'Alle Tauben anzeigen',
+    stats_male:'♂ Täuber', stats_title_male:'Nach Täuber (♂) filtern',
+    stats_female:'♀ Täubin', stats_title_female:'Nach Täubin (♀) filtern',
+    stats_instock:'Im Bestand', stats_title_instock:'Nur Bestandstauben anzeigen',
+    stats_with_both_parents:'Mit beiden Eltern', stats_vintages:'Jahrgänge',
+    stats_stock_by_type:'Bestand nach Taubentyp',
+    stats_title_racing:'Reisetauben im Bestand anzeigen', stats_racing:'✈ Reisetauben',
+    stats_title_breeding:'Zuchttauben im Bestand anzeigen', stats_breeding:'🥚 Zuchttauben',
+    stats_title_home:'Heimtauben im Bestand anzeigen', stats_home:'🏠 Heimtauben',
+    stats_per_vintage:'Tauben pro Jahrgang', stats_title_vintage:'Nach Jahrgang',
+    stats_colors:'Farben', stats_title_color:'Nach Farbe',
+    stats_strains:'Linien / Stämme', stats_title_strain:'Nach Linie/Stamm',
+    stats_breeders:'Züchter', stats_title_breeder:'Nach Züchter',
+    stats_owners:'Besitzer', stats_title_owner:'Nach Besitzer',
+    stats_location:'Standort', stats_title_location:'Nach Standort',
+    stats_top20:'🏆 Top-20-Vererber',
+    stats_top20_sub:'— Tauben mit den meisten Nachkommen im Bestand (anklicken für Details)',
+    stats_title_offspring:'Nachkommen anzeigen',
+    stats_no_top_vererber:'Keine Nachkommen im Bestand mit Eltern-Verknüpfung gefunden.',
+    stats_filter_suffix:'filtern',
   },
   en: {
     nav_pigeons:'Pigeons', nav_add:'Add', nav_racing:'Racing',
@@ -434,6 +465,37 @@ const I18N = {
     btn_edit_pigeon:'✏️ Edit', detail_not_instock:'Not in stock',
     fld_inbreedcoeff:'Inbreeding Coeff.', fld_calc_inbreed:'Calc. Inbreeding',
     fld_user1:'User Field 1', fld_user2:'User Field 2', fld_user3:'User Field 3',
+
+    // ── Pigeon overview: List/Statistics switch ──
+    sub_liste:'List', sub_statistik:'Statistics',
+
+    // ── Status badges (offspring view) ──
+    status_died:'Deceased', status_sold:'Sold', status_not_instock:'Not in stock',
+    status_cock_active:'Cock (active)', status_hen_active:'Hen (active)', status_instock:'In stock',
+    filter_chip_color:'Color', filter_chip_status:'Status',
+
+    // ── Statistics view (complete) ──
+    stats_click_filter:'(click to filter)',
+    stats_total:'Total pigeons', stats_title_total:'Show all pigeons',
+    stats_male:'♂ Cocks', stats_title_male:'Filter by cock (♂)',
+    stats_female:'♀ Hens', stats_title_female:'Filter by hen (♀)',
+    stats_instock:'In stock', stats_title_instock:'Show only pigeons in stock',
+    stats_with_both_parents:'With both parents', stats_vintages:'Vintages',
+    stats_stock_by_type:'Stock by pigeon type',
+    stats_title_racing:'Show racing pigeons in stock', stats_racing:'✈ Racing pigeons',
+    stats_title_breeding:'Show breeding pigeons in stock', stats_breeding:'🥚 Breeding pigeons',
+    stats_title_home:'Show home pigeons in stock', stats_home:'🏠 Home pigeons',
+    stats_per_vintage:'Pigeons per vintage', stats_title_vintage:'By vintage',
+    stats_colors:'Colors', stats_title_color:'By color',
+    stats_strains:'Lines / Strains', stats_title_strain:'By line/strain',
+    stats_breeders:'Breeders', stats_title_breeder:'By breeder',
+    stats_owners:'Owners', stats_title_owner:'By owner',
+    stats_location:'Location', stats_title_location:'By location',
+    stats_top20:'🏆 Top 20 Sires/Dams',
+    stats_top20_sub:'— pigeons with the most offspring in stock (click for details)',
+    stats_title_offspring:'Show offspring',
+    stats_no_top_vererber:'No offspring in stock with a linked parent found.',
+    stats_filter_suffix:'filter',
   }
 };
 function t(key){ return (I18N[LANG]&&I18N[LANG][key]) || I18N.de[key] || key; }
@@ -442,6 +504,48 @@ function renderLangSwitch(){
   const el=document.getElementById('langSwitch'); if(!el) return;
   el.innerHTML = ['de','en'].map(l=>`<button onclick="setLang('${l}')" style="cursor:pointer;border:1px solid var(--border);background:${LANG===l?'var(--green)':'var(--bg3)'};color:${LANG===l?'#0b1210':'var(--text2)'};font-weight:600;font-size:11px;padding:4px 9px;border-radius:20px 0 0 20px;border-radius:${l==='de'?'20px 0 0 20px':'0 20px 20px 0'}">${l.toUpperCase()}</button>`).join('');
 }
+
+// ── Übersetzung von Datenbank-Freitextwerten (Farben, Status) ──────────
+// Farben und Status kommen als Freitext aus der Datenbank (nicht als feste
+// Enums) und werden bei aktiver EN-Ansicht wort-/phrasenweise übersetzt.
+// Unbekannte Wörter bleiben unverändert (besser Deutsch stehen lassen als
+// falsch übersetzen). Wörterbücher können hier jederzeit erweitert werden,
+// falls einzelne Farb-/Status-Werte in der Datenbank noch fehlen.
+const COLOR_I18N = {
+  'blau':'blue','rot':'red','schwarz':'black','weiß':'white','weiss':'white',
+  'gelb':'yellow','silber':'silver','braun':'brown','fahl':'dun',
+  'gehämmert':'checkered','gehaemmert':'checkered','gehammert':'checkered',
+  'scheck':'pied','gescheckt':'pied','schimmel':'grizzle','schalie':'slate',
+  'dunkel':'dark','hell':'light','gebändert':'barred','gebaendert':'barred',
+  'rostig':'rusty','rost':'rust','einfarbig':'solid','geflammt':'flecked',
+  'gestrichelt':'streaked','blässe':'blaze','blaesse':'blaze','platte':'bald-headed',
+  'elster':'magpie','gepudert':'powdered','matt':'matte','glanz':'glossy',
+  'gebrochen':'broken','getigert':'tiger-marked','mehlig':'mealy'
+};
+const STATUS_I18N = {
+  'ausgeblieben':'lost (did not return)','verstorben':'deceased','verkauft':'sold',
+  'verschenkt':'given away','abgegeben':'given away','entlaufen':'escaped',
+  'vermisst':'missing','verloren':'lost','aktiv':'active','inaktiv':'inactive',
+  'ausgemustert':'culled','krank':'sick','im bestand':'in stock',
+  'gastvogel':'guest bird','zugeflogen':'stray (flown in)','getauscht':'traded',
+  'geschlachtet':'culled','tot':'dead','geschenkt bekommen':'received as gift',
+  'zugekauft':'purchased','gekauft':'bought'
+};
+function capitalizeLike(original, translated){
+  if(original && /^\p{Lu}/u.test(original)) return translated.charAt(0).toUpperCase()+translated.slice(1);
+  return translated;
+}
+function translateWords(text, dict){
+  if(!text || LANG!=='en') return text||'';
+  const lower = text.trim().toLowerCase();
+  if(dict[lower]) return capitalizeLike(text.trim(), dict[lower]);
+  return text.split(/(\s+|[-,])/).map(part=>{
+    const key = part.toLowerCase();
+    return dict[key] ? capitalizeLike(part, dict[key]) : part;
+  }).join('');
+}
+function tColor(text){ return translateWords(text, COLOR_I18N); }
+function tStatus(text){ return translateWords(text, STATUS_I18N); }
 
 
 // Auth-State
@@ -759,11 +863,11 @@ const COLUMN_DEFS = [
     val:p=>sex_(p)==='M'?t('cock'):sex_(p)==='F'?t('hen'):'',
     cell:p=>{const sx=sex_(p); return sx==='M'?'<span class="badge badge-m">♂</span>':sx==='F'?'<span class="badge badge-f">♀</span>':'<span class="badge badge-u">?</span>';} },
   { key:'color', get label(){return t('fld_color');}, sortKey:'color',
-    val:p=>p.color||'', cell:p=>escH(p.color||'—') },
+    val:p=>tColor(p.color)||'', cell:p=>escH(tColor(p.color))||'—' },
   { key:'strain', get label(){return t('fld_strain');}, sortKey:'strain',
     val:p=>p.strain||'', cell:p=>escH(p.strain||'—') },
   { key:'status', get label(){return t('fld_status');}, sortKey:'status',
-    val:p=>pigeonStateName(p), cell:p=>escH(pigeonStateName(p)||'—') },
+    val:p=>tStatus(pigeonStateName(p)), cell:p=>escH(tStatus(pigeonStateName(p)))||'—' },
   { key:'pigeontype', get label(){return t('fld_pigeontype');}, sortKey:'pigeontype',
     val:p=>p.pigeontype||'', cell:p=>{
       const pt=p.pigeontype;
@@ -1331,8 +1435,8 @@ async function exportPDF(){
     S.search?'Suche: "'+S.search+'"':null,
     S.sexFilter!=='all'?(S.sexFilter==='M'?'♂ Täuber':'♀ Täubin'):null,
     S.yearFilter!=='all'?'Jg. '+S.yearFilter:null,
-    S.colorFilter!=='all'?'Farbe: '+S.colorFilter:null,
-    S.stateFilter!=='all'?'Status: '+S.stateFilter:null,
+    S.colorFilter!=='all'?t('filter_chip_color')+': '+tColor(S.colorFilter):null,
+    S.stateFilter!=='all'?t('filter_chip_status')+': '+tStatus(S.stateFilter):null,
     S.standortFilter!=='all'?'Standort: '+S.standortFilter:null,
     S.inStockFilter==='yes'?'Im Bestand':S.inStockFilter==='no'?'Nicht im Bestand':null,
     S.typeFilter!=='all'?'Typ: '+S.typeFilter:null,
@@ -1665,7 +1769,7 @@ function renderReisenSubnav(active){
 function renderTaubenOverviewNav(active){
   const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="S.taubenView='${key}';render();window.scrollTo(0,0)">${icon} ${label}</button>`;
   return `<div class="subnav">
-    ${btn('liste','Liste','📋')}${btn('statistik','Statistik','📊')}
+    ${btn('liste',t('sub_liste'),'📋')}${btn('statistik',t('sub_statistik'),'📊')}
   </div>`;
 }
 // Subnav: Wege, eine neue Taube anzulegen (manuell, per Scan, per Datei-Import)
@@ -1844,11 +1948,11 @@ function renderList(){
         <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
           <select id="color-filter" onchange="S.colorFilter=this.value;S.page=0;applyFilter()">
             <option value="all">${t('filter_all_colors')}</option>
-            ${COLOR_FILTER_KEYWORDS.filter(k=>S.pigeons.some(p=>colorMatchesKeyword(p.color,k))).map(k=>`<option value="${escH(k)}"${S.colorFilter===k?' selected':''}>${escH(k)}</option>`).join('')}
+            ${COLOR_FILTER_KEYWORDS.filter(k=>S.pigeons.some(p=>colorMatchesKeyword(p.color,k))).map(k=>`<option value="${escH(k)}"${S.colorFilter===k?' selected':''}>${escH(tColor(k))}</option>`).join('')}
           </select>
           <select id="state-filter" onchange="S.stateFilter=this.value;S.page=0;applyFilter()">
             <option value="all">${t('filter_all_status')}</option>
-            ${(S.pigeonStates.length?S.pigeonStates:S.pigeons.filter(p=>p.pigeonstate).map(p=>({name:p.pigeonstate,pigeonstateid:p.pigeonstate}))).map(s=>`<option value="${escH(s.name)}"${S.stateFilter===s.name?' selected':''}>${escH(s.name)}</option>`).join('')}
+            ${(S.pigeonStates.length?S.pigeonStates:S.pigeons.filter(p=>p.pigeonstate).map(p=>({name:p.pigeonstate,pigeonstateid:p.pigeonstate}))).map(s=>`<option value="${escH(s.name)}"${S.stateFilter===s.name?' selected':''}>${escH(tStatus(s.name))}</option>`).join('')}
           </select>
           <select id="type-filter" onchange="S.typeFilter=this.value;S.page=0;applyFilter()">
             <option value="all">${t('filter_type_all')}</option>
@@ -1899,15 +2003,15 @@ function renderDetail(p){
   // Kernfelder oben (ohne Info/InternalInfo — die kommen separat)
   const coreFields=[
     [t('fld_ring'),p.ringnumber],[t('fld_ring_old'),p.ringnumberold],
-    [t('fld_year'),p.date_year],[t('fld_color'),p.color],[t('fld_race'),p.race],
+    [t('fld_year'),p.date_year],[t('fld_color'),tColor(p.color)],[t('fld_race'),p.race],
     [t('fld_strain'),p.strain],[t('fld_breeder'),p.breeder],[t('fld_owner'),p.owner],
     [t('fld_location'),p.standort],
     [t('fld_country'),p.countrycode],[t('fld_assocno'),p.associationno],
     [t('fld_birthday'),p.birthday],[t('fld_died'),p.died],
     [t('fld_bought'),p.bought],[t('fld_sold'),p.sold],
     [t('fld_instock'),p.instock!=null?(p.instock?t('yes_word'):t('no_word')):null],
-    [t('fld_pigeontype'),p.pigeontype||null],
-    [t('fld_status'),stateName||null],
+    [t('fld_pigeontype'),p.pigeontype?(p.pigeontype==='Reisetaube'?t('type_racing'):p.pigeontype==='Zuchttaube'?t('type_breeding'):p.pigeontype==='Heimtaube'?t('type_home'):p.pigeontype):null],
+    [t('fld_status'),stateName?tStatus(stateName):null],
     [t('fld_inbreedcoeff'),p.inbreedcoefficient!=null?Number(p.inbreedcoefficient).toFixed(4):null],
     [t('fld_calc_inbreed'),ib>0?`${(ib*100).toFixed(2)} %`:null],
     [t('fld_user1'),p.userdefined1],[t('fld_user2'),p.userdefined2],[t('fld_user3'),p.userdefined3],
@@ -1933,9 +2037,9 @@ function renderDetail(p){
             <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:4px">
               ${sx==='M'?`<span class="badge badge-m">♂ ${t('cock')}</span>`:sx==='F'?`<span class="badge badge-f">♀ ${t('hen')}</span>`:''}
               ${p.date_year?`<span class="badge badge-u">${t('year_abbr')} ${p.date_year}</span>`:''}
-              ${p.color?`<span class="badge badge-u">${escH(p.color)}</span>`:''}
+              ${p.color?`<span class="badge badge-u">${escH(tColor(p.color))}</span>`:''}
               ${p.strain?`<span class="badge badge-u">${escH(p.strain)}</span>`:''}
-              ${stateName?`<span class="badge" style="background:rgba(212,168,67,.12);color:var(--amber);border:1px solid rgba(212,168,67,.25)">${escH(stateName)}</span>`:''}
+              ${stateName?`<span class="badge" style="background:rgba(212,168,67,.12);color:var(--amber);border:1px solid rgba(212,168,67,.25)">${escH(tStatus(stateName))}</span>`:''}
               ${p.pigeontype==='Reisetaube'?`<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25)">✈ ${t('type_racing')}</span>`:''}
               ${p.pigeontype==='Zuchttaube'?`<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25)">🥚 ${t('type_breeding')}</span>`:''}
               ${p.pigeontype==='Heimtaube'?`<span class="badge badge-u">🏠 ${t('type_home')}</span>`:''}
@@ -2250,7 +2354,7 @@ function renderPedigreeInner(root, opts, embedded){
     const sx=sex_(p);
     const ib=calcInbreeding(p);
     const tags=[];
-    if(p.color)   tags.push(escH(p.color));
+    if(p.color)   tags.push(escH(tColor(p.color)));
     if(p.strain)  tags.push(escH(p.strain));
     if(p.breeder) tags.push(t('breeder_abbr')+' '+escH(p.breeder));
     const szRing = isRoot?'12px':'10px';
@@ -2285,7 +2389,7 @@ function renderPedigreeInner(root, opts, embedded){
         <div>
           <div class="serif" style="font-size:22px">${escH(root.name||ring(root))}</div>
           <div style="font-family:monospace;font-size:13px;color:var(--green);margin-top:4px">
-            ${escH(ring(root))} · ${sx==='M'?'♂ '+t('cock'):sx==='F'?'♀ '+t('hen'):'?'} · ${t('year_abbr')} ${root.date_year||'—'}${root.color?` · ${escH(root.color)}`:''}
+            ${escH(ring(root))} · ${sx==='M'?'♂ '+t('cock'):sx==='F'?'♀ '+t('hen'):'?'} · ${t('year_abbr')} ${root.date_year||'—'}${root.color?` · ${escH(tColor(root.color))}`:''}
           </div>
           ${ib>0?`<div style="margin-top:6px;font-size:12px;color:${ib<0.03?'var(--green)':ib<0.1?'var(--orange)':'#e07070'}">${t('inbreeding_label')} ${(ib*100).toFixed(2)} %</div>`:''}
         </div>
@@ -2688,7 +2792,7 @@ function renderPaarung(){
           <div>
             <div style="font-size:15px;font-weight:500">${escH(current.name||ring(current))}</div>
             <div style="font-family:monospace;font-size:12px;color:var(--green)">${escH(ring(current))}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:2px">${current.date_year||''} ${current.color?'· '+escH(current.color):''}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${current.date_year||''} ${current.color?'· '+escH(tColor(current.color)):''}</div>
           </div>
           <button class="btn btn-outline btn-sm" onclick="S.${role}=null;render()">✕ Ändern</button>
         </div>`
@@ -3167,7 +3271,7 @@ function renderScanResult(){
         <span title="${m?'In Datenbank':'Neu'}" style="font-size:11px;flex-shrink:0">${statusIcon}</span>
       </div>
       ${p.name?`<div class="ped-name" style="font-size:${k==='proband'?'13px':'11px'}">${escH(p.name)}</div>`:''}
-      <div style="font-size:9px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[p.date_year,p.color,p.strain].filter(Boolean).join(' · ')}</div>
+      <div style="font-size:9px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[p.date_year,tColor(p.color),p.strain].filter(Boolean).join(' · ')}</div>
       <div style="margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
         <span style="font-size:9px;padding:0 5px;border-radius:8px;background:${act==='skip'?'var(--bg4)':'rgba(91,134,89,.15)'};color:${act==='skip'?'var(--text3)':'var(--green)'};border:1px solid ${act==='skip'?'var(--border)':'rgba(91,134,89,.3)'}">${act==='skip'?'übersprungen':act==='update'?'ergänzen':'neu'}</span>
         ${instockOn?`<span style="font-size:9px;padding:0 5px;border-radius:8px;background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.3)">Bestand</span>`:''}
@@ -6053,39 +6157,39 @@ function renderStats(){
 
   return `
     <div class="stats-grid">
-      <div class="stat-card" onclick="statsGoToListe();resetTaubenFilter();applyFilter();window.scrollTo(0,0)" style="cursor:pointer" title="Alle Tauben anzeigen"><div class="stat-num">${total.toLocaleString('de')}</div><div class="stat-label">Tauben gesamt</div></div>
-      <div class="stat-card clickable" onclick="statsFilterSex('M')" title="Nach Täuber (♂) filtern"><div class="stat-num">${males.toLocaleString('de')}</div><div class="stat-label">♂ Täuber</div></div>
-      <div class="stat-card clickable" onclick="statsFilterSex('F')" title="Nach Täubin (♀) filtern"><div class="stat-num">${females.toLocaleString('de')}</div><div class="stat-label">♀ Täubin</div></div>
+      <div class="stat-card" onclick="statsGoToListe();resetTaubenFilter();applyFilter();window.scrollTo(0,0)" style="cursor:pointer" title="${t('stats_title_total')}"><div class="stat-num">${total.toLocaleString('de')}</div><div class="stat-label">${t('stats_total')}</div></div>
+      <div class="stat-card clickable" onclick="statsFilterSex('M')" title="${t('stats_title_male')}"><div class="stat-num">${males.toLocaleString('de')}</div><div class="stat-label">${t('stats_male')}</div></div>
+      <div class="stat-card clickable" onclick="statsFilterSex('F')" title="${t('stats_title_female')}"><div class="stat-num">${females.toLocaleString('de')}</div><div class="stat-label">${t('stats_female')}</div></div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
-      <div class="stat-card clickable" onclick="statsFilterInstock()" title="Nur Bestandstauben anzeigen"><div class="stat-num" style="font-size:24px">${instock.toLocaleString('de')}</div><div class="stat-label">Im Bestand</div></div>
-      <div class="stat-card"><div class="stat-num" style="font-size:24px">${withBoth.toLocaleString('de')}</div><div class="stat-label">Mit beiden Eltern</div></div>
-      <div class="stat-card"><div class="stat-num" style="font-size:24px">${Object.keys(years).length}</div><div class="stat-label">Jahrgänge</div></div>
+      <div class="stat-card clickable" onclick="statsFilterInstock()" title="${t('stats_title_instock')}"><div class="stat-num" style="font-size:24px">${instock.toLocaleString('de')}</div><div class="stat-label">${t('stats_instock')}</div></div>
+      <div class="stat-card"><div class="stat-num" style="font-size:24px">${withBoth.toLocaleString('de')}</div><div class="stat-label">${t('stats_with_both_parents')}</div></div>
+      <div class="stat-card"><div class="stat-num" style="font-size:24px">${Object.keys(years).length}</div><div class="stat-label">${t('stats_vintages')}</div></div>
     </div>
     <div class="card">
-      <div class="card-title">Bestand nach Taubentyp <span style="color:var(--text3);font-weight:400;font-size:11px">(anklicken zum Filtern)</span></div>
+      <div class="card-title">${t('stats_stock_by_type')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
-        <div class="stat-card clickable" onclick="statsFilterTypeInstock('Reisetaube')" title="Reisetauben im Bestand anzeigen"><div class="stat-num" style="font-size:22px">${reiseInstock.toLocaleString('de')}</div><div class="stat-label">✈ Reisetauben</div></div>
-        <div class="stat-card clickable" onclick="statsFilterTypeInstock('Zuchttaube')" title="Zuchttauben im Bestand anzeigen"><div class="stat-num" style="font-size:22px">${zuchtInstock.toLocaleString('de')}</div><div class="stat-label">🥚 Zuchttauben</div></div>
-        <div class="stat-card clickable" onclick="statsFilterTypeInstock('Heimtaube')" title="Heimtauben im Bestand anzeigen"><div class="stat-num" style="font-size:22px">${heimInstock.toLocaleString('de')}</div><div class="stat-label">🏠 Heimtauben</div></div>
+        <div class="stat-card clickable" onclick="statsFilterTypeInstock('Reisetaube')" title="${t('stats_title_racing')}"><div class="stat-num" style="font-size:22px">${reiseInstock.toLocaleString('de')}</div><div class="stat-label">${t('stats_racing')}</div></div>
+        <div class="stat-card clickable" onclick="statsFilterTypeInstock('Zuchttaube')" title="${t('stats_title_breeding')}"><div class="stat-num" style="font-size:22px">${zuchtInstock.toLocaleString('de')}</div><div class="stat-label">${t('stats_breeding')}</div></div>
+        <div class="stat-card clickable" onclick="statsFilterTypeInstock('Heimtaube')" title="${t('stats_title_home')}"><div class="stat-num" style="font-size:22px">${heimInstock.toLocaleString('de')}</div><div class="stat-label">${t('stats_home')}</div></div>
       </div>
     </div>
     <div class="card">
-      <div class="card-title">Tauben pro Jahrgang <span style="color:var(--text3);font-weight:400;font-size:11px">(anklicken zum Filtern)</span></div>
-      ${topYears.map(([y,n])=>`<div class="bar-row clickable" onclick="statsFilterYear(${jsAttr(y)})" title="Nach Jahrgang ${escH(y)} filtern"><span class="bar-label">${escH(y)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/maxY*100)}%"><span>${n}</span></div></div></div>`).join('')}
+      <div class="card-title">${t('stats_per_vintage')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div>
+      ${topYears.map(([y,n])=>`<div class="bar-row clickable" onclick="statsFilterYear(${jsAttr(y)})" title="${t('stats_title_vintage')} ${escH(y)} ${t('stats_filter_suffix')}"><span class="bar-label">${escH(y)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/maxY*100)}%"><span>${n}</span></div></div></div>`).join('')}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-      ${topColors.length?`<div class="card"><div class="card-title">Farben <span style="color:var(--text3);font-weight:400;font-size:11px">(anklicken zum Filtern)</span></div><div class="tag-list">${topColors.map(([c,n])=>`<div class="tag clickable" onclick="statsFilterColor(${jsAttr(c)})" title="Nach Farbe ${escH(c)} filtern">${escH(c)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
-      ${topStrains.length?`<div class="card"><div class="card-title">Linien / Stämme <span style="color:var(--text3);font-weight:400;font-size:11px">(anklicken zum Filtern)</span></div><div class="tag-list">${topStrains.map(([s,n])=>`<div class="tag clickable" onclick="statsFilterStrain(${jsAttr(s)})" title="Nach Linie/Stamm ${escH(s)} filtern">${escH(s)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+      ${topColors.length?`<div class="card"><div class="card-title">${t('stats_colors')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div><div class="tag-list">${topColors.map(([c,n])=>`<div class="tag clickable" onclick="statsFilterColor(${jsAttr(c)})" title="${t('stats_title_color')} ${escH(tColor(c))} ${t('stats_filter_suffix')}">${escH(tColor(c))}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+      ${topStrains.length?`<div class="card"><div class="card-title">${t('stats_strains')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div><div class="tag-list">${topStrains.map(([s,n])=>`<div class="tag clickable" onclick="statsFilterStrain(${jsAttr(s)})" title="${t('stats_title_strain')} ${escH(s)} ${t('stats_filter_suffix')}">${escH(s)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
-      ${topBreeders.length?`<div class="card"><div class="card-title">Züchter <span style="color:var(--text3);font-weight:400;font-size:11px">(anklicken zum Filtern)</span></div><div class="tag-list">${topBreeders.map(([b,n])=>`<div class="tag clickable" onclick="statsFilterBreeder(${jsAttr(b)})" title="Nach Züchter ${escH(b)} filtern">${escH(b)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
-      ${topOwners.length?`<div class="card"><div class="card-title">Besitzer <span style="color:var(--text3);font-weight:400;font-size:11px">(anklicken zum Filtern)</span></div><div class="tag-list">${topOwners.map(([o,n])=>`<div class="tag clickable" onclick="statsFilterOwner(${jsAttr(o)})" title="Nach Besitzer ${escH(o)} filtern">${escH(o)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
-      ${topStandorte.length?`<div class="card"><div class="card-title">Standort <span style="color:var(--text3);font-weight:400;font-size:11px">(anklicken zum Filtern)</span></div><div class="tag-list">${topStandorte.map(([st,n])=>`<div class="tag clickable" onclick="statsFilterStandort(${jsAttr(st)})" title="Nach Standort ${escH(st)} filtern">${escH(st)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+      ${topBreeders.length?`<div class="card"><div class="card-title">${t('stats_breeders')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div><div class="tag-list">${topBreeders.map(([b,n])=>`<div class="tag clickable" onclick="statsFilterBreeder(${jsAttr(b)})" title="${t('stats_title_breeder')} ${escH(b)} ${t('stats_filter_suffix')}">${escH(b)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+      ${topOwners.length?`<div class="card"><div class="card-title">${t('stats_owners')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div><div class="tag-list">${topOwners.map(([o,n])=>`<div class="tag clickable" onclick="statsFilterOwner(${jsAttr(o)})" title="${t('stats_title_owner')} ${escH(o)} ${t('stats_filter_suffix')}">${escH(o)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+      ${topStandorte.length?`<div class="card"><div class="card-title">${t('stats_location')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div><div class="tag-list">${topStandorte.map(([st,n])=>`<div class="tag clickable" onclick="statsFilterStandort(${jsAttr(st)})" title="${t('stats_title_location')} ${escH(st)} ${t('stats_filter_suffix')}">${escH(st)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
     </div>
     <div class="card">
-      <div class="card-title">🏆 Top-20-Vererber <span style="color:var(--text3);font-weight:400;font-size:11px">— Tauben mit den meisten Nachkommen im Bestand (anklicken für Details)</span></div>
-      ${topVererber.length?topVererber.map(x=>`<div class="bar-row clickable" onclick="showNachkommen('${x.p.pigeonid}')" title="Nachkommen von ${escH(ring(x.p))} anzeigen"><span class="bar-label" style="width:auto;min-width:90px;text-align:left;padding-right:8px">${escH(ring(x.p))}${x.p.name?` · ${escH(x.p.name)}`:''}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(x.n/maxV*100)}%"><span>${x.n}</span></div></div></div>`).join(''):'<div style="color:var(--text3);font-size:13px;padding:8px 0">Keine Nachkommen im Bestand mit Eltern-Verknüpfung gefunden.</div>'}
+      <div class="card-title">${t('stats_top20')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_top20_sub')}</span></div>
+      ${topVererber.length?topVererber.map(x=>`<div class="bar-row clickable" onclick="showNachkommen('${x.p.pigeonid}')" title="${t('stats_title_offspring')} ${escH(ring(x.p))}"><span class="bar-label" style="width:auto;min-width:90px;text-align:left;padding-right:8px">${escH(ring(x.p))}${x.p.name?` · ${escH(x.p.name)}`:''}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(x.n/maxV*100)}%"><span>${x.n}</span></div></div></div>`).join(''):`<div style="color:var(--text3);font-size:13px;padding:8px 0">${t('stats_no_top_vererber')}</div>`}
     </div>`;
 }
 
@@ -6195,12 +6299,12 @@ function findChildren(pigeonId){
 }
 
 function statusStyle(p){
-  if(p.died) return {label:'Verstorben',color:'#e07070',bg:'#1e0f0f'};
-  if(p.sold) return {label:'Verkauft',color:'var(--orange)',bg:'#2a1a0a'};
-  if(p.instock===false) return {label:'Nicht im Bestand',color:'#c8883a',bg:'#2a1a0a'};
-  if(sex_(p)==='M') return {label:'Täuber (aktiv)',color:'#7ab3e0',bg:'#1a2d4a'};
-  if(sex_(p)==='F') return {label:'Täubin (aktiv)',color:'#c97fd4',bg:'#2d1a3d'};
-  return {label:'Im Bestand',color:'var(--green)',bg:'color-mix(in srgb,var(--green) 10%,var(--bg3))'};
+  if(p.died) return {label:t('status_died'),color:'#e07070',bg:'#1e0f0f'};
+  if(p.sold) return {label:t('status_sold'),color:'var(--orange)',bg:'#2a1a0a'};
+  if(p.instock===false) return {label:t('status_not_instock'),color:'#c8883a',bg:'#2a1a0a'};
+  if(sex_(p)==='M') return {label:t('status_cock_active'),color:'#7ab3e0',bg:'#1a2d4a'};
+  if(sex_(p)==='F') return {label:t('status_hen_active'),color:'#c97fd4',bg:'#2d1a3d'};
+  return {label:t('status_instock'),color:'var(--green)',bg:'color-mix(in srgb,var(--green) 10%,var(--bg3))'};
 }
 
 function birdCard(p){
@@ -6211,7 +6315,7 @@ function birdCard(p){
     +'<div style="font-family:monospace;font-size:11px;color:var(--green)">'+escH(ring(p))+'</div>'
     +(p.name?'<div style="font-size:13px;font-weight:500;color:var(--text);margin-top:2px">'+escH(p.name)+'</div>':'')
     +'<div style="font-size:11px;color:var(--text3);margin-top:3px">'
-    +[p.date_year,p.color,p.strain].filter(Boolean).map(escH).join(' · ')
+    +[p.date_year,tColor(p.color),p.strain].filter(Boolean).map(escH).join(' · ')
     +'</div>'
     +(via?'<div style="font-size:10px;color:var(--text3);margin-top:3px">via <span style="font-family:monospace;color:var(--blue)">'+escH(ring(via))+'</span></div>':'')
     +'<div style="display:flex;gap:6px;margin-top:7px">'
