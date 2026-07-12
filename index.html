@@ -354,6 +354,26 @@ const I18N = {
     ph_breeder:'Name des Züchters', ph_owner:'Name des Besitzers', ph_location:'z.B. eigener Schlag, Name des Halters…',
     ph_info:'Erfolge, Herkunft, Abstammungsbeschreibung…', ph_internal_info:'Interne Notizen…',
     fld_info_notes:'Info / Notizen', btn_reset:'Zurücksetzen', btn_save_pigeon:'🕊 Taube speichern',
+
+    // ── Tauben-Übersicht (Tabelle/Karten), Filterleiste, Detail-Vorschau ──
+    col_endnumber:'Endnummer', col_reiseleistung:'Reiseleistung',
+    search_placeholder:'Endnr. (1), Jahrg+Nr (26/1), Name+Nr (idefix 1), Text…',
+    search_title:'26/1 = Jahrgang 2026 Endnummer 1 | idefix 1 = Name + Nummer | 455 = Endnummer',
+    search_clear_title:'Suche löschen',
+    filter_tools:'⚙️ Filter & Werkzeuge', filter_all:'Alle',
+    filter_sex_m:'♂ Täuber', filter_sex_f:'♀ Täubin',
+    filter_all_years:'Alle Jahrgänge', filter_all_stock:'Alle Bestände',
+    filter_instock:'Im Bestand', filter_not_instock:'Nicht im Bestand',
+    filter_reset:'↺ Filter zurücksetzen', filter_all_colors:'🎨 Alle Farben',
+    filter_all_status:'📋 Alle Status', filter_type_all:'🏁 Typ: Alle',
+    filter_all_locations:'📍 Alle Standorte', col_picker_btn:'☰ Spalten',
+    bulk_start:'🧩 Massenbearbeitung', bulk_stop:'✕ Massenbearbeitung beenden',
+    cleanup_btn:'🧹 Ringnummern bereinigen', export_csv:'📥 CSV', export_pdf:'🖨 PDF-Liste',
+    col_picker_hint:'Reihenfolge der aktiven Spalten mit ↑ ↓ anpassen. Gilt für Tabelle, Karten- und Export-Ansicht (CSV/PDF).',
+    col_picker_more:'Weitere Spalten', col_picker_resetbtn:'↺ Standard wiederherstellen',
+    btn_edit_pigeon:'✏️ Bearbeiten', detail_not_instock:'Nicht im Bestand',
+    fld_inbreedcoeff:'Inzuchtkoeff.', fld_calc_inbreed:'Ber. Inzucht',
+    fld_user1:'Benutzer 1', fld_user2:'Benutzer 2', fld_user3:'Benutzer 3',
   },
   en: {
     nav_pigeons:'Pigeons', nav_add:'Add', nav_racing:'Racing',
@@ -394,6 +414,26 @@ const I18N = {
     ph_breeder:'Breeder name', ph_owner:'Owner name', ph_location:'e.g. own loft, keeper name…',
     ph_info:'Achievements, origin, pedigree notes…', ph_internal_info:'Internal notes…',
     fld_info_notes:'Info / Notes', btn_reset:'Reset', btn_save_pigeon:'🕊 Save Pigeon',
+
+    // ── Pigeon overview (table/cards), filter bar, detail preview ──
+    col_endnumber:'End Number', col_reiseleistung:'Race Performance',
+    search_placeholder:'End no. (1), Year+No (26/1), Name+No (idefix 1), text…',
+    search_title:'26/1 = year 2026 end number 1 | idefix 1 = name + number | 455 = end number',
+    search_clear_title:'Clear search',
+    filter_tools:'⚙️ Filters & Tools', filter_all:'All',
+    filter_sex_m:'♂ Cock', filter_sex_f:'♀ Hen',
+    filter_all_years:'All years', filter_all_stock:'All stock',
+    filter_instock:'In stock', filter_not_instock:'Not in stock',
+    filter_reset:'↺ Reset filters', filter_all_colors:'🎨 All colors',
+    filter_all_status:'📋 All statuses', filter_type_all:'🏁 Type: All',
+    filter_all_locations:'📍 All locations', col_picker_btn:'☰ Columns',
+    bulk_start:'🧩 Bulk edit', bulk_stop:'✕ End bulk edit',
+    cleanup_btn:'🧹 Clean up ring numbers', export_csv:'📥 CSV', export_pdf:'🖨 PDF list',
+    col_picker_hint:'Adjust the order of active columns with ↑ ↓. Applies to the table, card and export view (CSV/PDF).',
+    col_picker_more:'More columns', col_picker_resetbtn:'↺ Restore default',
+    btn_edit_pigeon:'✏️ Edit', detail_not_instock:'Not in stock',
+    fld_inbreedcoeff:'Inbreeding Coeff.', fld_calc_inbreed:'Calc. Inbreeding',
+    fld_user1:'User Field 1', fld_user2:'User Field 2', fld_user3:'User Field 3',
   }
 };
 function t(key){ return (I18N[LANG]&&I18N[LANG][key]) || I18N.de[key] || key; }
@@ -702,52 +742,52 @@ function compareSortParts(a,b){
 // sortVal()= Vergleichswert für die Sortierung, fällt auf val() zurück
 // sortKey  = interner Key für die bestehende sortBy()/applyFilter()-Logik
 const COLUMN_DEFS = [
-  { key:'ringnumber', label:'Ringnummer', sortKey:'ringnumber',
+  { key:'ringnumber', get label(){return t('fld_ring');}, sortKey:'ringnumber',
     val:p=>ring(p), sortVal:p=>ringSortParts(p),
     cell:p=>`<span class="ring">${escH(ring(p))}</span>` },
-  { key:'endnumber', label:'Endnummer', sortKey:'endnumber',
+  { key:'endnumber', get label(){return t('col_endnumber');}, sortKey:'endnumber',
     val:p=>{ const n=endNumberOf(p); return n==null?'':String(n); },
     sortVal:p=>{ const n=endNumberOf(p); return n==null?-1:n; },
     cell:p=>{ const n=endNumberOf(p); return n==null?'—':String(n); } },
-  { key:'name', label:'Name', sortKey:'name',
+  { key:'name', get label(){return t('fld_name');}, sortKey:'name',
     val:p=>p.name||'',
     cell:p=>escH(p.name||'')||'<span style="color:var(--text3)">—</span>' },
-  { key:'year', label:'Jahrgang', sortKey:'year',
+  { key:'year', get label(){return t('fld_year');}, sortKey:'year',
     val:p=>p.date_year||'', sortVal:p=>p.date_year||0,
     cell:p=>p.date_year||'—' },
-  { key:'gender', label:'Geschlecht', sortKey:'gender',
-    val:p=>sex_(p)==='M'?'Täuber':sex_(p)==='F'?'Täubin':'',
+  { key:'gender', get label(){return t('fld_gender');}, sortKey:'gender',
+    val:p=>sex_(p)==='M'?t('cock'):sex_(p)==='F'?t('hen'):'',
     cell:p=>{const sx=sex_(p); return sx==='M'?'<span class="badge badge-m">♂</span>':sx==='F'?'<span class="badge badge-f">♀</span>':'<span class="badge badge-u">?</span>';} },
-  { key:'color', label:'Farbe', sortKey:'color',
+  { key:'color', get label(){return t('fld_color');}, sortKey:'color',
     val:p=>p.color||'', cell:p=>escH(p.color||'—') },
-  { key:'strain', label:'Linie', sortKey:'strain',
+  { key:'strain', get label(){return t('fld_strain');}, sortKey:'strain',
     val:p=>p.strain||'', cell:p=>escH(p.strain||'—') },
-  { key:'status', label:'Status', sortKey:'status',
+  { key:'status', get label(){return t('fld_status');}, sortKey:'status',
     val:p=>pigeonStateName(p), cell:p=>escH(pigeonStateName(p)||'—') },
-  { key:'pigeontype', label:'Taubentyp', sortKey:'pigeontype',
+  { key:'pigeontype', get label(){return t('fld_pigeontype');}, sortKey:'pigeontype',
     val:p=>p.pigeontype||'', cell:p=>{
-      const t=p.pigeontype;
-      if(t==='Reisetaube') return '<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25)">✈ Reisetaube</span>';
-      if(t==='Zuchttaube') return '<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25)">🥚 Zuchttaube</span>';
-      if(t==='Heimtaube') return '<span class="badge badge-u">🏠 Heimtaube</span>';
+      const pt=p.pigeontype;
+      if(pt==='Reisetaube') return `<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25)">✈ ${t('type_racing')}</span>`;
+      if(pt==='Zuchttaube') return `<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25)">🥚 ${t('type_breeding')}</span>`;
+      if(pt==='Heimtaube') return `<span class="badge badge-u">🏠 ${t('type_home')}</span>`;
       return '—';
     } },
-  { key:'instock', label:'Im Bestand', sortKey:'instock',
-    val:p=>p.instock!=null?(p.instock?'Ja':'Nein'):'', sortVal:p=>p.instock?1:0,
-    cell:p=>p.instock?'<span style="color:var(--green)">✓ Ja</span>':'<span style="color:var(--text3)">Nein</span>' },
-  { key:'standort', label:'Standort / akt. Besitzer', sortKey:'standort',
+  { key:'instock', get label(){return t('fld_instock');}, sortKey:'instock',
+    val:p=>p.instock!=null?(p.instock?t('yes_word'):t('no_word')):'', sortVal:p=>p.instock?1:0,
+    cell:p=>p.instock?`<span style="color:var(--green)">✓ ${t('yes_word')}</span>`:`<span style="color:var(--text3)">${t('no_word')}</span>` },
+  { key:'standort', get label(){return t('fld_location');}, sortKey:'standort',
     val:p=>p.standort||'', cell:p=>escH(p.standort||'—') },
-  { key:'father', label:'Vater', sortKey:'father',
+  { key:'father', get label(){return t('fld_father');}, sortKey:'father',
     val:p=>{const f=findFather(p); return f?ring(f):(p.ringnumberfather||'');},
     cell:p=>{const f=findFather(p); const r=f?ring(f):(p.ringnumberfather||''); return r?`<span class="ring-sm" onclick="event.stopPropagation();${f?`selectPigeon('${f.pigeonid}')`:'void(0)'}">${escH(r)}</span>`:'—';} },
-  { key:'mother', label:'Mutter', sortKey:'mother',
+  { key:'mother', get label(){return t('fld_mother');}, sortKey:'mother',
     val:p=>{const m=findMother(p); return m?ring(m):(p.ringnumbermother||'');},
     cell:p=>{const m=findMother(p); const r=m?ring(m):(p.ringnumbermother||''); return r?`<span class="ring-sm" onclick="event.stopPropagation();${m?`selectPigeon('${m.pigeonid}')`:'void(0)'}">${escH(r)}</span>`:'—';} },
-  { key:'breeder', label:'Züchter', sortKey:'breeder',
+  { key:'breeder', get label(){return t('fld_breeder');}, sortKey:'breeder',
     val:p=>p.breeder||'', cell:p=>escH(p.breeder||'—') },
-  { key:'owner', label:'Besitzer', sortKey:'owner',
+  { key:'owner', get label(){return t('fld_owner');}, sortKey:'owner',
     val:p=>p.owner||'', cell:p=>escH(p.owner||'—') },
-  { key:'reiseleistung', label:'Reiseleistung',
+  { key:'reiseleistung', get label(){return t('col_reiseleistung');},
     // Kein sortKey: Reisedaten werden nur seitenweise nachgeladen (PT_CACHE), eine
     // Sortierung über alle gefilterten Tauben hinweg wäre daher unvollständig/irreführend.
     val:p=>{ const s=pigeonReiseSummary(p.pigeonid); return (s&&s.gesetzt)?`${s.preise}/${s.gesetzt} Preise, Σ AS ${s.asSum.toFixed(2)}`:''; },
@@ -837,12 +877,12 @@ function columnPickerMenuHTML(){
         <button type="button" class="btn btn-outline btn-sm" style="padding:2px 8px;line-height:1" title="Nach unten" ${i===arr.length-1?'disabled':''} onclick="moveColumn('${c.key}',1)">↓</button>`:''}
     </div>`;
   return `
-    <div style="font-size:11px;color:var(--text3);margin-bottom:6px;line-height:1.4">Reihenfolge der aktiven Spalten mit ↑ ↓ anpassen. Gilt für Tabelle, Karten- und Export-Ansicht (CSV/PDF).</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:6px;line-height:1.4">${t('col_picker_hint')}</div>
     ${activeDefs.map((c,i,arr)=>row(c,i,arr,true)).join('')}
-    ${inactiveDefs.length?`<div style="border-top:1px solid var(--border);margin:8px 0 4px;padding-top:6px;font-size:11px;color:var(--text3)">Weitere Spalten</div>`:''}
+    ${inactiveDefs.length?`<div style="border-top:1px solid var(--border);margin:8px 0 4px;padding-top:6px;font-size:11px;color:var(--text3)">${t('col_picker_more')}</div>`:''}
     ${inactiveDefs.map((c,i,arr)=>row(c,i,arr,false)).join('')}
     <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
-      <button class="btn btn-outline btn-sm" style="width:100%" onclick="resetColumns()">↺ Standard wiederherstellen</button>
+      <button class="btn btn-outline btn-sm" style="width:100%" onclick="resetColumns()">${t('col_picker_resetbtn')}</button>
     </div>`;
 }
 function toggleColumnMenu(btn){
@@ -877,7 +917,7 @@ window.addEventListener('resize', ()=>{
 });
 function renderColumnPicker(){
   return `<div style="display:inline-block">
-    <button id="col-picker-btn" class="btn btn-outline btn-sm" onclick="event.stopPropagation();toggleColumnMenu(this)">☰ Spalten</button>
+    <button id="col-picker-btn" class="btn btn-outline btn-sm" onclick="event.stopPropagation();toggleColumnMenu(this)">${t('col_picker_btn')}</button>
     <div id="col-picker-menu" style="display:none;position:fixed;width:240px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;z-index:200;max-height:480px;overflow:auto;box-shadow:0 6px 20px rgba(0,0,0,.4)" onclick="event.stopPropagation()">
       ${columnPickerMenuHTML()}
     </div>
@@ -1776,57 +1816,57 @@ function renderList(){
     ${S.error?`<div class="error-box">⚠️ ${escH(S.error)}</div>`:''}
     <div class="search-row">
       <div class="search-wrap"><span class="search-icon">🔍</span>
-        <input id="tauben-search" type="text" placeholder="Endnr. (1), Jahrg+Nr (26/1), Name+Nr (idefix 1), Text…" title="26/1 = Jahrgang 2026 Endnummer 1 | idefix 1 = Name + Nummer | 455 = Endnummer" value="${escH(S.search)}" oninput="S.search=this.value;toggleSearchClear('tauben-search-clear',this.value);applyFilter()">
-        <button type="button" id="tauben-search-clear" class="search-clear" style="display:${S.search?'flex':'none'}" onclick="clearTaubenSearch()" title="Suche löschen" aria-label="Suche löschen">✕</button>
+        <input id="tauben-search" type="text" placeholder="${escH(t('search_placeholder'))}" title="${escH(t('search_title'))}" value="${escH(S.search)}" oninput="S.search=this.value;toggleSearchClear('tauben-search-clear',this.value);applyFilter()">
+        <button type="button" id="tauben-search-clear" class="search-clear" style="display:${S.search?'flex':'none'}" onclick="clearTaubenSearch()" title="${escH(t('search_clear_title'))}" aria-label="${escH(t('search_clear_title'))}">✕</button>
       </div>
       <span id="count-label" class="count-label">${S.filtered.length.toLocaleString('de')} / ${S.pigeons.length.toLocaleString('de')}</span>
     </div>
     <details class="filter-panel" id="filter-panel" ${S.filtersOpen?'open':''} ontoggle="S.filtersOpen=this.open">
-      <summary>⚙️ Filter &amp; Werkzeuge${activeFilterCount?` <span class="filter-badge">${activeFilterCount}</span>`:''}</summary>
+      <summary>${t('filter_tools')}${activeFilterCount?` <span class="filter-badge">${activeFilterCount}</span>`:''}</summary>
       <div class="filter-panel-body">
         <div class="toolbar">
           <select id="sex-filter" onchange="S.sexFilter=this.value;applyFilter()">
-            <option value="all" ${S.sexFilter==='all'?'selected':''}>Alle</option>
-            <option value="M" ${S.sexFilter==='M'?'selected':''}>♂ Täuber</option>
-            <option value="F" ${S.sexFilter==='F'?'selected':''}>♀ Täubin</option>
+            <option value="all" ${S.sexFilter==='all'?'selected':''}>${t('filter_all')}</option>
+            <option value="M" ${S.sexFilter==='M'?'selected':''}>${t('filter_sex_m')}</option>
+            <option value="F" ${S.sexFilter==='F'?'selected':''}>${t('filter_sex_f')}</option>
           </select>
           <select id="year-filter" onchange="S.yearFilter=this.value;applyFilter()">
-            <option value="all">Alle Jahrgänge</option>
+            <option value="all">${t('filter_all_years')}</option>
             ${years.map(y=>`<option value="${y}"${S.yearFilter===String(y)?' selected':''}>${y}</option>`).join('')}
           </select>
           <select id="stock-filter" onchange="S.inStockFilter=this.value;applyFilter()">
-            <option value="all">Alle Bestände</option>
-            <option value="yes"${S.inStockFilter==='yes'?' selected':''}>Im Bestand</option>
-            <option value="no"${S.inStockFilter==='no'?' selected':''}>Nicht im Bestand</option>
+            <option value="all">${t('filter_all_stock')}</option>
+            <option value="yes"${S.inStockFilter==='yes'?' selected':''}>${t('filter_instock')}</option>
+            <option value="no"${S.inStockFilter==='no'?' selected':''}>${t('filter_not_instock')}</option>
           </select>
-          <button class="btn btn-outline btn-sm" onclick="resetTaubenFilter()">↺ Filter zurücksetzen</button>
+          <button class="btn btn-outline btn-sm" onclick="resetTaubenFilter()">${t('filter_reset')}</button>
         </div>
         <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
           <select id="color-filter" onchange="S.colorFilter=this.value;S.page=0;applyFilter()">
-            <option value="all">🎨 Alle Farben</option>
+            <option value="all">${t('filter_all_colors')}</option>
             ${COLOR_FILTER_KEYWORDS.filter(k=>S.pigeons.some(p=>colorMatchesKeyword(p.color,k))).map(k=>`<option value="${escH(k)}"${S.colorFilter===k?' selected':''}>${escH(k)}</option>`).join('')}
           </select>
           <select id="state-filter" onchange="S.stateFilter=this.value;S.page=0;applyFilter()">
-            <option value="all">📋 Alle Status</option>
+            <option value="all">${t('filter_all_status')}</option>
             ${(S.pigeonStates.length?S.pigeonStates:S.pigeons.filter(p=>p.pigeonstate).map(p=>({name:p.pigeonstate,pigeonstateid:p.pigeonstate}))).map(s=>`<option value="${escH(s.name)}"${S.stateFilter===s.name?' selected':''}>${escH(s.name)}</option>`).join('')}
           </select>
           <select id="type-filter" onchange="S.typeFilter=this.value;S.page=0;applyFilter()">
-            <option value="all">🏁 Typ: Alle</option>
-            <option value="Reisetaube"${S.typeFilter==='Reisetaube'?' selected':''}>✈ Reisetaube</option>
-            <option value="Zuchttaube"${S.typeFilter==='Zuchttaube'?' selected':''}>🥚 Zuchttaube</option>
-            <option value="Heimtaube"${S.typeFilter==='Heimtaube'?' selected':''}>🏠 Heimtaube</option>
+            <option value="all">${t('filter_type_all')}</option>
+            <option value="Reisetaube"${S.typeFilter==='Reisetaube'?' selected':''}>✈ ${t('type_racing')}</option>
+            <option value="Zuchttaube"${S.typeFilter==='Zuchttaube'?' selected':''}>🥚 ${t('type_breeding')}</option>
+            <option value="Heimtaube"${S.typeFilter==='Heimtaube'?' selected':''}>🏠 ${t('type_home')}</option>
           </select>
           <select id="standort-filter" onchange="S.standortFilter=this.value;S.page=0;applyFilter()">
-            <option value="all">📍 Alle Standorte</option>
+            <option value="all">${t('filter_all_locations')}</option>
             ${[...new Set(S.pigeons.map(p=>p.standort).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}"${S.standortFilter===s?' selected':''}>${escH(s)}</option>`).join('')}
           </select>
         </div>
         <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
           ${renderColumnPicker()}
-          <button class="btn ${S.bulkMode?'':'btn-outline'} btn-sm" onclick="toggleBulkMode()">${S.bulkMode?'✕ Massenbearbeitung beenden':'🧩 Massenbearbeitung'}</button>
-          <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben einheitlich formatieren und Duplikate zusammenführen">🧹 Ringnummern bereinigen</button>
-          <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">📥 CSV</button>
-          <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">🖨 PDF-Liste</button>
+          <button class="btn ${S.bulkMode?'':'btn-outline'} btn-sm" onclick="toggleBulkMode()">${S.bulkMode?t('bulk_stop'):t('bulk_start')}</button>
+          <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben einheitlich formatieren und Duplikate zusammenführen">${t('cleanup_btn')}</button>
+          <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">${t('export_csv')}</button>
+          <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">${t('export_pdf')}</button>
         </div>
       </div>
     </details>
@@ -1858,19 +1898,19 @@ function renderDetail(p){
 
   // Kernfelder oben (ohne Info/InternalInfo — die kommen separat)
   const coreFields=[
-    ['Ringnummer',p.ringnumber],['Alte Ringnr.',p.ringnumberold],
-    ['Jahrgang',p.date_year],['Farbe',p.color],['Rasse',p.race],
-    ['Linie/Stamm',p.strain],['Züchter',p.breeder],['Besitzer',p.owner],
-    ['Standort / akt. Besitzer',p.standort],
-    ['Land',p.countrycode],['Verbandsnr.',p.associationno],
-    ['Geburtstag',p.birthday],['Verstorben',p.died],
-    ['Gekauft',p.bought],['Verkauft',p.sold],
-    ['Im Bestand',p.instock!=null?(p.instock?'Ja':'Nein'):null],
-    ['Taubentyp',p.pigeontype||null],
-    ['Status',stateName||null],
-    ['Inzuchtkoeff.',p.inbreedcoefficient!=null?Number(p.inbreedcoefficient).toFixed(4):null],
-    ['Ber. Inzucht',ib>0?`${(ib*100).toFixed(2)} %`:null],
-    ['Benutzer 1',p.userdefined1],['Benutzer 2',p.userdefined2],['Benutzer 3',p.userdefined3],
+    [t('fld_ring'),p.ringnumber],[t('fld_ring_old'),p.ringnumberold],
+    [t('fld_year'),p.date_year],[t('fld_color'),p.color],[t('fld_race'),p.race],
+    [t('fld_strain'),p.strain],[t('fld_breeder'),p.breeder],[t('fld_owner'),p.owner],
+    [t('fld_location'),p.standort],
+    [t('fld_country'),p.countrycode],[t('fld_assocno'),p.associationno],
+    [t('fld_birthday'),p.birthday],[t('fld_died'),p.died],
+    [t('fld_bought'),p.bought],[t('fld_sold'),p.sold],
+    [t('fld_instock'),p.instock!=null?(p.instock?t('yes_word'):t('no_word')):null],
+    [t('fld_pigeontype'),p.pigeontype||null],
+    [t('fld_status'),stateName||null],
+    [t('fld_inbreedcoeff'),p.inbreedcoefficient!=null?Number(p.inbreedcoefficient).toFixed(4):null],
+    [t('fld_calc_inbreed'),ib>0?`${(ib*100).toFixed(2)} %`:null],
+    [t('fld_user1'),p.userdefined1],[t('fld_user2'),p.userdefined2],[t('fld_user3'),p.userdefined3],
   ].filter(([,v])=>v!==null&&v!==undefined&&v!=='');
 
   return `
@@ -1891,36 +1931,36 @@ function renderDetail(p){
             <div class="detail-name">${escH(p.name||ring(p))}</div>
             <div class="detail-ring">🏷 ${escH(ring(p))}</div>
             <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:4px">
-              ${sx==='M'?'<span class="badge badge-m">♂ Täuber</span>':sx==='F'?'<span class="badge badge-f">♀ Täubin</span>':''}
-              ${p.date_year?`<span class="badge badge-u">Jg. ${p.date_year}</span>`:''}
+              ${sx==='M'?`<span class="badge badge-m">♂ ${t('cock')}</span>`:sx==='F'?`<span class="badge badge-f">♀ ${t('hen')}</span>`:''}
+              ${p.date_year?`<span class="badge badge-u">${t('year_abbr')} ${p.date_year}</span>`:''}
               ${p.color?`<span class="badge badge-u">${escH(p.color)}</span>`:''}
               ${p.strain?`<span class="badge badge-u">${escH(p.strain)}</span>`:''}
               ${stateName?`<span class="badge" style="background:rgba(212,168,67,.12);color:var(--amber);border:1px solid rgba(212,168,67,.25)">${escH(stateName)}</span>`:''}
-              ${p.pigeontype==='Reisetaube'?'<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25)">✈ Reisetaube</span>':''}
-              ${p.pigeontype==='Zuchttaube'?'<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25)">🥚 Zuchttaube</span>':''}
-              ${p.pigeontype==='Heimtaube'?'<span class="badge badge-u">🏠 Heimtaube</span>':''}
-              ${p.instock===false?'<span class="badge" style="background:#2a1a0a;color:#c8883a">Nicht im Bestand</span>':''}
+              ${p.pigeontype==='Reisetaube'?`<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25)">✈ ${t('type_racing')}</span>`:''}
+              ${p.pigeontype==='Zuchttaube'?`<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25)">🥚 ${t('type_breeding')}</span>`:''}
+              ${p.pigeontype==='Heimtaube'?`<span class="badge badge-u">🏠 ${t('type_home')}</span>`:''}
+              ${p.instock===false?`<span class="badge" style="background:#2a1a0a;color:#c8883a">${t('detail_not_instock')}</span>`:''}
             </div>
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-sm" onclick="startEdit('${p.pigeonid}')">✏️ Bearbeiten</button>
+          <button class="btn btn-sm" onclick="startEdit('${p.pigeonid}')">${t('btn_edit_pigeon')}</button>
         </div>
       </div>
 
       <!-- Eltern direkt oben -->
       ${(fR||mR)?`
-      <div class="section-label">Eltern</div>
+      <div class="section-label">${t('sec_parents')}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px">
         <div class="parent-card male ${!f?'unknown':''}" onclick="${f?`selectPigeon('${f.pigeonid}')`:'void(0)'}">
-          <div style="font-size:10px;color:var(--blue);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Vater</div>
-          <div class="ped-ring">${escH(fR||'Unbekannt')}</div>
+          <div style="font-size:10px;color:var(--blue);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${t('fld_father')}</div>
+          <div class="ped-ring">${escH(fR||t('ped_unknown'))}</div>
           ${f?`<div style="font-size:13px;color:var(--text);margin-top:3px">${escH(f.name||'—')}</div>
                <div style="font-size:11px;color:var(--text3);margin-top:2px">${[f.date_year,f.color].filter(Boolean).map(escH).join(' · ')}</div>`:''}
         </div>
         <div class="parent-card female ${!mo?'unknown':''}" onclick="${mo?`selectPigeon('${mo.pigeonid}')`:'void(0)'}">
-          <div style="font-size:10px;color:var(--purple);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Mutter</div>
-          <div class="ped-ring">${escH(mR||'Unbekannt')}</div>
+          <div style="font-size:10px;color:var(--purple);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${t('fld_mother')}</div>
+          <div class="ped-ring">${escH(mR||t('ped_unknown'))}</div>
           ${mo?`<div style="font-size:13px;color:var(--text);margin-top:3px">${escH(mo.name||'—')}</div>
                 <div style="font-size:11px;color:var(--text3);margin-top:2px">${[mo.date_year,mo.color].filter(Boolean).map(escH).join(' · ')}</div>`:''}
         </div>
@@ -1928,14 +1968,14 @@ function renderDetail(p){
 
       <!-- Info-Felder prominent -->
       ${p.info?`
-      <div class="section-label" style="margin-top:14px">Info</div>
+      <div class="section-label" style="margin-top:14px">${t('fld_info')}</div>
       <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${escH(p.info)}</div>`:''}
       ${p.internalinfo?`
-      <div class="section-label" style="margin-top:10px">Interne Info</div>
+      <div class="section-label" style="margin-top:10px">${t('fld_internal_info')}</div>
       <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${escH(p.internalinfo)}</div>`:''}
 
       <!-- Alle weiteren Felder -->
-      <div class="section-label" style="margin-top:14px">Details</div>
+      <div class="section-label" style="margin-top:14px">${t('sub_details')}</div>
       <div class="field-grid">
         ${coreFields.map(([l,v])=>`<div class="field-item"><label>${escH(l)}</label><span>${escH(String(v))}</span></div>`).join('')}
       </div>
