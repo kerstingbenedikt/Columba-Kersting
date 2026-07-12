@@ -327,6 +327,12 @@ const I18N = {
     th_name:'Name', th_breeder:'Züchter', th_speed:'m/min', th_prize:'Pr.',
     th_as:'AS', filtered_on:'gefiltert auf', season:'Saison',
     show_all_breeders:'Alle Züchter anzeigen',
+    ped_proband:'Proband', ped_parents:'Eltern', ped_grandparents:'Großeltern', ped_greatgrandparents:'Urgroßeltern',
+    cock:'Täuber', hen:'Täubin', ped_unknown:'Unbekannt', year_abbr:'Jg.', breeder_abbr:'Z:',
+    inbreeding_label:'Inzuchtkoeff. (ber.):', inbreeding_suffix:'Inzucht',
+    print_label:'Druck:', with_photo:'Mit Foto', breeder_data_btn:'Züchterdaten',
+    legend_click:'Klick → Stammbaum wechseln', pedigree_not_found:'Taube nicht gefunden.',
+    gens:'Gen.',
   },
   en: {
     nav_pigeons:'Pigeons', nav_add:'Add', nav_racing:'Racing',
@@ -340,6 +346,12 @@ const I18N = {
     th_name:'Name', th_breeder:'Breeder', th_speed:'m/min', th_prize:'Prize',
     th_as:'AS', filtered_on:'filtered on', season:'Season',
     show_all_breeders:'Show all breeders',
+    ped_proband:'Subject', ped_parents:'Parents', ped_grandparents:'Grandparents', ped_greatgrandparents:'Great-Grandparents',
+    cock:'Cock', hen:'Hen', ped_unknown:'Unknown', year_abbr:'Yr.', breeder_abbr:'Br:',
+    inbreeding_label:'Inbreeding coeff. (calc.):', inbreeding_suffix:'inbreeding',
+    print_label:'Print:', with_photo:'With photo', breeder_data_btn:'Breeder data',
+    legend_click:'Click → switch pedigree', pedigree_not_found:'Pigeon not found.',
+    gens:'gen.',
   }
 };
 function t(key){ return (I18N[LANG]&&I18N[LANG][key]) || I18N.de[key] || key; }
@@ -2141,7 +2153,7 @@ function renderPedigree(pid, opts){
   opts = opts || {};
   const embedded = opts.embedded===true;
   const root=findById(pid);
-  if(!root) return '<div style="padding:20px;color:var(--text3)">Taube nicht gefunden.</div>';
+  if(!root) return '<div style="padding:20px;color:var(--text3)">'+t('pedigree_not_found')+'</div>';
   try{
   return renderPedigreeInner(root, opts, embedded);
   } catch(e){
@@ -2152,13 +2164,13 @@ function renderPedigree(pid, opts){
 }
 function renderPedigreeInner(root, opts, embedded){
   function node(p,isRoot=false){
-    if(!p) return `<div class="ped-box empty" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:11px">—<br>Unbekannt</div></div>`;
+    if(!p) return `<div class="ped-box empty" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:11px">—<br>${t('ped_unknown')}</div></div>`;
     const sx=sex_(p);
     const ib=calcInbreeding(p);
     const tags=[];
     if(p.color)   tags.push(escH(p.color));
     if(p.strain)  tags.push(escH(p.strain));
-    if(p.breeder) tags.push('Z: '+escH(p.breeder));
+    if(p.breeder) tags.push(t('breeder_abbr')+' '+escH(p.breeder));
     const szRing = isRoot?'12px':'10px';
     const szName = isRoot?'13px':'11px';
     const fwName = isRoot?'700':'500';
@@ -2177,7 +2189,7 @@ function renderPedigreeInner(root, opts, embedded){
       ${p.name?`<div class="ped-name" style="font-size:${szName};font-weight:${fwName}">${escH(p.name)}</div>`:''}
       ${tags.length?`<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:2px">${tags.map(t=>`<span style="background:var(--bg4);border:1px solid var(--border);border-radius:3px;padding:0 4px;font-size:9px;color:var(--text3);white-space:nowrap">${t}</span>`).join('')}</div>`:''}
       ${infoHtml}
-      ${ib>0.01?`<div style="font-size:9px;margin-top:2px;color:${ib<0.03?'var(--green)':ib<0.1?'var(--orange)':'#e07070'}">⚠ ${(ib*100).toFixed(1)}% Inzucht</div>`:''}
+      ${ib>0.01?`<div style="font-size:9px;margin-top:2px;color:${ib<0.03?'var(--green)':ib<0.1?'var(--orange)':'#e07070'}">⚠ ${(ib*100).toFixed(1)}% ${t('inbreeding_suffix')}</div>`:''}
     </div>`;
   }
   const f=findFather(root),mo=findMother(root);
@@ -2191,40 +2203,40 @@ function renderPedigreeInner(root, opts, embedded){
         <div>
           <div class="serif" style="font-size:22px">${escH(root.name||ring(root))}</div>
           <div style="font-family:monospace;font-size:13px;color:var(--green);margin-top:4px">
-            ${escH(ring(root))} · ${sx==='M'?'♂ Täuber':sx==='F'?'♀ Täubin':'?'} · Jg. ${root.date_year||'—'}${root.color?` · ${escH(root.color)}`:''}
+            ${escH(ring(root))} · ${sx==='M'?'♂ '+t('cock'):sx==='F'?'♀ '+t('hen'):'?'} · ${t('year_abbr')} ${root.date_year||'—'}${root.color?` · ${escH(root.color)}`:''}
           </div>
-          ${ib>0?`<div style="margin-top:6px;font-size:12px;color:${ib<0.03?'var(--green)':ib<0.1?'var(--orange)':'#e07070'}">Inzuchtkoeff. (ber.): ${(ib*100).toFixed(2)} %</div>`:''}
+          ${ib>0?`<div style="margin-top:6px;font-size:12px;color:${ib<0.03?'var(--green)':ib<0.1?'var(--orange)':'#e07070'}">${t('inbreeding_label')} ${(ib*100).toFixed(2)} %</div>`:''}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span style="font-size:11px;color:var(--text3)">Druck:</span>
+            <span style="font-size:11px;color:var(--text3)">${t('print_label')}</span>
             <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);cursor:pointer">
-              <input type="checkbox" id="ped-print-photo" style="width:14px;height:14px;cursor:pointer"> Mit Foto
+              <input type="checkbox" id="ped-print-photo" style="width:14px;height:14px;cursor:pointer"> ${t('with_photo')}
             </label>
-            <button class="btn btn-outline btn-sm" onclick="triggerPrint('${root.pigeonid}',4,document.getElementById('ped-print-photo').checked)">🖨 4 Gen.</button>
-            <button class="btn btn-outline btn-sm" onclick="triggerPrint('${root.pigeonid}',5,document.getElementById('ped-print-photo').checked)">🖨 5 Gen.</button>
-            ${!embedded?`<button class="btn btn-outline btn-sm" onclick="toggleBreederProfileEditor()">🧑‍🌾 Züchterdaten</button>`:''}
+            <button class="btn btn-outline btn-sm" onclick="triggerPrint('${root.pigeonid}',4,document.getElementById('ped-print-photo').checked)">🖨 4 ${t('gens')}</button>
+            <button class="btn btn-outline btn-sm" onclick="triggerPrint('${root.pigeonid}',5,document.getElementById('ped-print-photo').checked)">🖨 5 ${t('gens')}</button>
+            ${!embedded?`<button class="btn btn-outline btn-sm" onclick="toggleBreederProfileEditor()">🧑‍🌾 ${t('breeder_data_btn')}</button>`:''}
           </div>
         </div>
       </div>
       ${!embedded && S.breederProfileEditing ? renderBreederProfileForm() : ''}
       <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap">
-        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--blue)"></span>Täuber</span>
-        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--purple)"></span>Täubin</span>
-        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--green)"></span>Proband</span>
-        <span style="font-size:12px;color:var(--text3)">Klick → Stammbaum wechseln</span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--blue)"></span>${t('cock')}</span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--purple)"></span>${t('hen')}</span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--green)"></span>${t('ped_proband')}</span>
+        <span style="font-size:12px;color:var(--text3)">${t('legend_click')}</span>
       </div>
       <div class="ped-wrap">
       <div style="display:grid;grid-template-columns:160px 28px 160px 28px 160px 28px 160px;grid-template-rows:28px repeat(8,95px);min-width:940px;align-items:stretch">
 
         <!-- Spalten-Header: nur über die Daten-Spalten, nicht Verbinder -->
-        <div class="ped-col-hdr" style="grid-column:1">Proband</div>
+        <div class="ped-col-hdr" style="grid-column:1">${t('ped_proband')}</div>
         <div style="grid-column:2"></div>
-        <div class="ped-col-hdr" style="grid-column:3">Eltern</div>
+        <div class="ped-col-hdr" style="grid-column:3">${t('ped_parents')}</div>
         <div style="grid-column:4"></div>
-        <div class="ped-col-hdr" style="grid-column:5">Großeltern</div>
+        <div class="ped-col-hdr" style="grid-column:5">${t('ped_grandparents')}</div>
         <div style="grid-column:6"></div>
-        <div class="ped-col-hdr" style="grid-column:7">Urgroßeltern</div>
+        <div class="ped-col-hdr" style="grid-column:7">${t('ped_greatgrandparents')}</div>
 
         <!-- PROBAND: Spalte 1 -->
         <div style="grid-column:1;grid-row:2/10;display:flex;align-items:center;justify-content:center;padding:4px">${node(root,true)}</div>
