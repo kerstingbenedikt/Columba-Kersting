@@ -316,12 +316,12 @@ const SUPA_KEY      = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 let LANG = localStorage.getItem('lang') || 'de';
 const I18N = {
   de: {
-    nav_pigeons:'Tauben', nav_add:'Hinzufügen', nav_racing:'Reisen',
-    sub_racing:'Reisen', sub_best:'Bestenliste', sub_breeders:'Züchter',
-    trip_word:'Reise', trips_word:'Reisen', all_trips:'Alle Reisen',
+    nav_pigeons:'Tauben', nav_add:'Hinzufügen', nav_racing:'Flüge',
+    sub_racing:'Flüge', sub_best:'Bestenliste', sub_breeders:'Züchter',
+    trip_word:'Flug', trips_word:'Flüge', all_trips:'Alle Flüge',
     all_breeders:'Alle Züchter', breeders_word:'Züchter',
     import_perf:'Leistungsdaten importieren', import_now:'Jetzt importieren',
-    no_trips:'Noch keine Reisen.', pigeons_set:'aufgesetzt',
+    no_trips:'Noch keine Flüge.', pigeons_set:'aufgesetzt',
     loading_results:'Lade Ergebnisse…', back:'Zurück',
     th_placement:'Pl.', th_placement_breeder:'Pl. Züchter', th_ring:'Ringnummer',
     th_name:'Name', th_breeder:'Züchter', th_speed:'m/min', th_prize:'Pr.',
@@ -405,6 +405,27 @@ const I18N = {
     stats_title_offspring:'Nachkommen anzeigen',
     stats_no_top_vererber:'Keine Nachkommen im Bestand mit Eltern-Verknüpfung gefunden.',
     stats_filter_suffix:'filtern',
+
+    // ── Züchterübersicht ──
+    zt_loading:'Lade Züchterdaten…', zt_empty1:'Noch keine Züchter-Daten importiert.',
+    zt_empty2:'Beim Import über den {tab}-Tab wird der Züchter automatisch aus der EDV-Kraus-Datei erkannt (Name aus der Datei, Nummer aus der Dateiendung).',
+    zt_back_all:'← Alle Züchter', zt_rv_label:'RV:', zt_reggr_label:'RegGr:', zt_reg_label:'Reg:',
+    col_number:'Nr.', col_pigeons_total:'Tauben ges.', col_avg_rv:'Ø RV', col_avg_reggr:'Ø RegGr', col_avg_reg:'Ø Reg',
+    col_best_as:'Bester AS', col_location:'Ort', col_date:'Datum', col_speed_mmin:'Flugmeter (m/min)',
+
+    // ── Bestenliste ──
+    bl_loading_perf:'Lade Leistungsdaten…', bl_loading_trips:'Lade Flüge…',
+    bl_tab_all:'🐦 Alle Tauben', bl_tab_cocks:'♂ Vögel', bl_tab_hens:'♀ Weibchen',
+    bl_tab_cocks_yl:'♂ Vögel (einjährig)', bl_tab_hens_yl:'♀ Weibchen (einjährig)',
+    bl_breeder_label:'Züchter:', bl_all_breeders_opt:'Gesamt (alle Züchter)',
+    bl_no_pigeons_cat:'Keine Tauben in dieser Kategorie.',
+    bl_desc1:'Je Reisesaison getrennt sortiert nach Anzahl Preise (ein Flug zählt als ein Preis, egal in wie vielen Listen RV/RegGr/Reg platziert wurde), bei Gleichstand nach Summe der AS-Punkte (je Flug wird der offizielle, aus der Importdatei übernommene AS-Wert gewertet — nicht selbst nachgerechnet).',
+    bl_desc2a:'Enthält auch Tauben ohne Zuordnung zur eigenen Datenbank (Jahrgang dann aus der Ringnummer abgeleitet).',
+    bl_desc2b:'Das Geschlecht stammt aus der Verbands-Importdatei, daher erscheinen hier auch Tauben ohne Zuordnung zur eigenen Datenbank.',
+    bl_desc3:'Über „+" lässt sich jede Taube aufklappen und die einzelnen Flüge (Platz &amp; AS-Wert) zur Kontrolle gegen das DSE-Portal prüfen.',
+    bl_no_flight_data:'Keine Flugdaten.', bl_sum_checked:'Summe geprüft:',
+    bl_sum_match:'✓ stimmt mit Σ AS überein', bl_sum_mismatch:'⚠ weicht von Σ AS ab — bitte melden',
+    col_prizes:'Preise', col_sum_as:'Σ AS',
   },
   en: {
     nav_pigeons:'Pigeons', nav_add:'Add', nav_racing:'Racing',
@@ -496,6 +517,27 @@ const I18N = {
     stats_title_offspring:'Show offspring',
     stats_no_top_vererber:'No offspring in stock with a linked parent found.',
     stats_filter_suffix:'filter',
+
+    // ── Breeder overview ──
+    zt_loading:'Loading breeder data…', zt_empty1:'No breeder data imported yet.',
+    zt_empty2:'When importing via the {tab} tab, the breeder is automatically detected from the EDV-Kraus file (name from the file, number from the file extension).',
+    zt_back_all:'← All Breeders', zt_rv_label:'RV:', zt_reggr_label:'RegGr:', zt_reg_label:'Reg:',
+    col_number:'No.', col_pigeons_total:'Pigeons total', col_avg_rv:'Avg RV', col_avg_reggr:'Avg RegGr', col_avg_reg:'Avg Reg',
+    col_best_as:'Best AS', col_location:'Location', col_date:'Date', col_speed_mmin:'Speed (m/min)',
+
+    // ── Leaderboard ──
+    bl_loading_perf:'Loading performance data…', bl_loading_trips:'Loading races…',
+    bl_tab_all:'🐦 All Pigeons', bl_tab_cocks:'♂ Cocks', bl_tab_hens:'♀ Hens',
+    bl_tab_cocks_yl:'♂ Cocks (yearling)', bl_tab_hens_yl:'♀ Hens (yearling)',
+    bl_breeder_label:'Breeder:', bl_all_breeders_opt:'Total (all breeders)',
+    bl_no_pigeons_cat:'No pigeons in this category.',
+    bl_desc1:'Sorted separately per race season by number of prizes (one race counts as one prize, regardless of how many lists RV/RegGr/Reg it placed in), ties broken by the sum of AS points (the official AS value from the import file is used per race — not recalculated).',
+    bl_desc2a:'Also includes pigeons not linked to your own database (vintage is then derived from the ring number).',
+    bl_desc2b:'The sex comes from the association import file, so pigeons not linked to your own database also appear here.',
+    bl_desc3:'Click "+" to expand any pigeon and check the individual races (placement &amp; AS value) against the DSE portal.',
+    bl_no_flight_data:'No race data.', bl_sum_checked:'Sum checked:',
+    bl_sum_match:'✓ matches Σ AS', bl_sum_mismatch:'⚠ differs from Σ AS — please report',
+    col_prizes:'Prizes', col_sum_as:'Σ AS',
   }
 };
 function t(key){ return (I18N[LANG]&&I18N[LANG][key]) || I18N.de[key] || key; }
@@ -5810,10 +5852,10 @@ async function openTripFromZuechter(tripid,breederName){
 }
 
 function renderZuechter(){
-  if(!ZT.loaded){ loadZuechterData().then(render); return '<div class="loading"><div class="spinner"></div>Lade Züchterdaten…</div>'; }
+  if(!ZT.loaded){ loadZuechterData().then(render); return '<div class="loading"><div class="spinner"></div>'+t('zt_loading')+'</div>'; }
   if(ZT.selected) return renderZuechterDetail(ZT.selected);
   const list=zuechterAgg();
-  if(list.length===0) return '<div class="card" style="text-align:center;padding:48px;color:var(--text3)">Noch keine Züchter-Daten importiert.<br>Beim Import über den Reisen-Tab wird der Züchter automatisch aus der EDV-Kraus-Datei erkannt (Name aus der Datei, Nummer aus der Dateiendung).</div>';
+  if(list.length===0) return '<div class="card" style="text-align:center;padding:48px;color:var(--text3)">'+t('zt_empty1')+'<br>'+t('zt_empty2').replace('{tab}',t('nav_racing'))+'</div>';
   const rows=list.map(b=>`
     <tr data-name="${escH(b.name)}" onclick="selectZuechter(this.dataset.name)" style="cursor:pointer">
       <td style="font-weight:500">${escH(b.name)}</td>
@@ -5825,11 +5867,11 @@ function renderZuechter(){
       <td style="text-align:center">${b.pctReg!=null?b.pctReg.toFixed(0)+'%':'—'}</td>
       <td style="text-align:center;font-weight:600;color:var(--green)">${b.bestAS?b.bestAS.toFixed(2):'—'}</td>
     </tr>`).join('');
-  return `<div><div class="serif" style="font-size:20px;margin-bottom:16px">🧑‍🌾 ${list.length} Züchter</div>
+  return `<div><div class="serif" style="font-size:20px;margin-bottom:16px">🧑‍🌾 ${list.length} ${t('breeders_word')}</div>
     <div class="card"><div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr><th>Züchter</th><th>Nr.</th><th style="text-align:center">Reisen</th><th style="text-align:center">Tauben ges.</th>
-        <th style="text-align:center">Ø RV</th><th style="text-align:center">Ø RegGr</th><th style="text-align:center">Ø Reg</th>
-        <th style="text-align:center">Bester AS</th></tr></thead>
+      <thead><tr><th>${t('th_breeder')}</th><th>${t('col_number')}</th><th style="text-align:center">${t('trips_word')}</th><th style="text-align:center">${t('col_pigeons_total')}</th>
+        <th style="text-align:center">${t('col_avg_rv')}</th><th style="text-align:center">${t('col_avg_reggr')}</th><th style="text-align:center">${t('col_avg_reg')}</th>
+        <th style="text-align:center">${t('col_best_as')}</th></tr></thead>
       <tbody>${rows}</tbody></table></div></div></div>`;
 }
 
@@ -5868,18 +5910,18 @@ function renderZuechterDetail(name){
       </tr>`;}).join('');
   const totalTauben=myRows.length;
   const agg=zuechterAgg().find(b=>b.name===name)||{pctRV:null,pctRegGr:null,pctReg:null};
-  return `<div><button class="back-btn" onclick="ZT.selected=null;render()">← Alle Züchter</button>
+  return `<div><button class="back-btn" onclick="ZT.selected=null;render()">${t('zt_back_all')}</button>
     <div class="card"><div class="serif" style="font-size:22px;margin-bottom:4px">${escH(name)}</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 16px">
-      <span class="badge badge-u">${Object.keys(byTrip).length} Reisen · ${totalTauben} Tauben</span>
-      <span class="badge badge-u">RV: ${agg.pctRV!=null?agg.pctRV.toFixed(0)+'%':'—'}</span>
-      <span class="badge badge-u">RegGr: ${agg.pctRegGr!=null?agg.pctRegGr.toFixed(0)+'%':'—'}</span>
-      <span class="badge badge-u">Reg: ${agg.pctReg!=null?agg.pctReg.toFixed(0)+'%':'—'}</span>
+      <span class="badge badge-u">${Object.keys(byTrip).length} ${t('trips_word')} · ${totalTauben} ${t('nav_pigeons')}</span>
+      <span class="badge badge-u">${t('zt_rv_label')} ${agg.pctRV!=null?agg.pctRV.toFixed(0)+'%':'—'}</span>
+      <span class="badge badge-u">${t('zt_reggr_label')} ${agg.pctRegGr!=null?agg.pctRegGr.toFixed(0)+'%':'—'}</span>
+      <span class="badge badge-u">${t('zt_reg_label')} ${agg.pctReg!=null?agg.pctReg.toFixed(0)+'%':'—'}</span>
     </div>
     <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr><th>Reise</th><th>Ort</th><th>Datum</th><th style="text-align:center">Tauben</th>
+      <thead><tr><th>${t('trip_word')}</th><th>${t('col_location')}</th><th>${t('col_date')}</th><th style="text-align:center">${t('nav_pigeons')}</th>
         <th style="text-align:center">RV</th><th style="text-align:center">RegGr</th><th style="text-align:center">Reg</th>
-        <th style="text-align:center">Bester AS</th><th style="text-align:center">Flugmeter (m/min)</th></tr></thead>
+        <th style="text-align:center">${t('col_best_as')}</th><th style="text-align:center">${t('col_speed_mmin')}</th></tr></thead>
       <tbody>${tripRows}</tbody></table></div>
     </div></div>`;
 }
@@ -5963,17 +6005,17 @@ function bestenliste(breederFilter){
 }
 
 function renderBestenliste(){
-  if(!ZT.loaded){ loadZuechterData().then(render); return '<div class="loading"><div class="spinner"></div>Lade Leistungsdaten…</div>'; }
-  if(!RT.trips.length){ loadTrips().then(render); return '<div class="loading"><div class="spinner"></div>Lade Reisen…</div>'; }
+  if(!ZT.loaded){ loadZuechterData().then(render); return '<div class="loading"><div class="spinner"></div>'+t('bl_loading_perf')+'</div>'; }
+  if(!RT.trips.length){ loadTrips().then(render); return '<div class="loading"><div class="spinner"></div>'+t('bl_loading_trips')+'</div>'; }
   const breeders=[...new Set(ZT.rows.map(r=>r.breedername).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const data=bestenliste(BL.breeder);
 
   const tabs=[
-    ['gesamt','🐦 Alle Tauben'],
-    ['tauber','♂ Vögel'],
-    ['taubinnen','♀ Weibchen'],
-    ['tauberJg','♂ Vögel (einjährig)'],
-    ['taubinnenJg','♀ Weibchen (einjährig)']
+    ['gesamt',t('bl_tab_all')],
+    ['tauber',t('bl_tab_cocks')],
+    ['taubinnen',t('bl_tab_hens')],
+    ['tauberJg',t('bl_tab_cocks_yl')],
+    ['taubinnenJg',t('bl_tab_hens_yl')]
   ];
   const groups=data[BL.cat]||[];
   if(!BL.expanded) BL.expanded=new Set();
@@ -5982,7 +6024,7 @@ function renderBestenliste(){
   window.toggleBL = toggleBL;
 
   const renderFlights=(e)=>{
-    if(!e.flights.length) return '<div style="padding:10px;color:var(--text3);font-size:12px">Keine Flugdaten.</div>';
+    if(!e.flights.length) return '<div style="padding:10px;color:var(--text3);font-size:12px">'+t('bl_no_flight_data')+'</div>';
     const cells=e.flights.map((f,i)=>{
       return `<div style="text-align:center">
         <div style="font-size:10px;color:var(--text3);margin-bottom:2px">F${String(i+1).padStart(2,'0')}</div>
@@ -5994,7 +6036,7 @@ function renderBestenliste(){
     const sumCheck=e.flights.reduce((s,f)=>s+(f.as||0),0);
     return `<div style="padding:10px 4px">
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;background:var(--bg2);border-radius:8px;padding:10px">${cells}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">Summe geprüft: <strong style="color:var(--text2)">${sumCheck.toFixed(2)}</strong> ${Math.abs(sumCheck-e.asSum)<0.01?'✓ stimmt mit Σ AS überein':'⚠ weicht von Σ AS ab — bitte melden'}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">${t('bl_sum_checked')} <strong style="color:var(--text2)">${sumCheck.toFixed(2)}</strong> ${Math.abs(sumCheck-e.asSum)<0.01?t('bl_sum_match'):t('bl_sum_mismatch')}</div>
     </div>`;
   };
 
@@ -6017,21 +6059,21 @@ function renderBestenliste(){
 
   const yearBlocks = groups.length ? groups.map(g=>`
     <div style="margin-bottom:16px">
-      <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Saison ${g.year}</div>
+      <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('season')} ${g.year}</div>
       <div class="card"><div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr><th>#</th><th></th><th>Ring</th><th>Name</th><th>Jg.</th>${BL.breeder==='ALL'?'<th>Züchter</th>':''}<th style="text-align:center">Preise</th><th style="text-align:center">Σ AS</th></tr></thead>
+        <thead><tr><th>#</th><th></th><th>${t('th_ring')}</th><th>${t('th_name')}</th><th>${t('year_abbr')}</th>${BL.breeder==='ALL'?'<th>'+t('th_breeder')+'</th>':''}<th style="text-align:center">${t('col_prizes')}</th><th style="text-align:center">${t('col_sum_as')}</th></tr></thead>
         <tbody>${g.rows.map((e,i)=>renderRow(e,i,g.year)).join('')}</tbody>
       </table></div></div>
     </div>`).join('')
-    : '<div class="card" style="text-align:center;padding:24px;color:var(--text3)">Keine Tauben in dieser Kategorie.</div>';
+    : '<div class="card" style="text-align:center;padding:24px;color:var(--text3)">'+t('bl_no_pigeons_cat')+'</div>';
 
   return `<div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-      <div class="serif" style="font-size:20px">🏆 Bestenliste</div>
+      <div class="serif" style="font-size:20px">🏆 ${t('sub_best')}</div>
       <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text3)">
-        Züchter:
+        ${t('bl_breeder_label')}
         <select onchange="BL.breeder=this.value;render()" style="max-width:260px">
-          <option value="ALL" ${BL.breeder==='ALL'?'selected':''}>Gesamt (alle Züchter)</option>
+          <option value="ALL" ${BL.breeder==='ALL'?'selected':''}>${t('bl_all_breeders_opt')}</option>
           ${breeders.map(b=>`<option value="${escH(b)}" ${BL.breeder===b?'selected':''}>${escH(b)}</option>`).join('')}
         </select>
       </label>
@@ -6040,9 +6082,9 @@ function renderBestenliste(){
       ${tabs.map(([k,label])=>`<button class="btn ${BL.cat===k?'':'btn-outline'}" style="font-size:12px;padding:7px 12px" onclick="BL.cat='${k}';render()">${label}</button>`).join('')}
     </div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:12px">
-      Je Reisesaison getrennt sortiert nach Anzahl Preise (ein Flug zählt als ein Preis, egal in wie vielen Listen RV/RegGr/Reg platziert wurde), bei Gleichstand nach Summe der AS-Punkte (je Flug wird der offizielle, aus der Importdatei übernommene AS-Wert gewertet — nicht selbst nachgerechnet).
-      ${BL.cat==='gesamt'?'Enthält auch Tauben ohne Zuordnung zur eigenen Datenbank (Jahrgang dann aus der Ringnummer abgeleitet).':'Das Geschlecht stammt aus der Verbands-Importdatei, daher erscheinen hier auch Tauben ohne Zuordnung zur eigenen Datenbank.'}
-      Über „+" lässt sich jede Taube aufklappen und die einzelnen Flüge (Platz &amp; AS-Wert) zur Kontrolle gegen das DSE-Portal prüfen.
+      ${t('bl_desc1')}
+      ${BL.cat==='gesamt'?t('bl_desc2a'):t('bl_desc2b')}
+      ${t('bl_desc3')}
     </div>
     ${yearBlocks}
   </div>`;
