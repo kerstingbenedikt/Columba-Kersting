@@ -6076,7 +6076,7 @@ function renderZuechterDetail(name){
 // zeigt zusätzlich auch Tauben mit unbekanntem Geschlecht; deren Jahrgang wird bei
 // fehlender DB-Zuordnung direkt aus der Ringnummer abgeleitet (mittleres Segment,
 // z.B. DE 6559-23-3535 → Jahrgang 2023).
-let BL = { breeder:'ALL', cat:'gesamt', expanded:new Set() };
+let BL = { breeder:'ALL', cat:'gesamt', ass:'all', expanded:new Set() };
 
 function bestenliste(breederFilter){
   const tripById={}; RT.trips.forEach(t=>tripById[t.tripid]=t);
@@ -6156,7 +6156,17 @@ function renderBestenliste(){
     ['tauberJg',t('bl_tab_cocks_yl')],
     ['taubinnenJg',t('bl_tab_hens_yl')]
   ];
-  const groups=data[BL.cat]||[];
+  const groupsRaw=data[BL.cat]||[];
+  // Ass-Kategorie-Filter (A/B/C/D/beliebig): Ass ist ein Tauben-Attribut
+  // (nur einmal/Jahr gesetzt), daher nur für Tauben mit DB-Zuordnung
+  // auswertbar — Tauben ohne DB-Match fallen bei aktivem Filter automatisch raus.
+  const assMatch = e => {
+    if(BL.ass==='all') return true;
+    if(!e.pigeon) return false;
+    if(BL.ass==='any') return !!(e.pigeon.ass_a||e.pigeon.ass_b||e.pigeon.ass_c||e.pigeon.ass_d);
+    return !!e.pigeon['ass_'+BL.ass];
+  };
+  const groups = groupsRaw.map(g=>({...g, rows:g.rows.filter(assMatch)})).filter(g=>g.rows.length);
   if(!BL.expanded) BL.expanded=new Set();
   const rowKey=(yr,e)=> BL.cat+'|'+yr+'|'+(e.pigeonid||e.ring);
   function toggleBL(k){ if(BL.expanded.has(k)) BL.expanded.delete(k); else BL.expanded.add(k); render(); }
@@ -6182,6 +6192,10 @@ function renderBestenliste(){
   const renderRow=(e,i,yr)=>{
     const k=rowKey(yr,e);
     const open=BL.expanded.has(k);
+    const assLetters=e.pigeon?['a','b','c','d'].filter(l=>e.pigeon['ass_'+l]):[];
+    const assCell=assLetters.length
+      ? assLetters.map(l=>`<span class="badge" style="background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.35);margin-right:2px">${l.toUpperCase()}</span>`).join('')
+      : '<span style="color:var(--text3)">—</span>';
     return `
     <tr>
       <td style="text-align:center;font-weight:600;color:${i<3?'var(--green)':'var(--text3)'}">${i+1}</td>
@@ -6190,17 +6204,18 @@ function renderBestenliste(){
       <td>${escH(e.name||'—')}</td>
       <td style="font-size:12px;color:var(--text3)">${e.birthYear||'—'}</td>
       ${BL.breeder==='ALL'?'<td style="font-size:12px;color:var(--text3)">'+escH(e.breedername||'—')+'</td>':''}
+      <td style="text-align:center">${assCell}</td>
       <td style="text-align:center;font-weight:600">${e.prizes}</td>
       <td style="text-align:center;font-weight:600;color:var(--green)">${e.asSum.toFixed(2)}</td>
     </tr>
-    ${open?`<tr><td colspan="${BL.breeder==='ALL'?8:7}" style="padding:0">${renderFlights(e)}</td></tr>`:''}`;
+    ${open?`<tr><td colspan="${BL.breeder==='ALL'?9:8}" style="padding:0">${renderFlights(e)}</td></tr>`:''}`;
   };
 
   const yearBlocks = groups.length ? groups.map(g=>`
     <div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('season')} ${g.year}</div>
       <div class="card"><div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr><th>#</th><th></th><th>${t('th_ring')}</th><th>${t('th_name')}</th><th>${t('year_abbr')}</th>${BL.breeder==='ALL'?'<th>'+t('th_breeder')+'</th>':''}<th style="text-align:center">${t('col_prizes')}</th><th style="text-align:center">${t('col_sum_as')}</th></tr></thead>
+        <thead><tr><th>#</th><th></th><th>${t('th_ring')}</th><th>${t('th_name')}</th><th>${t('year_abbr')}</th>${BL.breeder==='ALL'?'<th>'+t('th_breeder')+'</th>':''}<th style="text-align:center" title="Ass-Kategorien">Ass</th><th style="text-align:center">${t('col_prizes')}</th><th style="text-align:center">${t('col_sum_as')}</th></tr></thead>
         <tbody>${g.rows.map((e,i)=>renderRow(e,i,g.year)).join('')}</tbody>
       </table></div></div>
     </div>`).join('')
@@ -6214,6 +6229,17 @@ function renderBestenliste(){
         <select onchange="BL.breeder=this.value;render()" style="max-width:260px">
           <option value="ALL" ${BL.breeder==='ALL'?'selected':''}>${t('bl_all_breeders_opt')}</option>
           ${breeders.map(b=>`<option value="${escH(b)}" ${BL.breeder===b?'selected':''}>${escH(b)}</option>`).join('')}
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text3)">
+        Ass-Kategorie
+        <select onchange="BL.ass=this.value;render()" title="Nur Tauben mit dieser Ass-Kennzeichnung anzeigen">
+          <option value="all" ${BL.ass==='all'?'selected':''}>alle</option>
+          <option value="a" ${BL.ass==='a'?'selected':''}>🏅 A</option>
+          <option value="b" ${BL.ass==='b'?'selected':''}>🏅 B</option>
+          <option value="c" ${BL.ass==='c'?'selected':''}>🏅 C</option>
+          <option value="d" ${BL.ass==='d'?'selected':''}>🏅 D</option>
+          <option value="any" ${BL.ass==='any'?'selected':''}>🏅 beliebig</option>
         </select>
       </label>
     </div>
