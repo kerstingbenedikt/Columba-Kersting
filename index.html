@@ -2632,23 +2632,22 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
     const breederProf = BREEDER_PROFILE || {};
 
     const rows   = Math.pow(2, gens-1);   // 8 (4gen) oder 16 (5gen)
-    // Immer Hochformat, auch bei 5 Generationen — Spalten werden dafür schmaler und die
-    // Verbinderbreite reduziert sich etwas, um zusätzlichen Platz zu gewinnen.
-    const landscape = false;
+    // Ab 5 Generationen reicht Hochformat nicht mehr aus (Spalten würden zu schmal für
+    // vollständige Ringnummern) → automatisch auf Querformat wechseln, das gibt ca. 45%
+    // mehr nutzbare Breite pro Spalte.
+    const landscape = gens>=5;
     const pageWmm   = landscape ? 281 : 194;  // nutzbare Breite (A4 minus Ränder)
     const pageHmm   = landscape ? 194 : 281;  // nutzbare Gesamthöhe (A4 minus Rändern, inkl. Kopfzeile)
     // Die Zeilenhöhe wird NICHT mehr fix in mm vorberechnet, sondern per Flexbox erst im
     // Browser ermittelt: Kopfzeile(n) bekommen ihre natürliche Höhe, der Stammbaum-Raster
-    // erhält den kompletten Rest der Seite (flex:1) und teilt ihn per minmax(0,1fr) gleich-
-    // mäßig auf die Zeilen auf. minmax(0,…) statt nur 1fr ist wichtig: ohne das erzwingt
-    // CSS Grid pro Zeile mindestens die Min-Content-Höhe ihres Inhalts — bei randvollen
-    // Boxen (Reiseleistung/Top-Platzierungen/Info-Text) reicht das sonst über den Seitenrand
-    // hinaus und ein schmaler Reststreifen bricht auf eine zweite Seite um.
+    // erhält den kompletten Rest der Seite (flex:1) und teilt ihn per 1fr gleichmäßig auf
+    // die Zeilen auf. So passt der Ausdruck garantiert auf eine A4-Seite, unabhängig davon
+    // wie hoch die Züchter-Kopfzeile (Adresse/Logo/Erfolge) tatsächlich ausfällt.
     // Spaltenbreiten: kein Header-Overhead mehr → volle Breite für Daten
-    // Verbinder: 5mm (4 Gen.) bzw. 4mm (5 Gen., da Spalten sonst zu schmal werden)
-    const conWmm    = gens>=5 ? 4 : 5;
-    const totalConn = (gens-1)*conWmm;
+    // Verbinder: 5mm, Rest gleichmäßig auf Datenspalten
+    const totalConn = (gens-1)*5;
     const datWmm    = Math.floor((pageWmm - totalConn) / gens);
+    const conWmm    = 5;
 
     // Box-HTML — Infomenge abhängig von Generation und verfügbarem Platz
     function box(p, gen){
@@ -2666,7 +2665,7 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
       const szInfo = gen===0?'7.5pt':gen===1?'7pt':gen===2?'6.5pt':'6pt';
       const showTags = gen<=3;
       const showInfo = gen<=2 && info;  // Info nur bei Proband, Eltern, Großeltern
-      const showName = gen<=3;  // bei 5 Gen. (16 Zeilen, wenig Höhe) Name bei tiefster Ebene weglassen — Ringnummer hat Vorrang
+      const showName = gen<=3 || !landscape;  // bei 5 Gen (16 Zeilen, wenig Höhe) Name bei tiefster Ebene weglassen — Ringnummer hat Vorrang
 
       // Reiseleistung kompakt (nur Proband/Eltern/Großeltern — Gen. 0-2): z.B.
       // "2025: 13/11 Preise 1.-2.-3.-Preis". Anzahl Jahre je Ebene begrenzt, damit die Box
@@ -2683,12 +2682,9 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
       // Foto nur einbetten, wenn "Mit Foto" aktiv ist UND die Taube tatsächlich ein
       // eigenes hochgeladenes Foto hat (kein Farb-Platzhalterbild — der farbige
       // linke Rand markiert das Geschlecht bereits eindeutig).
-      // Taubenfotos sind i.d.R. querformatig (Seitenansicht) — breiteres statt quadratisches
-      // Format, damit beim object-fit:cover nicht links/rechts vom Vogel abgeschnitten wird.
-      const photoH = gen===0?'15mm':gen===1?'11mm':'8mm';
-      const photoW = gen===0?'21mm':gen===1?'16mm':'12mm';
+      const photoSize = gen===0?'15mm':gen===1?'11mm':'8mm';
       const photoHtml = (withPhoto && p.photo)
-        ? `<img src="${p.photo}" style="width:${photoW};height:${photoH};object-fit:cover;border-radius:1mm;border:.2mm solid #ddd;float:left;margin:0 2mm 1mm 0;background:#fff">`
+        ? `<img src="${p.photo}" style="width:${photoSize};height:${photoSize};object-fit:cover;border-radius:1mm;border:.2mm solid #ddd;float:left;margin:0 2mm 1mm 0;background:#fff">`
         : '';
 
       // Info-Feld bekommt flex:1 → füllt restliche Box-Höhe vollständig aus
@@ -2711,7 +2707,7 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
     // Grid-Template ohne Header-Zeile
     let gtc='';
     for(let g=0;g<gens;g++){ gtc+=datWmm+'mm'; if(g<gens-1) gtc+=' '+conWmm+'mm '; }
-    const gtr = 'repeat('+rows+',minmax(0,1fr))';  // keine Header-Zeile! Höhe verteilt sich per Flexbox auf Restplatz der Seite. minmax(0,…) verhindert, dass eine Zeile über ihre Min-Content-Höhe hinaus wächst und dadurch einen Seitenumbruch erzwingt.
+    const gtr = 'repeat('+rows+',1fr)';  // keine Header-Zeile! Höhe verteilt sich per Flexbox auf Restplatz der Seite
 
     let cells='';
     for(let g=0;g<gens;g++){
@@ -2722,7 +2718,7 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
         const p   = tree[g]?tree[g][i]:null;
         const rs  = i*span+1;  // +1 (kein Header)
         const re  = rs+span;
-        cells+=`<div style="grid-column:${gridCol};grid-row:${rs}/${re};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box;min-height:0;overflow:hidden">${box(p,g)}</div>`;
+        cells+=`<div style="grid-column:${gridCol};grid-row:${rs}/${re};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box">${box(p,g)}</div>`;
       }
       // Verbinder
       if(g<gens-1){
@@ -2754,17 +2750,17 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
       if(!p.name && !p.strasse && !p.ort && !p.verein && !p.logo && !erfolgeText) return '';
       const addr = [p.strasse, p.ort].filter(Boolean).join(', ');
       const left = `<div>
-        ${p.name?`<div style="font-size:9.5pt;font-weight:700">${_esc(p.name)}</div>`:''}
-        ${addr?`<div style="font-size:6.5pt;color:#555;margin-top:.3mm">${_esc(addr)}</div>`:''}
-        ${p.verein?`<div style="font-size:6.5pt;color:#555">${_esc(p.verein)}</div>`:''}
-        ${p.telefon?`<div style="font-size:6.5pt;color:#555">Tel. ${_esc(p.telefon)}</div>`:''}
+        ${p.name?`<div style="font-size:11pt;font-weight:700">${_esc(p.name)}</div>`:''}
+        ${addr?`<div style="font-size:7pt;color:#555;margin-top:.5mm">${_esc(addr)}</div>`:''}
+        ${p.verein?`<div style="font-size:7pt;color:#555">${_esc(p.verein)}</div>`:''}
+        ${p.telefon?`<div style="font-size:7pt;color:#555">Tel. ${_esc(p.telefon)}</div>`:''}
       </div>`;
-      const mid = p.logo?`<div style="text-align:center"><img src="${p.logo}" style="max-height:12mm;max-width:32mm;object-fit:contain"></div>`:'<div></div>';
-      const right = erfolgeText?`<div style="font-size:6.5pt;color:#555;text-align:right;max-width:90mm">
-        <div style="font-size:7.5pt;font-weight:700;color:#1a6b1a;margin-bottom:.3mm">Züchtererfolge</div>
+      const mid = p.logo?`<div style="text-align:center"><img src="${p.logo}" style="max-height:18mm;max-width:40mm;object-fit:contain"></div>`:'<div></div>';
+      const right = erfolgeText?`<div style="font-size:7pt;color:#555;text-align:right;max-width:90mm">
+        <div style="font-size:8pt;font-weight:700;color:#1a6b1a;margin-bottom:.5mm">Züchtererfolge</div>
         ${_esc(erfolgeText).replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>')}
       </div>`:'<div></div>';
-      return `<div style="margin-bottom:1.5mm;padding-bottom:1.2mm;border-bottom:.3mm solid #ccc;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:4mm">
+      return `<div style="margin-bottom:2.5mm;padding-bottom:2mm;border-bottom:.3mm solid #ccc;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:4mm">
         ${left}${mid}${right}
       </div>`;
     }
@@ -2781,13 +2777,10 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
 </head><body>
 <div style="flex-shrink:0">
 ${buildBreederHeader()}
-<div style="margin-bottom:1.5mm;border-bottom:.3mm solid #ccc;padding-bottom:1.2mm;display:flex;justify-content:space-between;align-items:flex-end">
+<div style="margin-bottom:2.5mm;border-bottom:.3mm solid #ccc;padding-bottom:2mm;display:flex;justify-content:space-between;align-items:flex-end">
   <div>
-    <div style="font-size:10.5pt;font-weight:700;display:flex;align-items:center;gap:1.5mm">
-      <svg width="10" height="10" viewBox="0 0 64 64" style="flex-shrink:0" fill="#1a6b1a"><path d="M32 6c-1 4-1 8 1 11-9 1-17 6-22 14 6-2 12-3 17-2-4 4-7 10-8 17 4-5 9-9 14-11 1 6 3 11 6 15 1-5 1-11 0-16 5 1 10 4 14 8-2-7-6-13-11-16 5-2 11-2 17 0-6-7-14-11-23-12 3-3 4-7 3-11-2 2-4 3-6 3s-4-1-6-3z"/></svg>
-      ${_esc(root.name||_ring(root))}
-    </div>
-    <div style="font-size:6.5pt;color:#555;margin-top:.3mm">
+    <div style="font-size:12pt;font-weight:700">🕊 ${_esc(root.name||_ring(root))}</div>
+    <div style="font-size:7pt;color:#555;margin-top:.5mm">
       ${_esc(_ring(root))} &nbsp;·&nbsp;
       ${sx==='M'?'♂ Täuber':sx==='F'?'♀ Täubin':'?'} &nbsp;·&nbsp;
       Jg. ${root.date_year||'—'}
@@ -2795,7 +2788,7 @@ ${buildBreederHeader()}
       &nbsp;·&nbsp; ${gens} Generationen
     </div>
   </div>
-  <div style="font-size:6.5pt;color:#aaa">${today} · Brieftauben-Verwaltung</div>
+  <div style="font-size:7pt;color:#aaa">${today} · Brieftauben-Verwaltung</div>
 </div>
 </div>
 <div style="flex:1;min-height:0;display:grid;grid-template-columns:${gtc};grid-template-rows:${gtr};border:.3mm solid #ccc;width:${pageWmm}mm;overflow:hidden">
