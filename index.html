@@ -1072,6 +1072,8 @@ function renderColumnPicker(){
 document.addEventListener('click', (e)=>{
   const m=document.getElementById('col-picker-menu');
   if(m && m.style.display==='block' && !e.target.closest('#col-picker-menu') && !e.target.closest('button')) m.style.display='none';
+  const mb=document.getElementById('bl-col-picker-menu');
+  if(mb && mb.style.display==='block' && !e.target.closest('#bl-col-picker-menu') && !e.target.closest('button')) mb.style.display='none';
 });
 
 
@@ -6060,7 +6062,85 @@ function renderZuechterDetail(name){
 // zeigt zusätzlich auch Tauben mit unbekanntem Geschlecht; deren Jahrgang wird bei
 // fehlender DB-Zuordnung direkt aus der Ringnummer abgeleitet (mittleres Segment,
 // z.B. DE 6559-23-3535 → Jahrgang 2023).
-let BL = { breeder:'ALL', cat:'gesamt', ass:'all', expanded:new Set() };
+let BL = { breeder:'ALL', cat:'gesamt', ass:'all', expanded:new Set(), collapsedSeasons:new Set() };
+
+const BL_COLUMN_DEFS = [
+  { key:'ring',     label:'Ringnummer' },
+  { key:'name',     label:'Name' },
+  { key:'jahrgang', label:'Jahrgang' },
+  { key:'breeder',  label:'Züchter' },
+  { key:'ass',      label:'Ass A-D' },
+  { key:'prizes',   label:'Preise' },
+  { key:'sumas',    label:'Σ AS' },
+];
+const BL_COLUMN_BY_KEY = Object.fromEntries(BL_COLUMN_DEFS.map(c=>[c.key,c]));
+const BL_DEFAULT_COLUMNS = BL_COLUMN_DEFS.map(c=>c.key);
+try{
+  const savedBL = JSON.parse(localStorage.getItem('bestenlisteCols')||'null');
+  BL.columns = Array.isArray(savedBL) && savedBL.length ? savedBL.filter(k=>BL_COLUMN_BY_KEY[k]) : [...BL_DEFAULT_COLUMNS];
+}catch(e){ BL.columns = [...BL_DEFAULT_COLUMNS]; }
+function toggleBLColumn(key){
+  const i = BL.columns.indexOf(key);
+  if(i>=0){ if(BL.columns.length<=1) return; BL.columns.splice(i,1); }
+  else BL.columns.push(key);
+  try{ localStorage.setItem('bestenlisteCols', JSON.stringify(BL.columns)); }catch(e){}
+  refreshBLColumnMenu(); render();
+}
+function moveBLColumn(key, dir){
+  const i = BL.columns.indexOf(key);
+  if(i<0) return;
+  const j = i+dir;
+  if(j<0 || j>=BL.columns.length) return;
+  [BL.columns[i], BL.columns[j]] = [BL.columns[j], BL.columns[i]];
+  try{ localStorage.setItem('bestenlisteCols', JSON.stringify(BL.columns)); }catch(e){}
+  refreshBLColumnMenu(); render();
+}
+function resetBLColumns(){
+  BL.columns = [...BL_DEFAULT_COLUMNS];
+  try{ localStorage.setItem('bestenlisteCols', JSON.stringify(BL.columns)); }catch(e){}
+  refreshBLColumnMenu(); render();
+}
+function blColumnPickerMenuHTML(){
+  const activeDefs = BL.columns.map(k=>BL_COLUMN_BY_KEY[k]).filter(Boolean);
+  const inactiveDefs = BL_COLUMN_DEFS.filter(c=>!BL.columns.includes(c.key));
+  const row = (c,i,arr,isActive) => `
+    <div style="display:flex;align-items:center;gap:4px;padding:4px 2px;font-size:13px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:0">
+        <input type="checkbox" ${isActive?'checked':''} onchange="toggleBLColumn('${c.key}')">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(c.label)}</span>
+      </label>
+      ${isActive?`
+        <button type="button" class="btn btn-outline btn-sm" style="padding:2px 8px;line-height:1" title="Nach oben" ${i===0?'disabled':''} onclick="moveBLColumn('${c.key}',-1)">↑</button>
+        <button type="button" class="btn btn-outline btn-sm" style="padding:2px 8px;line-height:1" title="Nach unten" ${i===arr.length-1?'disabled':''} onclick="moveBLColumn('${c.key}',1)">↓</button>`:''}
+    </div>`;
+  return `
+    <div style="font-size:11px;color:var(--text3);margin-bottom:6px;line-height:1.4">${t('col_picker_hint')}</div>
+    ${activeDefs.map((c,i,arr)=>row(c,i,arr,true)).join('')}
+    ${inactiveDefs.length?`<div style="border-top:1px solid var(--border);margin:8px 0 4px;padding-top:6px;font-size:11px;color:var(--text3)">${t('col_picker_more')}</div>`:''}
+    ${inactiveDefs.map((c,i,arr)=>row(c,i,arr,false)).join('')}
+    <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
+      <button class="btn btn-outline btn-sm" style="width:100%" onclick="resetBLColumns()">${t('col_picker_resetbtn')}</button>
+    </div>`;
+}
+function refreshBLColumnMenu(){
+  const m = document.getElementById('bl-col-picker-menu');
+  const btn = document.getElementById('bl-col-picker-btn');
+  if(m) m.innerHTML = blColumnPickerMenuHTML();
+  if(m && btn && m.style.display==='block') positionColumnMenu(btn, m);
+}
+function toggleBLColumnMenu(btn){
+  const m = document.getElementById('bl-col-picker-menu');
+  if(!m) return;
+  if(m.style.display==='block'){ m.style.display='none'; return; }
+  m.innerHTML = blColumnPickerMenuHTML();
+  positionColumnMenu(btn, m);
+  m.style.display='block';
+}
+window.addEventListener('resize', ()=>{
+  const m = document.getElementById('bl-col-picker-menu');
+  const btn = document.getElementById('bl-col-picker-btn');
+  if(m && btn && m.style.display==='block') positionColumnMenu(btn, m);
+});
 
 function bestenliste(breederFilter){
   const tripById={}; RT.trips.forEach(t=>tripById[t.tripid]=t);
@@ -6158,6 +6238,8 @@ function renderBestenliste(){
   const rowKey=(yr,e)=> BL.cat+'|'+yr+'|'+(e.pigeonid||e.ring);
   function toggleBL(k){ if(BL.expanded.has(k)) BL.expanded.delete(k); else BL.expanded.add(k); render(); }
   window.toggleBL = toggleBL;
+  function toggleBLSeason(yr){ const k=String(yr); if(BL.collapsedSeasons.has(k)) BL.collapsedSeasons.delete(k); else BL.collapsedSeasons.add(k); render(); }
+  window.toggleBLSeason = toggleBLSeason;
 
   const renderFlights=(e)=>{
     if(!e.flights.length) return '<div style="padding:10px;color:var(--text3);font-size:12px">'+t('bl_no_flight_data')+'</div>';
@@ -6176,36 +6258,55 @@ function renderBestenliste(){
     </div>`;
   };
 
+  // Spalten wie im Taubenmodul: über BL.columns konfigurierbar (Reihenfolge +
+  // Sichtbarkeit). "Züchter" wird nur angezeigt, wenn tatsächlich alle
+  // Züchter gemeinsam betrachtet werden (sonst ist die Spalte redundant).
+  const activeBLCols = BL.columns.map(k=>BL_COLUMN_BY_KEY[k]).filter(Boolean)
+    .filter(c=>c.key!=='breeder' || BL.breeder==='ALL');
+  const BL_CELL = {
+    ring:(e)=>`<td style="font-family:monospace;font-size:12px;${e.pigeonid?'cursor:pointer':''}" ${e.pigeonid?`onclick="selectPigeon('${e.pigeonid}')"`:''}>${escH(e.ring||'—')}${!e.inDb?' <span style="color:var(--text3);font-size:10px">(nicht in DB)</span>':''}</td>`,
+    name:(e)=>`<td>${escH(e.name||'—')}</td>`,
+    jahrgang:(e)=>`<td style="font-size:12px;color:var(--text3)">${e.birthYear||'—'}</td>`,
+    breeder:(e)=>`<td style="font-size:12px;color:var(--text3)">${escH(e.breedername||'—')}</td>`,
+    ass:(e)=>{
+      const letters=['a','b','c','d'].filter(l=>e.ass[l]);
+      const cell=letters.length
+        ? letters.map(l=>`<span class="badge" style="background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.35);margin-right:2px">${l.toUpperCase()}</span>`).join('')
+        : '<span style="color:var(--text3)">—</span>';
+      return `<td style="text-align:center">${cell}</td>`;
+    },
+    prizes:(e)=>`<td style="text-align:center;font-weight:600">${e.prizes}</td>`,
+    sumas:(e)=>`<td style="text-align:center;font-weight:600;color:var(--green)">${e.asSum.toFixed(2)}</td>`,
+  };
+
   const renderRow=(e,i,yr)=>{
     const k=rowKey(yr,e);
     const open=BL.expanded.has(k);
-    const assLetters=['a','b','c','d'].filter(l=>e.ass[l]);
-    const assCell=assLetters.length
-      ? assLetters.map(l=>`<span class="badge" style="background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.35);margin-right:2px">${l.toUpperCase()}</span>`).join('')
-      : '<span style="color:var(--text3)">—</span>';
     return `
     <tr>
       <td style="text-align:center;font-weight:600;color:${i<3?'var(--green)':'var(--text3)'}">${i+1}</td>
       <td style="text-align:center"><button class="btn btn-outline" style="padding:2px 8px;font-size:11px;min-width:0" onclick="event.stopPropagation();toggleBL('${k}')">${open?'−':'+'}</button></td>
-      <td style="font-family:monospace;font-size:12px;${e.pigeonid?'cursor:pointer':''}" ${e.pigeonid?`onclick="selectPigeon('${e.pigeonid}')"`:''}>${escH(e.ring||'—')}${!e.inDb?' <span style="color:var(--text3);font-size:10px">(nicht in DB)</span>':''}</td>
-      <td>${escH(e.name||'—')}</td>
-      <td style="font-size:12px;color:var(--text3)">${e.birthYear||'—'}</td>
-      ${BL.breeder==='ALL'?'<td style="font-size:12px;color:var(--text3)">'+escH(e.breedername||'—')+'</td>':''}
-      <td style="text-align:center">${assCell}</td>
-      <td style="text-align:center;font-weight:600">${e.prizes}</td>
-      <td style="text-align:center;font-weight:600;color:var(--green)">${e.asSum.toFixed(2)}</td>
+      ${activeBLCols.map(c=>BL_CELL[c.key](e)).join('')}
     </tr>
-    ${open?`<tr><td colspan="${BL.breeder==='ALL'?9:8}" style="padding:0">${renderFlights(e)}</td></tr>`:''}`;
+    ${open?`<tr><td colspan="${2+activeBLCols.length}" style="padding:0">${renderFlights(e)}</td></tr>`:''}`;
   };
 
-  const yearBlocks = groups.length ? groups.map(g=>`
+  const BL_TH = { ring:t('th_ring'), name:t('th_name'), jahrgang:t('year_abbr'), breeder:t('th_breeder'), ass:'Ass', prizes:t('col_prizes'), sumas:t('col_sum_as') };
+  const yearBlocks = groups.length ? groups.map(g=>{
+    const collapsed = BL.collapsedSeasons.has(String(g.year));
+    return `
     <div style="margin-bottom:16px">
-      <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('season')} ${g.year}</div>
-      <div class="card"><div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr><th>#</th><th></th><th>${t('th_ring')}</th><th>${t('th_name')}</th><th>${t('year_abbr')}</th>${BL.breeder==='ALL'?'<th>'+t('th_breeder')+'</th>':''}<th style="text-align:center" title="Ass-Kategorien">Ass</th><th style="text-align:center">${t('col_prizes')}</th><th style="text-align:center">${t('col_sum_as')}</th></tr></thead>
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;user-select:none" onclick="toggleBLSeason('${g.year}')">
+        <span style="font-size:11px;color:var(--text3);transition:transform .15s;transform:rotate(${collapsed?'-90':'0'}deg);display:inline-block">▾</span>
+        <span style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${t('season')} ${g.year}</span>
+        <span style="font-size:11px;color:var(--text3)">(${g.rows.length})</span>
+      </div>
+      ${collapsed?'':`<div class="card"><div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr><th>#</th><th></th>${activeBLCols.map(c=>`<th${c.key==='ass'||c.key==='prizes'||c.key==='sumas'?' style="text-align:center"':''}${c.key==='ass'?' title="Ass-Kategorien"':''}>${BL_TH[c.key]}</th>`).join('')}</tr></thead>
         <tbody>${g.rows.map((e,i)=>renderRow(e,i,g.year)).join('')}</tbody>
-      </table></div></div>
-    </div>`).join('')
+      </table></div></div>`}
+    </div>`;
+  }).join('')
     : '<div class="card" style="text-align:center;padding:24px;color:var(--text3)">'+t('bl_no_pigeons_cat')+'</div>';
 
   return `<div>
@@ -6229,6 +6330,10 @@ function renderBestenliste(){
           <option value="any" ${BL.ass==='any'?'selected':''}>🏅 beliebig</option>
         </select>
       </label>
+      <div style="position:relative">
+        <button id="bl-col-picker-btn" class="btn btn-outline btn-sm" onclick="toggleBLColumnMenu(this)">⚙ Spalten</button>
+        <div id="bl-col-picker-menu" style="display:none;position:fixed;width:240px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;z-index:200;max-height:480px;overflow:auto;box-shadow:0 6px 20px rgba(0,0,0,.4)" onclick="event.stopPropagation()"></div>
+      </div>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
       ${tabs.map(([k,label])=>`<button class="btn ${BL.cat===k?'':'btn-outline'}" style="font-size:12px;padding:7px 12px" onclick="BL.cat='${k}';render()">${label}</button>`).join('')}
