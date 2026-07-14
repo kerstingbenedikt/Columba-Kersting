@@ -727,7 +727,7 @@ const DEFAULT_COLUMNS = ['ringnumber','endnumber','name','year','gender','color'
 const S = {
   tab: 'tauben', pigeons: [], filtered: [],
   page: 0, pageSize: 50,
-  search: '', sexFilter: 'all', yearFilter: 'all', inStockFilter: 'yes', colorFilter: 'all', stateFilter: 'all', typeFilter: 'all', standortFilter: 'all', assFilter: 'all',
+  search: '', sexFilter: 'all', yearFilter: 'all', inStockFilter: 'yes', colorFilter: 'all', stateFilter: 'all', typeFilter: 'all', standortFilter: 'all',
   filtersOpen: false, taubenView: 'liste',
   pigeonStates: [],
   uniqueColors: [], uniqueRaces: [], uniqueStrains: [], uniqueBreeders: [],
@@ -949,14 +949,6 @@ const COLUMN_DEFS = [
       const s=pigeonReiseSummary(p.pigeonid);
       if(s===null) return '<span style="color:var(--text3);font-size:12px">…</span>';
       return s.top10>0 ? `<span style="color:var(--amber);font-weight:600">🏆 ${s.top10}</span>` : '<span style="color:var(--text3)">—</span>';
-    } },
-  { key:'ass', label:'Ass A-D', sortKey:'ass',
-    val:p=>['a','b','c','d'].filter(k=>p['ass_'+k]).map(k=>k.toUpperCase()).join(', '),
-    sortVal:p=>['a','b','c','d'].filter(k=>p['ass_'+k]).length,
-    cell:p=>{
-      const letters=['a','b','c','d'].filter(k=>p['ass_'+k]);
-      if(!letters.length) return '<span style="color:var(--text3)">—</span>';
-      return letters.map(k=>`<span class="badge" style="background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.35);margin-right:2px">${k.toUpperCase()}</span>`).join('');
     } },
 ];
 const COLUMN_BY_KEY = Object.fromEntries(COLUMN_DEFS.map(c=>[c.key,c]));
@@ -1317,7 +1309,7 @@ function colorMatchesKeyword(colorText, keyword){
 
 function resetTaubenFilter(){
   S.search=''; S.sexFilter='all'; S.yearFilter='all';
-  S.inStockFilter='all'; S.colorFilter='all'; S.stateFilter='all'; S.typeFilter='all'; S.standortFilter='all'; S.assFilter='all';
+  S.inStockFilter='all'; S.colorFilter='all'; S.stateFilter='all'; S.typeFilter='all'; S.standortFilter='all';
   S.page=0;
   ['sex-filter','year-filter','stock-filter','color-filter','state-filter','type-filter','standort-filter']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.value='all'; });
@@ -1490,7 +1482,6 @@ async function exportPDF(){
     S.standortFilter!=='all'?'Standort: '+S.standortFilter:null,
     S.inStockFilter==='yes'?'Im Bestand':S.inStockFilter==='no'?'Nicht im Bestand':null,
     S.typeFilter!=='all'?'Typ: '+S.typeFilter:null,
-    S.assFilter!=='all'?'Ass: '+(S.assFilter==='any'?'beliebig':S.assFilter.toUpperCase()):null,
   ].filter(Boolean).join(' · ');
   const today = new Date().toLocaleDateString('de-DE');
   const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
@@ -1745,10 +1736,6 @@ function applyFilter(){
   if(S.stateFilter!=='all') arr=arr.filter(p=>pigeonStateName(p)===S.stateFilter);
   if(S.standortFilter!=='all') arr=arr.filter(p=>(p.standort||'')===S.standortFilter);
   if(S.typeFilter!=='all') arr=arr.filter(p=>p.pigeontype===S.typeFilter);
-  if(S.assFilter && S.assFilter!=='all'){
-    if(S.assFilter==='any') arr=arr.filter(p=>p.ass_a||p.ass_b||p.ass_c||p.ass_d);
-    else arr=arr.filter(p=>p['ass_'+S.assFilter]);
-  }
 
   // Fallback-Sortierung nur wenn KEIN Scoring aktiv war
   if(!q || !((/^\d/.test(q)) || q.match(/^(\d{2,4})[\/\-\s](\d{1,6})$/))){
@@ -1970,7 +1957,7 @@ function renderList(){
   const start=S.page*S.pageSize, end=start+S.pageSize;
   const page=S.filtered.slice(start,end);
   const totalPages=Math.ceil(S.filtered.length/S.pageSize)||1;
-  const activeFilterCount=[S.sexFilter,S.yearFilter,S.inStockFilter,S.colorFilter,S.stateFilter,S.typeFilter,S.standortFilter,S.assFilter].filter(v=>v&&v!=='all').length;
+  const activeFilterCount=[S.sexFilter,S.yearFilter,S.inStockFilter,S.colorFilter,S.stateFilter,S.typeFilter,S.standortFilter].filter(v=>v&&v!=='all').length;
   return `
     ${S.error?`<div class="error-box">⚠️ ${escH(S.error)}</div>`:''}
     <div class="search-row">
@@ -2018,14 +2005,6 @@ function renderList(){
           <select id="standort-filter" onchange="S.standortFilter=this.value;S.page=0;applyFilter()">
             <option value="all">${t('filter_all_locations')}</option>
             ${[...new Set(S.pigeons.map(p=>p.standort).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}"${S.standortFilter===s?' selected':''}>${escH(s)}</option>`).join('')}
-          </select>
-          <select id="ass-filter" onchange="S.assFilter=this.value;S.page=0;applyFilter()" title="Ass-Kategorie">
-            <option value="all"${S.assFilter==='all'?' selected':''}>Ass: alle</option>
-            <option value="a"${S.assFilter==='a'?' selected':''}>🏅 Ass A</option>
-            <option value="b"${S.assFilter==='b'?' selected':''}>🏅 Ass B</option>
-            <option value="c"${S.assFilter==='c'?' selected':''}>🏅 Ass C</option>
-            <option value="d"${S.assFilter==='d'?' selected':''}>🏅 Ass D</option>
-            <option value="any"${S.assFilter==='any'?' selected':''}>🏅 Ass (beliebig)</option>
           </select>
         </div>
         <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
@@ -2107,7 +2086,6 @@ function renderDetail(p){
               ${p.pigeontype==='Zuchttaube'?`<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25)">🥚 ${t('type_breeding')}</span>`:''}
               ${p.pigeontype==='Heimtaube'?`<span class="badge badge-u">🏠 ${t('type_home')}</span>`:''}
               ${p.instock===false?`<span class="badge" style="background:#2a1a0a;color:#c8883a">${t('detail_not_instock')}</span>`:''}
-              ${['a','b','c','d'].filter(k=>p['ass_'+k]).map(k=>`<span class="badge" style="background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.35)" title="Ass-Kategorie ${k.toUpperCase()}">🏅 Ass ${k.toUpperCase()}</span>`).join('')}
             </div>
           </div>
         </div>
@@ -4737,7 +4715,7 @@ function fixUmlauts(s){
 
 let RT = {
   step:'list', trips:[], selected:null, results:[], breederFilter:null,
-  imp:{ step:'upload', rows:[], breeders:[], stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0} }
+  imp:{ step:'upload', rows:[], breeders:[], stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0} }
 };
 
 // ── Züchterprofil für die Kopfzeile im Abstammungsdruck ──────────
@@ -5245,7 +5223,7 @@ function renderTripsList(){
       }).join('')}
     </div>`).join('');
 
-  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0}};render()">📥 '+t('import_perf')+'</button></div>'+(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
+  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div>'+(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
 }
 
 // Fasst die je Reise importierten Züchter mit gesetzten Tauben und Preisen zusammen
@@ -5737,8 +5715,14 @@ function renderTripsDone(){
         <div style="font-size:24px;font-weight:600;color:#e07070">${RT.imp.stats.err}</div>
         <div style="font-size:12px;color:var(--text3)">Fehler</div></div>`:''}
     </div>
+    ${RT.imp.stats.rlsBlocked?`<div style="max-width:520px;margin:0 auto 14px;text-align:left;background:rgba(212,168,67,.1);border:1px solid rgba(212,168,67,.3);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;color:var(--amber)">
+      ⚠️ ${RT.imp.stats.rlsBlocked} Ergebnis-Zeile(n) konnten nicht aktualisiert werden, obwohl sie bereits existierten
+      — vermutlich blockiert eine Row-Level-Security-Policy auf <code>pigeontrips</code> das Update für Zeilen ohne
+      <code>pigeonid</code> (Tauben ohne DB-Zuordnung). Betroffene Zeilen behalten dadurch alte/fehlende Werte
+      (z.B. Ass-Kategorien). Bitte die RLS-Policies für UPDATE auf <code>pigeontrips</code> in Supabase prüfen.
+    </div>`:''}
     <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
-      <button class="btn btn-outline" onclick="RT.imp={step:'upload',rows:[],breeders:[],stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0}};render()">📥 Weiterer Import</button>
+      <button class="btn btn-outline" onclick="RT.imp={step:'upload',rows:[],breeders:[],stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 Weiterer Import</button>
       <button class="btn" onclick="RT.step='list';loadTrips().then(()=>render())">🏁 Zu den Reisen</button>
     </div>
   </div>`;
@@ -5760,10 +5744,8 @@ async function runTripsImport(){
   // Sammle alle tripids dieser Session für Duplikat-Check
   const sessionTrips=[...RT.trips];
   // Ass-Kategorie-Flags (A/B/C/D) werden nur EINMAL pro Jahr auf einem Flug
-  // gesetzt und gehören an die Taube, nicht an den Flug-Ergebnis-Eintrag.
-  // Wir sammeln sie hier über den ganzen Import und schreiben sie am Ende
-  // additiv (true wird nie wieder auf false zurückgesetzt) in S.pigeons.
-  const assUpdates={}; // pigeonid -> {ass_a,ass_b,ass_c,ass_d}
+  // gesetzt. Sie werden am Flug-Ergebnis (pigeontrips) gespeichert, damit
+  // sie auch für Tauben ohne Zuordnung zur eigenen DB verfügbar sind.
 
   for(const item of RT.imp.rows){
     const t=item.trip;
@@ -5859,15 +5841,34 @@ async function runTripsImport(){
         setAlways('v_flag',!!res.v_flag); setAlways('v_platz',res.v_platz);
         setAlways('j_flag',!!res.j_flag); setAlways('j_platz',res.j_platz);
         setAlways('m_flag',!!res.m_flag); setAlways('m_platz',res.m_platz);
-        const flagFields=['v_flag','v_platz','j_flag','j_platz','m_flag','m_platz'];
+        // Ass-Kategorien A-D: gehören inhaltlich zur Taube (nur 1x/Jahr
+        // gesetzt), werden aber am Flug-Ergebnis gespeichert, damit sie
+        // auch für Tauben ohne Zuordnung zur eigenen Datenbank verfügbar
+        // sind (Bestenliste wertet ALLE geflogenen Tauben aus, nicht nur
+        // die in der eigenen DB erfassten).
+        setAlways('ass_a',!!res.ass_a); setAlways('ass_b',!!res.ass_b);
+        setAlways('ass_c',!!res.ass_c); setAlways('ass_d',!!res.ass_d);
+        const flagFields=['v_flag','v_platz','j_flag','j_platz','m_flag','m_platz','ass_a','ass_b','ass_c','ass_d'];
         const doWrite=async(r)=>{
-          if(existingId) await apiPatchBy('pigeontrips','id=eq.'+existingId,r);
-          else await apiPost('pigeontrips',{id:crypto.randomUUID(),tripid,...r});
+          if(existingId){
+            // Supabase PATCH mit "Prefer: return=representation" liefert die
+            // geänderten Zeilen zurück. Kommt hier ein LEERES Array, obwohl
+            // wir die Zeile über existingByKey sicher gefunden hatten, dann
+            // hat vermutlich eine RLS-Policy die UPDATE-Zeile (WHERE-Klausel)
+            // gefiltert — typischerweise weil die Policy an pigeonid/eine
+            // JOIN-Bedingung gekoppelt ist und bei pigeonid=NULL (Taube ohne
+            // DB-Zuordnung) leer läuft. KEIN Fehler/Exception, daher sonst
+            // unbemerkt — wir zählen das separat mit.
+            const res2 = await apiPatchBy('pigeontrips','id=eq.'+existingId,r);
+            if(Array.isArray(res2) && res2.length===0) RT.imp.stats.rlsBlocked++;
+          } else {
+            await apiPost('pigeontrips',{id:crypto.randomUUID(),tripid,...r});
+          }
         };
         try{
           await doWrite(row);
         }catch(e2){
-          // Fallback 1: V/J/M/P-Spalten evtl. noch nicht angelegt
+          // Fallback 1: V/J/M/Ass-Spalten evtl. noch nicht angelegt
           const r2={...row};
           flagFields.forEach(k=>delete r2[k]);
           try{
@@ -5877,15 +5878,6 @@ async function runTripsImport(){
             if(r2.sex){ const r4={...r2}; delete r4.sex; await doWrite(r4); }
             else throw e3;
           }
-        }
-        // Ass-Kategorie-Flags sammeln (an der Taube, additiv)
-        if(res.pigeonid && (res.ass_a||res.ass_b||res.ass_c||res.ass_d)){
-          const cur=assUpdates[res.pigeonid]||{};
-          if(res.ass_a) cur.ass_a=true;
-          if(res.ass_b) cur.ass_b=true;
-          if(res.ass_c) cur.ass_c=true;
-          if(res.ass_d) cur.ass_d=true;
-          assUpdates[res.pigeonid]=cur;
         }
         if(existingId) RT.imp.stats.resultsUpdated++; else RT.imp.stats.resultsNew++;
         RT.imp.stats.results++;
@@ -5914,22 +5906,6 @@ async function runTripsImport(){
       }
     }catch(e){ console.error('Gesamtplatzierung neu berechnen fehlgeschlagen:',e.message); }
   }
-  // Ass-Kategorie-Flags additiv an den Tauben speichern (nie true→false)
-  const assIds=Object.keys(assUpdates);
-  if(assIds.length){
-    setS('Ass-Kategorien speichern…');
-    for(const pid of assIds){
-      const upd=assUpdates[pid];
-      const existingP=S.pigeons.find(p=>p.pigeonid===pid);
-      const patch={};
-      ['ass_a','ass_b','ass_c','ass_d'].forEach(k=>{
-        if(upd[k] && !(existingP&&existingP[k])) patch[k]=true;
-      });
-      if(Object.keys(patch).length){
-        try{ await apiPatch('pigeons',pid,patch); }catch(e){ /* Spalten evtl. noch nicht angelegt */ }
-      }
-    }
-  }
   updP();
   await loadTrips();
   ZT.loaded=false;
@@ -5944,13 +5920,21 @@ async function runTripsImport(){
 let ZT = { rows:[], loaded:false, selected:null };
 
 async function loadZuechterData(){
+  const FULL='breedername,breedernumber,tripid,pigeonid,ringnumber,sex,speed,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat,ass_a,ass_b,ass_c,ass_d';
+  const NO_ASS='breedername,breedernumber,tripid,pigeonid,ringnumber,sex,speed,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat';
+  const NO_SEX_ASS='breedername,breedernumber,tripid,pigeonid,ringnumber,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat';
   try{
-    ZT.rows = await apiGet('/pigeontrips?breedername=not.is.null&select=breedername,breedernumber,tripid,pigeonid,ringnumber,sex,speed,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat&limit=10000') || [];
+    ZT.rows = await apiGet('/pigeontrips?breedername=not.is.null&select='+FULL+'&limit=10000') || [];
   }catch(e){
-    // Fallback: sex-Spalte evtl. noch nicht angelegt
     try{
-      ZT.rows = await apiGet('/pigeontrips?breedername=not.is.null&select=breedername,breedernumber,tripid,pigeonid,ringnumber,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat&limit=10000') || [];
-    }catch(e2){ ZT.rows = []; }
+      // Fallback: ass_a-d-Spalten evtl. noch nicht angelegt
+      ZT.rows = await apiGet('/pigeontrips?breedername=not.is.null&select='+NO_ASS+'&limit=10000') || [];
+    }catch(e2){
+      try{
+        // Fallback: sex-Spalte evtl. auch noch nicht angelegt
+        ZT.rows = await apiGet('/pigeontrips?breedername=not.is.null&select='+NO_SEX_ASS+'&limit=10000') || [];
+      }catch(e3){ ZT.rows = []; }
+    }
   }
   ZT.loaded = true;
 }
@@ -6089,8 +6073,12 @@ function bestenliste(breederFilter){
     if(!yr) return; // ohne bekannte Reise/Saison keine Zuordnung möglich
     const pid=r.pigeonid || ('ring:'+normRing(r.ringnumber||''));
     const key=yr+'|'+pid;
-    if(!byKey[key]) byKey[key]={year:yr, pigeonid:r.pigeonid||null, ringnumber:r.ringnumber||null, prizes:0, asSum:0, breedernames:new Set(), sexVotes:{M:0,F:0}, flights:[]};
+    if(!byKey[key]) byKey[key]={year:yr, pigeonid:r.pigeonid||null, ringnumber:r.ringnumber||null, prizes:0, asSum:0, breedernames:new Set(), sexVotes:{M:0,F:0}, flights:[], ass:{a:false,b:false,c:false,d:false}};
     const b=byKey[key];
+    if(r.ass_a) b.ass.a=true;
+    if(r.ass_b) b.ass.b=true;
+    if(r.ass_c) b.ass.c=true;
+    if(r.ass_d) b.ass.d=true;
     const hasPreis = r.prize_rv!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
     if(hasPreis) b.prizes++;
     // Je Liste (RV/RegGr/Reg) ein Kandidatenpaar aus Platz+AS; das beste (höchste AS) gilt für den Flug
@@ -6157,14 +6145,13 @@ function renderBestenliste(){
     ['taubinnenJg',t('bl_tab_hens_yl')]
   ];
   const groupsRaw=data[BL.cat]||[];
-  // Ass-Kategorie-Filter (A/B/C/D/beliebig): Ass ist ein Tauben-Attribut
-  // (nur einmal/Jahr gesetzt), daher nur für Tauben mit DB-Zuordnung
-  // auswertbar — Tauben ohne DB-Match fallen bei aktivem Filter automatisch raus.
+  // Ass-Kategorie-Filter (A/B/C/D/beliebig): kommt aus den Flugergebnissen
+  // selbst, funktioniert daher für ALLE geflogenen Tauben — auch ohne
+  // Zuordnung zur eigenen Datenbank.
   const assMatch = e => {
     if(BL.ass==='all') return true;
-    if(!e.pigeon) return false;
-    if(BL.ass==='any') return !!(e.pigeon.ass_a||e.pigeon.ass_b||e.pigeon.ass_c||e.pigeon.ass_d);
-    return !!e.pigeon['ass_'+BL.ass];
+    if(BL.ass==='any') return e.ass.a||e.ass.b||e.ass.c||e.ass.d;
+    return !!e.ass[BL.ass];
   };
   const groups = groupsRaw.map(g=>({...g, rows:g.rows.filter(assMatch)})).filter(g=>g.rows.length);
   if(!BL.expanded) BL.expanded=new Set();
@@ -6192,7 +6179,7 @@ function renderBestenliste(){
   const renderRow=(e,i,yr)=>{
     const k=rowKey(yr,e);
     const open=BL.expanded.has(k);
-    const assLetters=e.pigeon?['a','b','c','d'].filter(l=>e.pigeon['ass_'+l]):[];
+    const assLetters=['a','b','c','d'].filter(l=>e.ass[l]);
     const assCell=assLetters.length
       ? assLetters.map(l=>`<span class="badge" style="background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.35);margin-right:2px">${l.toUpperCase()}</span>`).join('')
       : '<span style="color:var(--text3)">—</span>';
