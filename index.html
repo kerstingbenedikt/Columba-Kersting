@@ -5956,7 +5956,7 @@ function zuechterAgg(){
       if(trip.pigeonsset_reggr>0) { b.reggrSet++; if(r.prize_reggr) b.reggrWon++; }
       if(trip.pigeonsset_reg>0)   { b.regSet++;   if(r.prize_reg)   b.regWon++; }
     }
-    [r.as_rv,r.as_reg].forEach(v=>{ if(v&&v>b.bestAS) b.bestAS=v; });
+    [r.as_rv,r.as_reg,r.as_nat].forEach(v=>{ if(v&&v>b.bestAS) b.bestAS=v; });
   });
   return Object.values(g).map(b=>({...b, tripCount:b.trips.size,
     pctRV:   b.rvSet    ? b.rvWon/b.rvSet*100       : null,
@@ -6009,7 +6009,7 @@ function renderZuechterDetail(name){
     if(r.prize_rv)    t.rv++;
     if(r.prize_reggr) t.reggr++;
     if(r.prize_reg)   t.reg++;
-    [r.as_rv,r.as_reg].forEach(v=>{ if(v&&v>t.bestAS) t.bestAS=v; });
+    [r.as_rv,r.as_reg,r.as_nat].forEach(v=>{ if(v&&v>t.bestAS) t.bestAS=v; });
     if(r.speed!=null && (t.bestSpeed==null || Number(r.speed)>t.bestSpeed)) t.bestSpeed=Number(r.speed);
   });
   const tripRows=Object.values(byTrip).map(t=>({...t, trip:tripById[t.tripid]}))
