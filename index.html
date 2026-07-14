@@ -2086,6 +2086,7 @@ function renderDetail(p){
               ${p.pigeontype==='Zuchttaube'?`<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25)">🥚 ${t('type_breeding')}</span>`:''}
               ${p.pigeontype==='Heimtaube'?`<span class="badge badge-u">🏠 ${t('type_home')}</span>`:''}
               ${p.instock===false?`<span class="badge" style="background:#2a1a0a;color:#c8883a">${t('detail_not_instock')}</span>`:''}
+              ${['a','b','c','d'].filter(k=>p['ass_'+k]).map(k=>`<span class="badge" style="background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.35)" title="Ass-Kategorie ${k.toUpperCase()}">🏅 Ass ${k.toUpperCase()}</span>`).join('')}
             </div>
           </div>
         </div>
@@ -4667,6 +4668,22 @@ function renderImpDone(){
 // Datei liefert 0 / 458 / 175 / 0 / 33 → amtlicher Ausdruck bestätigt
 // Reg=458, RegGr=175, RV=33 (vorher waren Reg/RegGr vertauscht und RV wurde
 // gar nicht gelesen, stattdessen das immer-leere FG-Feld als RV interpretiert).
+//
+// Vorbenennungs-/Auszeichnungs-Flags (je Taube, Spalte 20-30), verifiziert
+// per Spaltenanalyse an dieser Musterdatei (Rückmeldung Benedikt 14.07.26):
+// [20]=Geschlecht (W=weiblich, sonst männlich — KEIN Vorbenennungs-Flag)
+// [21]=V  Verbandsmeisterschaft-Vorbenennung  (je Flug, Top-3 zählen)
+// [23]=J  Jährige-Kennzeichnung               (je Flug, Top-3 zählen)
+// [24]=M  Medaillen-Vorbenennung               (je Flug, Top-3 zählen)
+// [27]=A, [28]=B, [29]=C, [30]=D  Ass-Kategorien — nur EINMAL pro Jahr auf
+//      einem einzigen Flug gesetzt → wird an der Taube (nicht am Flug)
+//      gespeichert (S.pigeons.ass_a/ass_b/ass_c/ass_d).
+// [P] Preisflug-Vorbenennung: Spalte/Position bei diesem Verein noch nicht
+//      bekannt (kommt in Musterdatei nicht vor) — Platzhalter-Feld p_flag/
+//      p_platz ist in DB und Anzeige bereits vorbereitet, wird hier aber
+//      noch NICHT befüllt. TODO sobald Beispieldatei mit P-Kennzeichnung
+//      vorliegt: Spaltenposition unten bei FLAG_COL ergänzen.
+const FLAG_COL = { v:21, j:23, m:24, p:null, a:27, b:28, c:29, d:30 };
 function calcAS(platz, g_aufgesetzt) {
   if (!platz || platz <= 0 || !g_aufgesetzt || g_aufgesetzt <= 0) return null;
   // Laut Reglement erhält nur jede 3. gesetzte Taube einen Preis (aufgerundet).
@@ -5252,6 +5269,15 @@ function tripDetailRows(){
 }
 function setTripBreederFilter(name){ RT.breederFilter=name||null; render(); }
 
+// Zellendarstellung für Vorbenennungs-Flags: mit Platz (1.-3.) farblich
+// hervorgehoben, ohne Platz nur ein dezentes Häkchen, sonst leer.
+function tripFlagCell(r, key, label){
+  if(!r[key+'_flag']) return '<span style="color:var(--text3)">—</span>';
+  const platz=r[key+'_platz'];
+  if(platz) return `<span class="badge badge-u" title="${label} — Platz ${platz} der Vorbenennung">${label}${platz}</span>`;
+  return `<span style="color:var(--text2)" title="${label} vorbenannt">${label}</span>`;
+}
+
 function renderTripDetail(){
   const trip=RT.selected; if(!trip) return renderTripsList();
   const sorted=tripDetailRows();
@@ -5266,7 +5292,11 @@ function renderTripDetail(){
       +'<td>'+(r.speed?Number(r.speed).toFixed(3):'—')+'</td>'
       +'<td>'+(r.prize_rv||'—')+'</td><td>'+(r.prize_fg||'—')+'</td>'
       +'<td>'+(r.prize_reggr||'—')+'</td><td>'+(r.prize_reg||'—')+'</td>'
-      +'<td>'+(r.as_reg>0?Number(r.as_reg).toFixed(2):'—')+'</td></tr>';
+      +'<td>'+(r.as_reg>0?Number(r.as_reg).toFixed(2):'—')+'</td>'
+      +'<td style="text-align:center">'+tripFlagCell(r,'v','V')+'</td>'
+      +'<td style="text-align:center">'+tripFlagCell(r,'j','J')+'</td>'
+      +'<td style="text-align:center">'+tripFlagCell(r,'m','M')+'</td>'
+      +'<td style="text-align:center">'+tripFlagCell(r,'p','P')+'</td></tr>';
   }).join('');
 
   // Züchter-Chips zum Umschalten des Filters (inkl. "Alle Züchter")
@@ -5294,7 +5324,8 @@ function renderTripDetail(){
       ?'<div style="text-align:center;padding:24px;color:var(--text3)">'+t('loading_results')+'</div>'
       :'<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
       +'<thead><tr><th>'+t('th_placement')+'</th><th>'+t('th_placement_breeder')+'</th><th>'+t('th_ring')+'</th><th>'+t('th_name')+'</th>'+(RT.breederFilter?'':'<th>'+t('th_breeder')+'</th>')+'<th>'+t('th_speed')+'</th>'
-      +'<th>'+t('th_prize')+'RV</th><th>'+t('th_prize')+'FG</th><th>'+t('th_prize')+'RegGr</th><th>'+t('th_prize')+'Reg</th><th>'+t('th_as')+' Reg</th></tr></thead>'
+      +'<th>'+t('th_prize')+'RV</th><th>'+t('th_prize')+'FG</th><th>'+t('th_prize')+'RegGr</th><th>'+t('th_prize')+'Reg</th><th>'+t('th_as')+' Reg</th>'
+      +'<th title="Verbandsmeisterschaft-Vorbenennung">V</th><th title="Jährige">J</th><th title="Medaillen-Vorbenennung">M</th><th title="Preisflug-Vorbenennung">P</th></tr></thead>'
       +'<tbody>'+rows+'</tbody></table></div>')
     +'</div></div>';
 }
@@ -5491,11 +5522,23 @@ async function parseKrausRows(file, breedernumber){
       const prg = pRgg!==0?pRgg:null;  // RegGr = G-Liste
       const pre = pReg!==0?pReg:null;  // Reg   = A-Liste (große Liste)
       const pfg = pFg!==0?pFg:null;    // bei diesem Verein bislang stets 0/unbenutzt
+      // Vorbenennungs-/Ass-Flags, siehe FLAG_COL-Kommentar oben
+      const flagAt = c => c!=null && line.length>c && line[c]!==' ' ? line[c] : null;
+      const vFlag = flagAt(FLAG_COL.v)==='V';
+      const jFlag = flagAt(FLAG_COL.j)==='J';
+      const mFlag = flagAt(FLAG_COL.m)==='M';
+      const pFlag = FLAG_COL.p!=null && flagAt(FLAG_COL.p)==='P'; // noch inaktiv, s.o.
+      const assA  = flagAt(FLAG_COL.a)==='A';
+      const assB  = flagAt(FLAG_COL.b)==='B';
+      const assC  = flagAt(FLAG_COL.c)==='C';
+      const assD  = flagAt(FLAG_COL.d)==='D';
       reiseMap[rNr].results.push({
         ringnumber:ring, sex:geschl==='W'?'F':'M',
         speed,
         prize_rv:prv, prize_fg:pfg, prize_reggr:prg, prize_reg:pre,
-        as_rv:calcAS(prv,_h.g_rv||0), as_reg:calcAS(pre,_h.g_reg||0), as_nat:calcAS(prg,_h.g_reggr||0)
+        as_rv:calcAS(prv,_h.g_rv||0), as_reg:calcAS(pre,_h.g_reg||0), as_nat:calcAS(prg,_h.g_reggr||0),
+        v_flag:vFlag, j_flag:jFlag, m_flag:mFlag, p_flag:pFlag,
+        ass_a:assA, ass_b:assB, ass_c:assC, ass_d:assD
       });
     }
   });
@@ -5505,10 +5548,30 @@ async function parseKrausRows(file, breedernumber){
     .sort((a,b)=>a.number-b.number)
     .map(trip=>{
       const h=zuechterMap[trip.number]||{};
+      // Top-3-Nummerierung je Flug+Züchter für V/J/M/P: von den jeweils
+      // gekennzeichneten Tauben zählen nur die schnellsten 3 (analog zur
+      // üblichen Vorbenennungs-Wertung, bei der nur die besten 3 der
+      // gemeldeten Tauben in die Wertung kommen).
+      const rankTop3 = flagKey => {
+        const flagged = trip.results
+          .map((res,i)=>({i, speed:res[flagKey+'_flag']?res.speed:null}))
+          .filter(x=>trip.results[x.i][flagKey+'_flag']);
+        flagged.sort((a,b)=>{
+          if(a.speed!=null && b.speed!=null) return b.speed-a.speed;
+          if(a.speed!=null) return -1;
+          if(b.speed!=null) return 1;
+          return 0;
+        });
+        const platz={};
+        flagged.slice(0,3).forEach((x,rank)=>{ platz[x.i]=rank+1; });
+        return platz;
+      };
+      const vPlatz=rankTop3('v'), jPlatz=rankTop3('j'), mPlatz=rankTop3('m'), pPlatz=rankTop3('p');
       const results=trip.results.map((res,i)=>{
         const dbP=S.pigeons.find(p=>normRing(p.ringnumber)===normRing(res.ringnumber));
         return {...res, placement:i+1, pigeonid:dbP?.pigeonid||null, found:!!dbP,
-          breedername:breedername||null, breedernumber:breedernumber||null};
+          breedername:breedername||null, breedernumber:breedernumber||null,
+          v_platz:vPlatz[i]||null, j_platz:jPlatz[i]||null, m_platz:mPlatz[i]||null, p_platz:pPlatz[i]||null};
       });
       return {
         trip:{...trip, pigeonsset:results.length,
@@ -5550,6 +5613,18 @@ async function parseXlsxRows(file){
     const results=trip.rows.map((r,i)=>{
       const ring=parseTaube(r['Taube']||'');
       const dbP=ring?S.pigeons.find(p=>normRing(p.ringnumber)===normRing(ring)):null;
+      // Optionale Spalten V/J/M/P (Vorbenennungs-Platz je Flug) und A/B/C/D
+      // (Ass-Kategorie, wird an der Taube gespeichert): Zelle leer/0 → kein
+      // Flag; eine Zahl → Platz direkt übernehmen; ein sonstiger Wert (z.B.
+      // "x") → Flag gesetzt, aber ohne Platz.
+      const flagCell = key => {
+        const raw = String(r[key]||'').trim();
+        if(!raw) return {flag:false, platz:null};
+        const n = parseInt(raw.replace(',','.'));
+        if(!isNaN(n) && /^\d+$/.test(raw)) return {flag:true, platz:n};
+        return {flag:true, platz:null};
+      };
+      const vC=flagCell('V'), jC=flagCell('J'), mC=flagCell('M'), pC=flagCell('P');
       return {ringnumber:ring||String(r['Taube']||''),pigeonid:dbP?.pigeonid||null,found:!!dbP,
         placement:i+1,
         speed:parseFloat(String(r['Geschwindigkeit']||'0').replace(',','.'))||null,
@@ -5559,6 +5634,10 @@ async function parseXlsxRows(file){
         as_rv:parseFloat(String(r['AS RV']||'0').replace(',','.'))||null,
         as_reg:parseFloat(String(r['AS Reg']||'0').replace(',','.'))||null,
         as_nat:parseFloat(String(r['AS Nat']||'0').replace(',','.'))||null,
+        v_flag:vC.flag, v_platz:vC.platz, j_flag:jC.flag, j_platz:jC.platz,
+        m_flag:mC.flag, m_platz:mC.platz, p_flag:pC.flag, p_platz:pC.platz,
+        ass_a:!!String(r['A']||'').trim(), ass_b:!!String(r['B']||'').trim(),
+        ass_c:!!String(r['C']||'').trim(), ass_d:!!String(r['D']||'').trim(),
       };
     });
     return {trip:{...trip,pigeonsset:results.length},results};
@@ -5662,6 +5741,11 @@ async function runTripsImport(){
 
   // Sammle alle tripids dieser Session für Duplikat-Check
   const sessionTrips=[...RT.trips];
+  // Ass-Kategorie-Flags (A/B/C/D) werden nur EINMAL pro Jahr auf einem Flug
+  // gesetzt und gehören an die Taube, nicht an den Flug-Ergebnis-Eintrag.
+  // Wir sammeln sie hier über den ganzen Import und schreiben sie am Ende
+  // additiv (true wird nie wieder auf false zurückgesetzt) in S.pigeons.
+  const assUpdates={}; // pigeonid -> {ass_a,ass_b,ass_c,ass_d}
 
   for(const item of RT.imp.rows){
     const t=item.trip;
@@ -5753,6 +5837,12 @@ async function runTripsImport(){
         setAlways('as_rv',res.as_rv); setAlways('as_reg',res.as_reg); setAlways('as_nat',res.as_nat);
         setIf('breedername',res.breedername); setIf('breedernumber',res.breedernumber);
         setIf('sex',res.sex);
+        // Vorbenennungs-Flags (V/J/M/P), je Flug
+        setAlways('v_flag',!!res.v_flag); setAlways('v_platz',res.v_platz);
+        setAlways('j_flag',!!res.j_flag); setAlways('j_platz',res.j_platz);
+        setAlways('m_flag',!!res.m_flag); setAlways('m_platz',res.m_platz);
+        setAlways('p_flag',!!res.p_flag); setAlways('p_platz',res.p_platz);
+        const flagFields=['v_flag','v_platz','j_flag','j_platz','m_flag','m_platz','p_flag','p_platz'];
         const doWrite=async(r)=>{
           if(existingId) await apiPatchBy('pigeontrips','id=eq.'+existingId,r);
           else await apiPost('pigeontrips',{id:crypto.randomUUID(),tripid,...r});
@@ -5760,9 +5850,25 @@ async function runTripsImport(){
         try{
           await doWrite(row);
         }catch(e2){
-          // Fallback: sex-Spalte evtl. noch nicht angelegt
-          if(row.sex){ const r2={...row}; delete r2.sex; await doWrite(r2); }
-          else throw e2;
+          // Fallback 1: V/J/M/P-Spalten evtl. noch nicht angelegt
+          const r2={...row};
+          flagFields.forEach(k=>delete r2[k]);
+          try{
+            await doWrite(r2);
+          }catch(e3){
+            // Fallback 2: sex-Spalte evtl. auch noch nicht angelegt
+            if(r2.sex){ const r4={...r2}; delete r4.sex; await doWrite(r4); }
+            else throw e3;
+          }
+        }
+        // Ass-Kategorie-Flags sammeln (an der Taube, additiv)
+        if(res.pigeonid && (res.ass_a||res.ass_b||res.ass_c||res.ass_d)){
+          const cur=assUpdates[res.pigeonid]||{};
+          if(res.ass_a) cur.ass_a=true;
+          if(res.ass_b) cur.ass_b=true;
+          if(res.ass_c) cur.ass_c=true;
+          if(res.ass_d) cur.ass_d=true;
+          assUpdates[res.pigeonid]=cur;
         }
         if(existingId) RT.imp.stats.resultsUpdated++; else RT.imp.stats.resultsNew++;
         RT.imp.stats.results++;
@@ -5790,6 +5896,22 @@ async function runTripsImport(){
         }
       }
     }catch(e){ console.error('Gesamtplatzierung neu berechnen fehlgeschlagen:',e.message); }
+  }
+  // Ass-Kategorie-Flags additiv an den Tauben speichern (nie true→false)
+  const assIds=Object.keys(assUpdates);
+  if(assIds.length){
+    setS('Ass-Kategorien speichern…');
+    for(const pid of assIds){
+      const upd=assUpdates[pid];
+      const existingP=S.pigeons.find(p=>p.pigeonid===pid);
+      const patch={};
+      ['ass_a','ass_b','ass_c','ass_d'].forEach(k=>{
+        if(upd[k] && !(existingP&&existingP[k])) patch[k]=true;
+      });
+      if(Object.keys(patch).length){
+        try{ await apiPatch('pigeons',pid,patch); }catch(e){ /* Spalten evtl. noch nicht angelegt */ }
+      }
+    }
   }
   updP();
   await loadTrips();
