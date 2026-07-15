@@ -411,7 +411,7 @@ const I18N = {
     zt_empty2:'Beim Import über den {tab}-Tab wird der Züchter automatisch aus der EDV-Kraus-Datei erkannt (Name aus der Datei, Nummer aus der Dateiendung).',
     zt_back_all:'← Alle Züchter', zt_rv_label:'RV:', zt_reggr_label:'RegGr:', zt_reg_label:'Reg:',
     col_number:'Nr.', col_pigeons_total:'Tauben ges.', col_avg_rv:'Ø RV', col_avg_reggr:'Ø RegGr', col_avg_reg:'Ø Reg',
-    col_best_as:'Bester AS', col_location:'Ort', col_date:'Datum', col_speed_mmin:'Flugmeter (m/min)',
+    col_best_as:'Bester AS', col_location:'Ort', col_date:'Datum', col_speed_mmin:'Flugmeter (m/min)', col_distance:'Entfernung',
 
     // ── Bestenliste ──
     bl_loading_perf:'Lade Leistungsdaten…', bl_loading_trips:'Lade Flüge…',
@@ -523,7 +523,7 @@ const I18N = {
     zt_empty2:'When importing via the {tab} tab, the breeder is automatically detected from the EDV-Kraus file (name from the file, number from the file extension).',
     zt_back_all:'← All Breeders', zt_rv_label:'RV:', zt_reggr_label:'RegGr:', zt_reg_label:'Reg:',
     col_number:'No.', col_pigeons_total:'Pigeons total', col_avg_rv:'Avg RV', col_avg_reggr:'Avg RegGr', col_avg_reg:'Avg Reg',
-    col_best_as:'Best AS', col_location:'Location', col_date:'Date', col_speed_mmin:'Speed (m/min)',
+    col_best_as:'Best AS', col_location:'Location', col_date:'Date', col_speed_mmin:'Speed (m/min)', col_distance:'Distance',
 
     // ── Leaderboard ──
     bl_loading_perf:'Loading performance data…', bl_loading_trips:'Loading races…',
@@ -2693,7 +2693,7 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
       // kein max-height, kein Zeichenlimit → voller Text
       // Ringnummer darf bei Bedarf auf 2 Zeilen umbrechen statt mit "…" abgeschnitten zu
       // werden — eine unvollständige Ringnummer ist im Zweifel nutzlos, ein Umbruch nicht.
-      return `<div style="border-left:2mm solid ${col};padding:1.5mm 2mm;background:#fafafa;border-radius:.8mm;width:100%;height:100%;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column">
+      return `<div style="border-left:2mm solid ${col};padding:1.5mm 2mm;background:#fafafa;border-radius:.8mm;width:100%;height:100%;min-height:0;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column">
         ${photoHtml}
         <div style="font-family:monospace;font-size:${szRing};font-weight:700;color:#1a6b1a;white-space:normal;word-break:break-word;line-height:1.2;flex-shrink:0">
           ${sx==='M'?'♂':sx==='F'?'♀':'?'} ${_esc(rn)}</div>
@@ -2709,7 +2709,13 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
     // Grid-Template ohne Header-Zeile
     let gtc='';
     for(let g=0;g<gens;g++){ gtc+=datWmm+'mm'; if(g<gens-1) gtc+=' '+conWmm+'mm '; }
-    const gtr = 'repeat('+rows+',1fr)';  // keine Header-Zeile! Höhe verteilt sich per Flexbox auf Restplatz der Seite
+    // minmax(0,1fr) statt 1fr: eine reine 1fr-Spur hat eine implizite Mindesthöhe, die
+    // sich am Inhalt der Zelle orientiert (min-height:auto). Ist der Boxinhalt (Foto,
+    // Reiseleistungs-/Platzierungszeilen) zusammen höher als die verfügbare 1fr-Höhe,
+    // "sprengt" das die Zeile und Chrome druckt eine zweite, fast leere Seite — obwohl
+    // overflow:hidden auf dem Grid-Container steht. minmax(0,…) erlaubt der Spur, echt
+    // auf 0 zu schrumpfen und garantiert damit Zeilenhöhe = verfügbarer Platz / rows.
+    const gtr = 'repeat('+rows+',minmax(0,1fr))';  // keine Header-Zeile! Höhe verteilt sich per Flexbox auf Restplatz der Seite
 
     let cells='';
     for(let g=0;g<gens;g++){
@@ -2720,7 +2726,9 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
         const p   = tree[g]?tree[g][i]:null;
         const rs  = i*span+1;  // +1 (kein Header)
         const re  = rs+span;
-        cells+=`<div style="grid-column:${gridCol};grid-row:${rs}/${re};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box">${box(p,g)}</div>`;
+        // min-height:0 + overflow:hidden auf der Zelle selbst: verhindert, dass die
+        // implizite Mindesthöhe des Grid-Items (min-height:auto) die Zeile aufbläht.
+        cells+=`<div style="grid-column:${gridCol};grid-row:${rs}/${re};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box;min-height:0;overflow:hidden">${box(p,g)}</div>`;
       }
       // Verbinder
       if(g<gens-1){
@@ -6059,9 +6067,11 @@ function renderZuechterDetail(name){
       const rvCell    = t.trip.pigeonsset_rv>0    ? t.rv+' ('+(t.rv/t.total*100).toFixed(0)+'%)'       : '—';
       const reggrCell = t.trip.pigeonsset_reggr>0 ? t.reggr+' ('+(t.reggr/t.total*100).toFixed(0)+'%)' : '—';
       const regCell   = t.trip.pigeonsset_reg>0   ? t.reg+' ('+(t.reg/t.total*100).toFixed(0)+'%)'     : '—';
+      const kmCell = t.trip.averagedistance3!=null ? Number(t.trip.averagedistance3).toFixed(1)+' km' : '—';
       return `
       <tr data-tripid="${t.tripid}" onclick="openTripFromZuechter(this.dataset.tripid,${jsAttr(name)})" style="cursor:pointer">
         <td>${t.trip.number}</td><td>${escH(t.trip.location||'')}</td><td>${t.trip.tripdate||'—'}</td>
+        <td style="text-align:center">${kmCell}</td>
         <td style="text-align:center">${t.total}</td>
         <td style="text-align:center">${rvCell}</td>
         <td style="text-align:center">${reggrCell}</td>
@@ -6080,7 +6090,7 @@ function renderZuechterDetail(name){
       <span class="badge badge-u">${t('zt_reg_label')} ${agg.pctReg!=null?agg.pctReg.toFixed(0)+'%':'—'}</span>
     </div>
     <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr><th>${t('trip_word')}</th><th>${t('col_location')}</th><th>${t('col_date')}</th><th style="text-align:center">${t('nav_pigeons')}</th>
+      <thead><tr><th>${t('trip_word')}</th><th>${t('col_location')}</th><th>${t('col_date')}</th><th style="text-align:center">${t('col_distance')}</th><th style="text-align:center">${t('nav_pigeons')}</th>
         <th style="text-align:center">RV</th><th style="text-align:center">RegGr</th><th style="text-align:center">Reg</th>
         <th style="text-align:center">${t('col_best_as')}</th><th style="text-align:center">${t('col_speed_mmin')}</th></tr></thead>
       <tbody>${tripRows}</tbody></table></div>
