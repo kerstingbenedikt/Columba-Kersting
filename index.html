@@ -6072,6 +6072,7 @@ const BL_COLUMN_DEFS = [
   { key:'ass',      label:'Ass A-D' },
   { key:'prizes',   label:'Preise' },
   { key:'sumas',    label:'Σ AS' },
+  { key:'kmsum',    label:'Σ km (Preisflüge)' },
 ];
 const BL_COLUMN_BY_KEY = Object.fromEntries(BL_COLUMN_DEFS.map(c=>[c.key,c]));
 const BL_DEFAULT_COLUMNS = BL_COLUMN_DEFS.map(c=>c.key);
@@ -6153,7 +6154,7 @@ function bestenliste(breederFilter){
     if(!yr) return; // ohne bekannte Reise/Saison keine Zuordnung möglich
     const pid=r.pigeonid || ('ring:'+normRing(r.ringnumber||''));
     const key=yr+'|'+pid;
-    if(!byKey[key]) byKey[key]={year:yr, pigeonid:r.pigeonid||null, ringnumber:r.ringnumber||null, prizes:0, asSum:0, breedernames:new Set(), sexVotes:{M:0,F:0}, flights:[], ass:{a:false,b:false,c:false,d:false}};
+    if(!byKey[key]) byKey[key]={year:yr, pigeonid:r.pigeonid||null, ringnumber:r.ringnumber||null, prizes:0, asSum:0, kmSum:0, breedernames:new Set(), sexVotes:{M:0,F:0}, flights:[], ass:{a:false,b:false,c:false,d:false}};
     const b=byKey[key];
     if(r.ass_a) b.ass.a=true;
     if(r.ass_b) b.ass.b=true;
@@ -6161,6 +6162,12 @@ function bestenliste(breederFilter){
     if(r.ass_d) b.ass.d=true;
     const hasPreis = r.prize_rv!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
     if(hasPreis) b.prizes++;
+    // Kilometer-Summe: nur Flüge zählen, bei denen die Taube einen Preis
+    // erzielt hat (gleiche Preis-Definition wie oben — irgendeine Liste
+    // reicht). Als Entfernung gilt die mittlere Entfernung des Fluges in
+    // der Gesamt-Konkurrenz (trips.averagedistance3), nicht die individuelle
+    // Distanz der Taube.
+    if(hasPreis && trip.averagedistance3!=null) b.kmSum += Number(trip.averagedistance3);
     // Je Liste (RV/RegGr/Reg) ein Kandidatenpaar aus Platz+AS; das beste (höchste AS) gilt für den Flug
     const candidates=[
       {platz:r.prize_rv,    as:r.as_rv},
@@ -6174,7 +6181,8 @@ function bestenliste(breederFilter){
     if(r.sex==='M'||r.sex==='F') b.sexVotes[r.sex]++;
     b.flights.push({
       tripNumber: trip.number, location: trip.location, tripdate: trip.tripdate,
-      platz: best?best.platz:null, as: flightAS, hasPreis, speed: r.speed!=null?Number(r.speed):null
+      platz: best?best.platz:null, as: flightAS, hasPreis, speed: r.speed!=null?Number(r.speed):null,
+      distance: trip.averagedistance3!=null?Number(trip.averagedistance3):null
     });
   });
 
@@ -6249,6 +6257,7 @@ function renderBestenliste(){
         <div style="font-size:12px;font-weight:500">${f.platz!=null?f.platz:'—'}</div>
         <div style="font-size:11px;color:var(--green)">${f.as!=null?f.as.toFixed(2):'—'}</div>
         <div style="font-size:10px;color:var(--text3)">${f.speed!=null?f.speed.toFixed(3)+' m/min':'—'}</div>
+        <div style="font-size:10px;color:${f.hasPreis?'var(--text2)':'var(--text3)'}">${f.distance!=null?f.distance.toFixed(1)+' km':'—'}${f.hasPreis&&f.distance!=null?' ✓':''}</div>
       </div>`;
     }).join('');
     const sumCheck=e.flights.reduce((s,f)=>s+(f.as||0),0);
@@ -6277,6 +6286,7 @@ function renderBestenliste(){
     },
     prizes:(e)=>`<td style="text-align:center;font-weight:600">${e.prizes}</td>`,
     sumas:(e)=>`<td style="text-align:center;font-weight:600;color:var(--green)">${e.asSum.toFixed(2)}</td>`,
+    kmsum:(e)=>`<td style="text-align:center;font-weight:600">${e.kmSum?e.kmSum.toFixed(1)+' km':'—'}</td>`,
   };
 
   const renderRow=(e,i,yr)=>{
@@ -6291,7 +6301,8 @@ function renderBestenliste(){
     ${open?`<tr><td colspan="${2+activeBLCols.length}" style="padding:0">${renderFlights(e)}</td></tr>`:''}`;
   };
 
-  const BL_TH = { ring:t('th_ring'), name:t('th_name'), jahrgang:t('year_abbr'), breeder:t('th_breeder'), ass:'Ass', prizes:t('col_prizes'), sumas:t('col_sum_as') };
+  const BL_TH = { ring:t('th_ring'), name:t('th_name'), jahrgang:t('year_abbr'), breeder:t('th_breeder'), ass:'Ass', prizes:t('col_prizes'), sumas:t('col_sum_as'), kmsum:'Σ km' };
+  const BL_TH_CENTER = new Set(['ass','prizes','sumas','kmsum']);
   const yearBlocks = groups.length ? groups.map(g=>{
     const collapsed = BL.collapsedSeasons.has(String(g.year));
     return `
@@ -6302,7 +6313,7 @@ function renderBestenliste(){
         <span style="font-size:11px;color:var(--text3)">(${g.rows.length})</span>
       </div>
       ${collapsed?'':`<div class="card"><div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr><th>#</th><th></th>${activeBLCols.map(c=>`<th${c.key==='ass'||c.key==='prizes'||c.key==='sumas'?' style="text-align:center"':''}${c.key==='ass'?' title="Ass-Kategorien"':''}>${BL_TH[c.key]}</th>`).join('')}</tr></thead>
+        <thead><tr><th>#</th><th></th>${activeBLCols.map(c=>`<th${BL_TH_CENTER.has(c.key)?' style="text-align:center"':''}${c.key==='ass'?' title="Ass-Kategorien"':''}${c.key==='kmsum'?' title="Summe der mittleren Flugdistanz über alle Preisflüge dieser Taube"':''}>${BL_TH[c.key]}</th>`).join('')}</tr></thead>
         <tbody>${g.rows.map((e,i)=>renderRow(e,i,g.year)).join('')}</tbody>
       </table></div></div>`}
     </div>`;
