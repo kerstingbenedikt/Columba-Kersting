@@ -5471,14 +5471,27 @@ async function parseKrausRows(file, breedernumber){
       const yr  =line.substring(8,10).trim();
       const ort =fixUmlauts(line.substring(18,38));
       const date=(tag&&mon&&yr)?`20${yr}-${mon.padStart(2,'0')}-${tag.padStart(2,'0')}`:null;
-      const mR=line.match(/R\s+(\d+)/);
-      const mG=line.match(/G\s+(\d+)/);
-      const mA=line.match(/A\s+(\d+)/);
+      const mR=line.match(/R\s+(\d+)\s+(\d+)\s+(\d{1,3})/);
+      const mG=line.match(/G\s+(\d+)\s+(\d+)\s+(\d{1,3})/);
+      const mA=line.match(/A\s+(\d+)\s+(\d+)\s+(\d{1,3})/);
+      // Format je Liste: "<Buchstabe> <gesetzt> <Preise> <Entfernung-km>".
+      // "R" = RV-Gesamt (übergeordnete, für ALLE Züchter des Reisevereins
+      // gültige Liste) — das ist die "mittlere Entfernung des Fluges in der
+      // Gesamt-Konkurrenz". "A" (Reg-Liste) und "G" (RegGr-Liste) sind nur
+      // Untergruppen mit einer EIGENEN, meist abweichenden Distanz (z.B.
+      // Erlangen-Baiersdorf: A=313km, G=310km, aber R/RV-gesamt=278km — nur
+      // R stimmt mit der offiziellen Reiseplan-Distanz überein). Ist R für
+      // einen Flug nicht gesetzt (kommt vor, z.B. wenn dort kein RV-weiter
+      // Wettbewerb ausgetragen wurde), fällt man auf A, sonst auf G zurück.
+      const distRv   = mR ? parseInt(mR[3]) : null;
+      const distReg  = mA ? parseInt(mA[3]) : null;
+      const distReggr= mG ? parseInt(mG[3]) : null;
       reiseMap[rNr]={number:rNr, vintage:yr?2000+parseInt(yr):null,
         location:ort, tripdate:date, results:[],
         g_rv:  mR?parseInt(mR[1]):0,
         g_reggr:mG?parseInt(mG[1]):0,
-        g_reg:  mA?parseInt(mA[1]):0};
+        g_reg:  mA?parseInt(mA[1]):0,
+        distRv, distReg, distReggr};
     }
 
     if(/^1[0-9][0-9]$/.test(prefix)){
@@ -5575,7 +5588,7 @@ async function parseKrausRows(file, breedernumber){
         trip:{...trip, pigeonsset:results.length,
           prices1:h.p1||null, prices2:h.p2||null, prices3:h.p3||null,
           prices4:h.p4||null, prices5:h.p5||null,
-          averagedistance3:h.dist?h.dist/1000:null},
+          averagedistance3:(trip.distRv!=null?trip.distRv:(trip.distReg!=null?trip.distReg:trip.distReggr))},
         results
       };
     });
