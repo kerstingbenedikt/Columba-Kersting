@@ -5323,18 +5323,18 @@ function renderTripDetail(){
     +breederNames.map(n=>'<span class="badge'+(RT.breederFilter===n?' badge-u':'')+'" style="cursor:pointer'+(RT.breederFilter===n?'':';opacity:.6')+'" onclick="setTripBreederFilter('+jsAttr(n)+')">🧑‍🌾 '+escH(n)+'</span>').join('')
     +'</div>':'';
 
-  // Echte Summe über ALLE Züchter dieses Flugs (nicht nur den zuletzt
-  // importierten) — RT.results enthält bereits alle Ergebnisse der Reise.
-  const rvCount=RT.results.filter(r=>r.prize_rv!=null).length;
-  const reggrCount=RT.results.filter(r=>r.prize_reggr!=null).length;
-  const regCount=RT.results.filter(r=>r.prize_reg!=null).length;
+  // Summe passend zum aktuell gewählten Züchter-Filter (oder über alle
+  // Züchter, wenn kein Filter aktiv ist) — reagiert auf die Züchter-Chips.
+  const rvCount=sorted.filter(r=>r.prize_rv!=null).length;
+  const reggrCount=sorted.filter(r=>r.prize_reggr!=null).length;
+  const regCount=sorted.filter(r=>r.prize_reg!=null).length;
 
   return '<div><button class="back-btn" onclick="RT.step=\'list\';RT.breederFilter=null;render()">← '+t('all_trips')+'</button>'
     +'<div class="card"><div style="margin-bottom:14px">'
     +'<div class="serif" style="font-size:22px;cursor:pointer" onclick="setTripBreederFilter(null)" title="'+t('show_all_breeders')+'">'+I18N[LANG].trip_word+' '+trip.number+' — '+escH(trip.location||'')+'</div>'
     +'<div style="color:var(--text3);font-size:13px;margin-top:4px">'+(trip.tripdate||'')+' · '+t('season')+' '+(trip.vintage||'')+(RT.breederFilter?' · '+t('filtered_on')+' 🧑‍🌾 '+escH(RT.breederFilter):'')+'</div>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">'
-    +'<span class="badge badge-u">'+RT.results.length+' '+t('pigeons_set')+'</span>'
+    +'<span class="badge badge-u">'+sorted.length+' '+t('pigeons_set')+'</span>'
     +(rvCount?'<span class="badge badge-u">RV: '+rvCount+'</span>':'')
     +(reggrCount?'<span class="badge badge-u">RegGr: '+reggrCount+'</span>':'')
     +(regCount?'<span class="badge badge-u">Reg: '+regCount+'</span>':'')
