@@ -328,6 +328,7 @@ const I18N = {
     th_as:'AS', filtered_on:'gefiltert auf', season:'Saison',
     show_all_breeders:'Alle Züchter anzeigen',
     ped_proband:'Proband', ped_parents:'Eltern', ped_grandparents:'Großeltern', ped_greatgrandparents:'Urgroßeltern',
+    ped_virtual_label:'Virtueller Nachkomme', ped_virtual_badge:'Prognose',
     cock:'Täuber', hen:'Täubin', ped_unknown:'Unbekannt', year_abbr:'Jg.', breeder_abbr:'Z:',
     inbreeding_label:'Inzuchtkoeff. (ber.):', inbreeding_suffix:'Inzucht',
     print_label:'Druck:', with_photo:'Mit Foto', breeder_data_btn:'Züchterdaten',
@@ -440,6 +441,7 @@ const I18N = {
     th_as:'AS', filtered_on:'filtered on', season:'Season',
     show_all_breeders:'Show all breeders',
     ped_proband:'Subject', ped_parents:'Parents', ped_grandparents:'Grandparents', ped_greatgrandparents:'Great-Grandparents',
+    ped_virtual_label:'Virtual Offspring', ped_virtual_badge:'Forecast',
     cock:'Cock', hen:'Hen', ped_unknown:'Unknown', year_abbr:'Yr.', breeder_abbr:'Br:',
     inbreeding_label:'Inbreeding coeff. (calc.):', inbreeding_suffix:'inbreeding',
     print_label:'Print:', with_photo:'With photo', breeder_data_btn:'Breeder data',
@@ -1093,7 +1095,12 @@ function findMother(p){
   if(!target) return null;
   return S.pigeons.find(x=>normRing(x.ringnumber)===target || normRing(x.ringnumberold||'')===target) || null;
 }
-function findById(id){ if(!id)return null; return S.pigeons.find(p=>p.pigeonid===id||p.ringnumber===String(id))||null; }
+// Für den Paarungscheck: ein virtueller (noch nicht existierender) Nachkomme,
+// damit der normale Stammbaum-Renderer (inkl. Druck/Export) unverändert
+// wiederverwendet werden kann. findById() löst diese ID zusätzlich zu echten
+// Tauben auf.
+let VIRTUAL_PROBAND = null;
+function findById(id){ if(!id)return null; if(VIRTUAL_PROBAND && id===VIRTUAL_PROBAND.pigeonid) return VIRTUAL_PROBAND; return S.pigeons.find(p=>p.pigeonid===id||p.ringnumber===String(id))||null; }
 function getAncestors(p, depth=4){
   if(!p||depth===0) return new Set();
   const s = new Set([p.pigeonid]);
@@ -2427,12 +2434,15 @@ function renderPedigreeInner(root, opts, embedded){
       ? `<div style="margin-top:5px;font-size:11px;color:var(--text2);line-height:1.5;max-height:80px;overflow-y:auto;border-top:1px solid var(--border);padding-top:4px;white-space:pre-wrap">${escH(infoFull)}</div>`
       : `<div title="${escH(infoFull)}" onclick="showPedigree('${p.pigeonid}')" style="margin-top:3px;font-size:9px;color:var(--text3);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;cursor:pointer;border-top:1px solid var(--border);padding-top:3px">${escH(infoShort)}</div>`)
       : '';
-    return `<div class="ped-box ${sx==='M'?'male':sx==='F'?'female':''} ${isRoot?'root':''}" onclick="showPedigree('${p.pigeonid}')" style="width:100%;box-sizing:border-box">
+    const ringLabel = p._virtual ? t('ped_virtual_label') : escH(ring(p));
+    const clickAttr = p._virtual ? '' : `onclick="showPedigree('${p.pigeonid}')"`;
+    return `<div class="ped-box ${sx==='M'?'male':sx==='F'?'female':''} ${isRoot?'root':''}" ${clickAttr} style="width:100%;box-sizing:border-box${p._virtual?';cursor:default':''}">
       <div style="display:flex;align-items:center;gap:4px;margin-bottom:1px">
         <span style="font-size:9px;font-weight:700;flex-shrink:0;color:${sx==='M'?'var(--blue)':sx==='F'?'var(--purple)':'var(--text3)'}">${sx==='M'?'♂':sx==='F'?'♀':'?'}</span>
-        <div class="ped-ring" style="font-size:${szRing};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(ring(p))}</div>
+        <div class="ped-ring" style="font-size:${szRing};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ringLabel}</div>
       </div>
-      ${p.name?`<div class="ped-name" style="font-size:${szName};font-weight:${fwName}">${escH(p.name)}</div>`:''}
+      ${p._virtual?`<div style="margin-top:2px;display:inline-block;background:var(--bg4);border:1px solid var(--border);border-radius:3px;padding:0 5px;font-size:9px;color:var(--text3)">🧬 ${t('ped_virtual_badge')}</div>`:''}
+      ${p.name&&!p._virtual?`<div class="ped-name" style="font-size:${szName};font-weight:${fwName}">${escH(p.name)}</div>`:''}
       ${tags.length?`<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:2px">${tags.map(t=>`<span style="background:var(--bg4);border:1px solid var(--border);border-radius:3px;padding:0 4px;font-size:9px;color:var(--text3);white-space:nowrap">${t}</span>`).join('')}</div>`:''}
       ${infoHtml}
       ${ib>0.01?`<div style="font-size:9px;margin-top:2px;color:${ib<0.03?'var(--green)':ib<0.1?'var(--orange)':'#e07070'}">⚠ ${(ib*100).toFixed(1)}% ${t('inbreeding_suffix')}</div>`:''}
@@ -2449,7 +2459,7 @@ function renderPedigreeInner(root, opts, embedded){
         <div>
           <div class="serif" style="font-size:22px">${escH(root.name||ring(root))}</div>
           <div style="font-family:monospace;font-size:13px;color:var(--green);margin-top:4px">
-            ${escH(ring(root))} · ${sx==='M'?'♂ '+t('cock'):sx==='F'?'♀ '+t('hen'):'?'} · ${t('year_abbr')} ${root.date_year||'—'}${root.color?` · ${escH(tColor(root.color))}`:''}
+            ${root._virtual ? '🧬 '+t('ped_virtual_badge') : escH(ring(root))+' · '+(sx==='M'?'♂ '+t('cock'):sx==='F'?'♀ '+t('hen'):'?')+' · '+t('year_abbr')+' '+(root.date_year||'—')+(root.color?` · ${escH(tColor(root.color))}`:'')}
           </div>
           ${ib>0?`<div style="margin-top:6px;font-size:12px;color:${ib<0.03?'var(--green)':ib<0.1?'var(--orange)':'#e07070'}">${t('inbreeding_label')} ${(ib*100).toFixed(2)} %</div>`:''}
         </div>
@@ -2721,9 +2731,9 @@ async function buildPedigreeHtml(pid, gens, withPhoto, erfolgeText){
       // werden — eine unvollständige Ringnummer ist im Zweifel nutzlos, ein Umbruch nicht.
       return `<div style="border-left:2mm solid ${col};padding:1.5mm 2mm;background:#fafafa;border-radius:.8mm;width:100%;height:100%;min-height:0;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column">
         ${photoHtml}
-        <div style="font-family:monospace;font-size:${szRing};font-weight:700;color:#1a6b1a;white-space:normal;word-break:break-word;line-height:1.2;flex-shrink:0">
-          ${sx==='M'?'♂':sx==='F'?'♀':'?'} ${_esc(rn)}</div>
-        ${p.name&&showName?`<div style="font-size:${szName};font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:.3mm;flex-shrink:0">${_esc(p.name)}</div>`:''}
+        ${p._virtual?`<div style="font-size:6.5pt;color:#666;background:#e8e8e8;display:inline-block;padding:.3mm 1.5mm;border-radius:2mm;flex-shrink:0">🧬 Prognose</div>`:`<div style="font-family:monospace;font-size:${szRing};font-weight:700;color:#1a6b1a;white-space:normal;word-break:break-word;line-height:1.2;flex-shrink:0">
+          ${sx==='M'?'♂':sx==='F'?'♀':'?'} ${_esc(rn)}</div>`}
+        ${p.name&&showName?`<div style="font-size:${szName};font-weight:700;white-space:${p._virtual?'normal':'nowrap'};overflow:hidden;text-overflow:ellipsis;margin-top:.3mm;flex-shrink:0">${_esc(p.name)}</div>`:''}
         ${showTags&&tags.length?`<div style="font-size:${szTag};color:#666;margin-top:.4mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">${tags.map(_esc).join(' · ')}</div>`:''}
         ${travelLines.length?`<div style="font-size:${szTravel};color:#1a6b1a;margin-top:.6mm;border-top:.2mm solid #ddd;padding-top:.4mm;line-height:1.35;flex-shrink:0">${travelLines.map(_esc).join('<br>')}</div>`:''}
         ${topLines.length?`<div style="font-size:${szTop};color:#333;margin-top:.5mm;line-height:1.35;flex-shrink:0">${topLines.map(_esc).join('<br>')}</div>`:''}
@@ -3183,10 +3193,18 @@ function renderPaarung(){
         ${sharedAnc.map(p=>`<div class="tag">${escH(ring(p))}${p.name?`<strong>${escH(p.name)}</strong>`:''}</div>`).join('')}
       </div>`:'<div style="margin-top:12px;font-size:13px;color:var(--text3)">Keine gemeinsamen Vorfahren in 4 Generationen gefunden.</div>'}
     </div>
-    <div class="section-label" style="margin-top:18px">🌳 Stammbaum ♂ ${escH(ring(S.paarungM))}${S.paarungM.name?' · '+escH(S.paarungM.name):''}</div>
-    ${renderPedigree(S.paarungM.pigeonid,{embedded:true})}
-    <div class="section-label" style="margin-top:18px">🌳 Stammbaum ♀ ${escH(ring(S.paarungF))}${S.paarungF.name?' · '+escH(S.paarungF.name):''}</div>
-    ${renderPedigree(S.paarungF.pigeonid,{embedded:true})}
+    <div class="section-label" style="margin-top:18px">🌳 Stammbaum des virtuellen Nachkommen (druckbar)</div>
+    ${(() => {
+      VIRTUAL_PROBAND = {
+        pigeonid: 'virtueller-nachkomme',
+        _virtual: true,
+        name: 'Verpaarung '+ring(S.paarungM)+' × '+ring(S.paarungF),
+        gender: null,
+        fatherid: S.paarungM.pigeonid,
+        motherid: S.paarungF.pigeonid
+      };
+      return renderPedigree(VIRTUAL_PROBAND.pigeonid, {embedded:true});
+    })()}
     ` : `<div class="empty-state"><div class="icon">💑</div>Wähle einen Täuber und eine Täubin, um den Inzuchtkoeffizienten der Nachkommen zu berechnen.</div>`}`;
 }
 
