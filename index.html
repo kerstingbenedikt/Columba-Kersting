@@ -734,7 +734,7 @@ const S = {
   sortCol: 'ringnumber', sortDir: 1,
   selected: null, selectedPed: null, pigeonTripYear: null, breederProfileEditing: false, erfolgeEditingId: null,
   loading: true, error: null, _loadingMore: false,
-  paarungM: null, paarungF: null, selectedNach: null, nachStatusFilter: null, nachGenFilter: null, nachCollapsed: {},
+  paarungM: null, paarungF: null, selectedNach: null, nachStatusFilter: null, nachGenFilter: null, nachExpanded: {},
   neuMode: 'full',
   bulkMode: false, bulkSelected: new Set(), bulkField: 'gender', bulkValue: '1',
   columns: (() => {
@@ -6986,8 +6986,8 @@ function toggleNachGenFilter(key){
   S.nachGenFilter = (S.nachGenFilter===key) ? null : key;
   render();
 }
-function toggleNachCollapse(key){
-  S.nachCollapsed[key] = !S.nachCollapsed[key];
+function toggleNachExpand(key){
+  S.nachExpanded[key] = !S.nachExpanded[key];
   render();
 }
 
@@ -7012,10 +7012,10 @@ function findChildren(pigeonId){
 }
 
 function statusStyle(p){
-  if(p.died) return {label:t('status_died')+(p.sold?' · zuvor verkauft':''),color:'#e07070',bg:'#1e0f0f'};
-  if(p.sold) return {label:t('status_sold'),color:'var(--orange)',bg:'#2a1a0a'};
-  if(p.instock===false) return {label:t('status_not_instock'),color:'#c8883a',bg:'#2a1a0a'};
-  return {label:t('status_instock'),color:'var(--green)',bg:'color-mix(in srgb,var(--green) 10%,var(--bg3))'};
+  if(p.died) return {key:'died',label:t('status_died')+(p.sold?' · zuvor verkauft':''),color:'#e07070',bg:'#1e0f0f'};
+  if(p.sold) return {key:'sold',label:t('status_sold'),color:'var(--orange)',bg:'#2a1a0a'};
+  if(p.instock===false) return {key:'not_instock',label:t('status_not_instock'),color:'#c8883a',bg:'#2a1a0a'};
+  return {key:'instock',label:t('status_instock'),color:'var(--green)',bg:'color-mix(in srgb,var(--green) 10%,var(--bg3))'};
 }
 
 function birdCard(p){
@@ -7047,12 +7047,19 @@ function renderGen(arr,gen,emptyMsg,groupKey){
     if(!groups[st.label]) groups[st.label]={style:st,birds:[]};
     groups[st.label].birds.push(p);
   });
-  return Object.entries(groups).map(function(entry){
+  // Feste Priorität: Im Bestand, Nicht im Bestand, danach alles Weitere (Verstorben, Verkauft, ...).
+  var order=['instock','not_instock','died','sold'];
+  var sorted=Object.entries(groups).sort(function(a,b){
+    var ia=order.indexOf(a[1].style.key); if(ia<0) ia=order.length;
+    var ib=order.indexOf(b[1].style.key); if(ib<0) ib=order.length;
+    return ia-ib;
+  });
+  return sorted.map(function(entry){
     var label=entry[0], g=entry[1];
     var key=groupKey+':'+encodeURIComponent(label);
-    var collapsed=!!S.nachCollapsed[key];
+    var collapsed=!S.nachExpanded[key];
     return '<div style="margin-bottom:14px">'
-      +'<div onclick="toggleNachCollapse(\''+key+'\')" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;user-select:none">'
+      +'<div onclick="toggleNachExpand(\''+key+'\')" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;user-select:none">'
       +'<span style="color:var(--text3);font-size:11px;width:12px;display:inline-block">'+(collapsed?'▸':'▾')+'</span>'
       +'<span style="background:'+g.style.bg+';color:'+g.style.color+';padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500">'+g.style.label+'</span>'
       +'<span style="font-size:12px;color:var(--text3)">'+g.birds.length+' Taube'+(g.birds.length!==1?'n':'')+'</span>'
@@ -7116,9 +7123,9 @@ function renderNachkommen(pid){
     var birds=applyStatusFilter(g[1]);
     var emptyMsg = statusLabel ? 'Keine '+g[2]+' mit Status "'+statusLabel+'".' : null;
     var genKey='gen:'+g[3];
-    var genCollapsed=!!S.nachCollapsed[genKey];
+    var genCollapsed=!S.nachExpanded[genKey];
     return '<div class="card" style="margin-bottom:12px">'
-      +'<div class="card-title" onclick="toggleNachCollapse(\''+genKey+'\')" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">'
+      +'<div class="card-title" onclick="toggleNachExpand(\''+genKey+'\')" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">'
       +'<span style="color:var(--text3);font-size:11px">'+(genCollapsed?'▸':'▾')+'</span>'
       +g[0]+' <span style="color:var(--text3);font-weight:400">('+birds.length+(statusLabel?' von '+g[1].length:'')+')</span></div>'
       +(genCollapsed?'':renderGen(birds,g[2],emptyMsg,genKey))+'</div>';
