@@ -734,7 +734,7 @@ const S = {
   sortCol: 'ringnumber', sortDir: 1,
   selected: null, selectedPed: null, pigeonTripYear: null, breederProfileEditing: false, erfolgeEditingId: null,
   loading: true, error: null, _loadingMore: false,
-  paarungM: null, paarungF: null, selectedNach: null,
+  paarungM: null, paarungF: null, selectedNach: null, nachStatusFilter: null, nachGenFilter: null,
   neuMode: 'full',
   bulkMode: false, bulkSelected: new Set(), bulkField: 'gender', bulkValue: '1',
   columns: (() => {
@@ -6952,9 +6952,23 @@ function escH(s){ if(s===null||s===undefined)return''; return String(s).replace(
 
 // ── NACHKOMMEN ────────────────────────────────────────────────
 function showNachkommen(id){
+  if(S.selectedNach!==id){ S.nachStatusFilter=null; S.nachGenFilter=null; }
   S.selectedNach=id; S.tab='nachkommen';
   setActiveNav('nachkommen');
   render(); window.scrollTo(0,0);
+}
+
+// Filter-Klick auf die Statistik-Kacheln in der Nachkommen-Ansicht.
+// Priorität: zuerst Bestandsstatus (Im Bestand/Verstorben/Verkauft), danach
+// Generation (Kinder/Enkel/Urenkel). Innerhalb der gefilterten Ergebnisse
+// gruppiert renderGen() weiterhin nach Status/Geschlecht (Täuber/Täubin aktiv).
+function toggleNachStatusFilter(key){
+  S.nachStatusFilter = (S.nachStatusFilter===key) ? null : key;
+  render();
+}
+function toggleNachGenFilter(key){
+  S.nachGenFilter = (S.nachGenFilter===key) ? null : key;
+  render();
 }
 
 function renderNachSearch(){
@@ -7005,8 +7019,8 @@ function birdCard(p){
     +'</div></div>';
 }
 
-function renderGen(arr,gen){
-  if(!arr.length) return '<div style="color:var(--text3);font-size:13px;padding:8px 0">Keine '+gen+' in der Datenbank erfasst.</div>';
+function renderGen(arr,gen,emptyMsg){
+  if(!arr.length) return '<div style="color:var(--text3);font-size:13px;padding:8px 0">'+(emptyMsg||('Keine '+gen+' in der Datenbank erfasst.'))+'</div>';
   var groups={};
   arr.forEach(function(p){
     var st=statusStyle(p);
@@ -7039,18 +7053,47 @@ function renderNachkommen(pid){
   var sold=allDesc.filter(function(p){return p.sold;}).length;
   var sx=sex_(root);
 
-  var kpis=[['Nachkommen',total,'var(--green)'],['Kinder',children.length,'var(--blue)'],['Enkel',gc.length,'var(--purple)'],['Urenkel',ggc.length,'var(--text2)'],['Im Bestand',active,'var(--green)'],['Verstorben',died,'#e07070'],['Verkauft',sold,'var(--orange)']];
+  // KPI-Kacheln: 'Nachkommen' setzt beide Filter zurück, die Status-Kacheln
+  // (Im Bestand/Verstorben/Verkauft) und die Generations-Kacheln (Kinder/Enkel/
+  // Urenkel) sind einzeln anklickbar und togglen den jeweiligen Filter.
+  var kpis=[
+    ['Nachkommen',total,'var(--green)',null,null],
+    ['Kinder',children.length,'var(--blue)','gen','children'],
+    ['Enkel',gc.length,'var(--purple)','gen','gc'],
+    ['Urenkel',ggc.length,'var(--text2)','gen','ggc'],
+    ['Im Bestand',active,'var(--green)','status','instock'],
+    ['Verstorben',died,'#e07070','status','died'],
+    ['Verkauft',sold,'var(--orange)','status','sold']
+  ];
   var kpiHtml=kpis.map(function(k){
-    return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center">'
+    var isActive = k[3]==='status' ? S.nachStatusFilter===k[4] : (k[3]==='gen' ? S.nachGenFilter===k[4] : (!S.nachStatusFilter&&!S.nachGenFilter));
+    var onclick = k[3]===null ? "S.nachStatusFilter=null;S.nachGenFilter=null;render();"
+      : (k[3]==='status' ? "toggleNachStatusFilter('"+k[4]+"')" : "toggleNachGenFilter('"+k[4]+"')");
+    var tip = k[3]===null ? 'Alle Filter zurücksetzen' : (isActive ? 'Filter "'+k[0]+'" entfernen' : 'Nach "'+k[0]+'" filtern');
+    return '<div onclick="'+onclick+'" title="'+tip+'" style="cursor:pointer;background:var(--bg3);border:1px solid '+(isActive?k[2]:'var(--border)')+';border-radius:var(--radius-sm);padding:12px;text-align:center;transition:border-color .15s'+(isActive?';box-shadow:0 0 0 1px '+k[2]+' inset':'')+'">'
       +'<div style="font-family:\'Playfair Display\',serif;font-size:24px;color:'+k[2]+';font-weight:600">'+k[1]+'</div>'
-      +'<div style="font-size:11px;color:var(--text3);margin-top:3px">'+k[0]+'</div></div>';
+      +'<div style="font-size:11px;color:'+(isActive?'var(--text)':'var(--text3)')+';margin-top:3px">'+k[0]+'</div></div>';
   }).join('');
 
-  var gens=[['🐣 Kinder (1. Generation)',children,'Kinder'],['🐓 Enkel (2. Generation)',gc,'Enkel'],['🥚 Urenkel (3. Generation)',ggc,'Urenkel']];
+  // Priorität beim Filtern: zuerst Bestandsstatus (Im Bestand/Verstorben/Verkauft),
+  // danach Generation (Kinder/Enkel/Urenkel). Innerhalb der Ergebnisliste
+  // gruppiert renderGen() zusätzlich nach Status/Geschlecht (Täuber/Täubin aktiv).
+  function applyStatusFilter(arr){
+    if(S.nachStatusFilter==='instock') return arr.filter(function(p){return p.instock;});
+    if(S.nachStatusFilter==='died') return arr.filter(function(p){return p.died;});
+    if(S.nachStatusFilter==='sold') return arr.filter(function(p){return p.sold;});
+    return arr;
+  }
+  var statusLabel = S.nachStatusFilter==='instock'?'Im Bestand':S.nachStatusFilter==='died'?'Verstorben':S.nachStatusFilter==='sold'?'Verkauft':null;
+
+  var gens=[['🐣 Kinder (1. Generation)',children,'Kinder','children'],['🐓 Enkel (2. Generation)',gc,'Enkel','gc'],['🥚 Urenkel (3. Generation)',ggc,'Urenkel','ggc']];
+  if(S.nachGenFilter) gens=gens.filter(function(g){return g[3]===S.nachGenFilter;});
   var genHtml=gens.map(function(g){
+    var birds=applyStatusFilter(g[1]);
+    var emptyMsg = statusLabel ? 'Keine '+g[2]+' mit Status "'+statusLabel+'".' : null;
     return '<div class="card" style="margin-bottom:12px">'
-      +'<div class="card-title">'+g[0]+' <span style="color:var(--text3);font-weight:400">('+g[1].length+')</span></div>'
-      +renderGen(g[1],g[2])+'</div>';
+      +'<div class="card-title">'+g[0]+' <span style="color:var(--text3);font-weight:400">('+birds.length+(statusLabel?' von '+g[1].length:'')+')</span></div>'
+      +renderGen(birds,g[2],emptyMsg)+'</div>';
   }).join('');
 
   return '<div class="card" style="margin-bottom:12px">'
