@@ -2443,8 +2443,8 @@ function renderPedigreeInner(root, opts, embedded){
             <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);cursor:pointer">
               <input type="checkbox" id="ped-print-photo" style="width:14px;height:14px;cursor:pointer"> ${t('with_photo')}
             </label>
-            <button class="btn btn-outline btn-sm" onclick="triggerPrint('${root.pigeonid}',4,document.getElementById('ped-print-photo').checked)">🖨 4 ${t('gens')}</button>
-            <button class="btn btn-outline btn-sm" onclick="triggerPrint('${root.pigeonid}',5,document.getElementById('ped-print-photo').checked)">🖨 5 ${t('gens')}</button>
+            <button class="btn btn-outline btn-sm" onclick="openPedigreePrintMenu(event,'${root.pigeonid}',4)">🖨 4 ${t('gens')}</button>
+            <button class="btn btn-outline btn-sm" onclick="openPedigreePrintMenu(event,'${root.pigeonid}',5)">🖨 5 ${t('gens')}</button>
             ${!embedded?`<button class="btn btn-outline btn-sm" onclick="toggleBreederProfileEditor()">🧑‍🌾 ${t('breeder_data_btn')}</button>`:''}
           </div>
         </div>
@@ -2600,7 +2600,7 @@ function renderPedigreeInner(root, opts, embedded){
 }
 
 // ── DRUCK / PDF ────────────────────────────────────────────────
-async function printPedigree(pid, gens, withPhoto, erfolgeText){
+async function buildPedigreeHtml(pid, gens, withPhoto, erfolgeText){
   try{
     gens = parseInt(gens)||4;
     withPhoto = !!withPhoto;
@@ -2751,6 +2751,11 @@ async function printPedigree(pid, gens, withPhoto, erfolgeText){
 
     const sx=_sex(root);
     const today=new Date().toLocaleDateString('de-DE');
+    // Für Dateinamen (PNG-Export etc.) — Sonderzeichen entfernen, nichts mit
+    // Umlauten/Leerzeichen, das auf manchen Systemen Probleme machen könnte.
+    const safeName = (root.name || _ring(root) || 'Taube').toString()
+      .replace(/[^\p{L}\p{N}\-]+/gu,'_').replace(/_+/g,'_').replace(/^_|_$/g,'') || 'Taube';
+    const filenameBase = `Stammbaum_${safeName}`;
 
     // Kopfzeile: Züchterdaten links, Logo/Foto mittig, im Druckdialog ausgewählte
     // Züchtererfolge rechts. Grid statt flex-space-between, damit das Logo unabhängig
@@ -2806,14 +2811,94 @@ ${buildBreederHeader()}
 </div>
 </body></html>`;
 
-    const blob=new Blob([html],{type:'text/html;charset=utf-8'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url; a.target='_blank'; a.rel='noopener';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(()=>URL.revokeObjectURL(url),15000);
+    return { html, pageWmm, pageHmm, filenameBase };
   } catch(e){
     alert('Druckfehler: '+e.message+'\n'+e.stack);
+    return null;
+  }
+}
+
+// Öffnet das fertige Stammbaum-HTML in einem neuen Tab — von dort kann per
+// Strg+P gedruckt oder im Druckdialog als Ziel "Als PDF speichern" gewählt werden.
+async function printPedigree(pid, gens, withPhoto, erfolgeText){
+  const built = await buildPedigreeHtml(pid, gens, withPhoto, erfolgeText);
+  if(!built) return;
+  const blob=new Blob([built.html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.target='_blank'; a.rel='noopener';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),15000);
+}
+
+// ── Bild-Export (PNG) ──────────────────────────────────────────
+// Rendert dasselbe Druck-HTML in einem unsichtbaren iframe und rastert es per
+// html2canvas zu einem PNG. Läuft komplett im Browser (passt zu GitHub Pages,
+// kein eigener Server nötig) — die Bibliothek wird bei Bedarf einmalig von
+// cdnjs nachgeladen. (Ein "echtes" durchsuchbares Vektor-PDF ist als
+// separater, aufwändigerer Schritt für später vorgesehen.)
+let _h2cLoadPromise = null;
+function ensureHtml2Canvas(){
+  if(window.html2canvas) return Promise.resolve();
+  if(_h2cLoadPromise) return _h2cLoadPromise;
+  _h2cLoadPromise = new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = ()=>resolve();
+    s.onerror = ()=>{ _h2cLoadPromise=null; reject(new Error('html2canvas konnte nicht geladen werden (Internetverbindung prüfen)')); };
+    document.head.appendChild(s);
+  });
+  return _h2cLoadPromise;
+}
+
+async function exportPedigreeImage(pid, gens, withPhoto, erfolgeText){
+  let iframe;
+  try{
+    await ensureHtml2Canvas();
+    const built = await buildPedigreeHtml(pid, gens, withPhoto, erfolgeText);
+    if(!built) return;
+    const { html, pageWmm, pageHmm, filenameBase } = built;
+
+    // mm → px bei 96dpi als Basis-Layoutgröße; html2canvas rendert davon
+    // unabhängig mit eigenem "scale"-Faktor in höherer Auflösung.
+    const pxW = Math.round(pageWmm * 96/25.4);
+    const pxH = Math.round(pageHmm * 96/25.4);
+
+    iframe = document.createElement('iframe');
+    iframe.style.cssText = `position:fixed;top:-10000px;left:-10000px;width:${pxW}px;height:${pxH}px;border:0`;
+    document.body.appendChild(iframe);
+
+    await new Promise((resolve, reject)=>{
+      iframe.onload = resolve;
+      iframe.onerror = ()=>reject(new Error('Vorschau konnte nicht geladen werden'));
+      iframe.srcdoc = html;
+    });
+    // Kurz warten, damit Bilder (Foto, Logo, Farbmuster) im iframe sicher fertig
+    // gerendert sind, bevor html2canvas den Snapshot macht.
+    await new Promise(r=>setTimeout(r, 200));
+
+    const canvas = await window.html2canvas(iframe.contentDocument.body, {
+      scale: 3,                 // ~288dpi effektive Auflösung, druckfähige Schärfe
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      width: pxW,
+      height: pxH,
+      windowWidth: pxW,
+      windowHeight: pxH
+    });
+
+    const blob = await new Promise(res=>canvas.toBlob(res, 'image/png'));
+    if(!blob){ alert('Bild-Export fehlgeschlagen'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filenameBase + '.png';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 15000);
+
+  } catch(e){
+    alert('Bild-Export fehlgeschlagen: '+e.message);
+  } finally {
+    if(iframe) iframe.remove();
   }
 }
 
@@ -4932,16 +5017,46 @@ function renderErfolgeSection(){
     </div>
   </div>`;
 }
-// Druckt direkt mit der gespeicherten Standard-Erfolge-Auswahl — keine
-// Bestätigung pro Druck mehr nötig. Anpassungen erfolgen ausschließlich
-// über "Züchterdaten" (renderErfolgeSection).
-async function triggerPrint(pid, gens, withPhoto){
+// Lädt Züchterprofil + Standard-Erfolge-Auswahl — gemeinsame Vorbereitung für
+// Drucken UND Bild-Export, keine Bestätigung pro Aktion nötig. Anpassungen
+// erfolgen ausschließlich über "Züchterdaten" (renderErfolgeSection).
+async function loadPrintErfolgeText(){
   if(!BREEDER_PROFILE_LOADED) await loadBreederProfile();
   await loadBreedersdata();
   const ids = new Set(getDefaultErfolgeIds());
   const chosen = (BREEDERSDATA_CACHE||[]).filter(r=>ids.has(r.breederdataid));
-  const erfolgeText = chosen.map(r=>`${r.name}: ${r.info}`).join('\n\n');
+  return chosen.map(r=>`${r.name}: ${r.info}`).join('\n\n');
+}
+async function triggerPrint(pid, gens, withPhoto){
+  const erfolgeText = await loadPrintErfolgeText();
   printPedigree(pid, gens, withPhoto, erfolgeText);
+}
+async function triggerImageExport(pid, gens, withPhoto){
+  const erfolgeText = await loadPrintErfolgeText();
+  exportPedigreeImage(pid, gens, withPhoto, erfolgeText);
+}
+
+// ── Druck/Export-Auswahlmenü (🖨-Buttons im Stammbaum) ──────────
+function closePedigreePrintMenu(){
+  const m = document.getElementById('ped-print-menu');
+  if(m) m.remove();
+}
+function openPedigreePrintMenu(evt, pid, gens){
+  evt.stopPropagation();
+  closePedigreePrintMenu();
+  const withPhoto = document.getElementById('ped-print-photo')?.checked || false;
+  const rect = evt.currentTarget.getBoundingClientRect();
+  const itemStyle = 'display:block;width:100%;text-align:left;padding:10px 14px;background:none;border:none;color:inherit;font-size:13px;cursor:pointer;font-family:inherit';
+  const menu = document.createElement('div');
+  menu.id = 'ped-print-menu';
+  menu.style.cssText = `position:fixed;top:${rect.bottom+4}px;left:${rect.left}px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 6px 20px rgba(0,0,0,.4);z-index:500;min-width:220px;overflow:hidden`;
+  menu.onclick = e=>e.stopPropagation();
+  menu.innerHTML = `
+    <button style="${itemStyle};border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg3,rgba(255,255,255,.06))'" onmouseout="this.style.background='none'" onclick="closePedigreePrintMenu();triggerPrint('${pid}',${gens},${withPhoto})">🖨 Drucken</button>
+    <button style="${itemStyle}" onmouseover="this.style.background='var(--bg3,rgba(255,255,255,.06))'" onmouseout="this.style.background='none'" onclick="closePedigreePrintMenu();triggerImageExport('${pid}',${gens},${withPhoto})">🖼 Als Bild speichern (PNG)</button>
+  `;
+  document.body.appendChild(menu);
+  setTimeout(()=>document.addEventListener('click', closePedigreePrintMenu, {once:true}), 0);
 }
 
 async function loadTrips(){
