@@ -2759,8 +2759,7 @@ async function buildPedigreeHtml(pid, gens, withPhoto, erfolgeText){
       }
     }
 
-    const sx=_sex(root);
-    const today=new Date().toLocaleDateString('de-DE');
+
 
     // Kopfzeile: Züchterdaten links, Logo/Foto mittig, im Druckdialog ausgewählte
     // Züchtererfolge rechts. Grid statt flex-space-between, damit das Logo unabhängig
@@ -2797,19 +2796,6 @@ async function buildPedigreeHtml(pid, gens, withPhoto, erfolgeText){
 </head><body>
 <div style="flex-shrink:0">
 ${buildBreederHeader()}
-<div style="margin-bottom:2.5mm;border-bottom:.3mm solid #ccc;padding-bottom:2mm;display:flex;justify-content:space-between;align-items:flex-end">
-  <div>
-    <div style="font-size:12pt;font-weight:700">🕊 ${_esc(root.name||_ring(root))}</div>
-    <div style="font-size:7pt;color:#555;margin-top:.5mm">
-      ${_esc(_ring(root))} &nbsp;·&nbsp;
-      ${sx==='M'?'♂ Täuber':sx==='F'?'♀ Täubin':'?'} &nbsp;·&nbsp;
-      Jg. ${root.date_year||'—'}
-      ${root.color?' &nbsp;·&nbsp; '+_esc(root.color):''}
-      &nbsp;·&nbsp; ${gens} Generationen
-    </div>
-  </div>
-  <div style="font-size:7pt;color:#aaa">${today} · Brieftauben-Verwaltung</div>
-</div>
 </div>
 <div style="flex:1;min-height:0;display:grid;grid-template-columns:${gtc};grid-template-rows:${gtr};border:.3mm solid #ccc;width:${pageWmm}mm;overflow:hidden">
   ${cells}
