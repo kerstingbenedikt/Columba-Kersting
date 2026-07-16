@@ -734,7 +734,7 @@ const S = {
   sortCol: 'ringnumber', sortDir: 1,
   selected: null, selectedPed: null, pigeonTripYear: null, breederProfileEditing: false, erfolgeEditingId: null,
   loading: true, error: null, _loadingMore: false,
-  paarungM: null, paarungF: null, selectedNach: null, nachStatusFilter: null, nachGenFilter: null,
+  paarungM: null, paarungF: null, selectedNach: null, nachStatusFilter: null, nachGenFilter: null, nachCollapsed: {},
   neuMode: 'full',
   bulkMode: false, bulkSelected: new Set(), bulkField: 'gender', bulkValue: '1',
   columns: (() => {
@@ -2201,6 +2201,12 @@ async function uploadPigeonPhoto(id, file){
 }
 
 function fv(p,f){ return escH(String(p[f]||'')); }
+// Native <input type="date"> bietet in manchen Browsern keine sichtbare Möglichkeit,
+// ein gesetztes Datum wieder zu entfernen — daher ein expliziter Lösch-Button.
+function clearDateField(id){
+  var el=document.getElementById(id);
+  if(el){ el.value=''; el.dispatchEvent(new Event('change')); }
+}
 
 function renderDetailEdit(p){
   const f=findFather(p),mo=findMother(p);
@@ -2259,9 +2265,19 @@ function renderDetailEdit(p){
         <div class="form-field"><label>${t('fld_country')}</label><input id="e_countrycode" value="${fv(p,'countrycode')}"></div>
         <div class="form-field"><label>${t('fld_assocno')}</label><input id="e_associationno" value="${fv(p,'associationno')}"></div>
         <div class="form-field"><label>${t('fld_birthday')}</label><input id="e_birthday" type="date" value="${fv(p,'birthday')}"></div>
-        <div class="form-field"><label>${t('fld_died')}</label><input id="e_died" type="date" value="${fv(p,'died')}"></div>
+        <div class="form-field"><label>${t('fld_died')}</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="e_died" type="date" value="${fv(p,'died')}" style="flex:1">
+            <span onclick="clearDateField('e_died')" title="Datum entfernen" style="cursor:pointer;color:var(--text3);font-size:15px;padding:0 4px" onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--text3)'">✕</span>
+          </div>
+        </div>
         <div class="form-field"><label>${t('fld_bought')}</label><input id="e_bought" type="date" value="${fv(p,'bought')}"></div>
-        <div class="form-field"><label>${t('fld_sold')}</label><input id="e_sold" type="date" value="${fv(p,'sold')}"></div>
+        <div class="form-field"><label>${t('fld_sold')}</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="e_sold" type="date" value="${fv(p,'sold')}" style="flex:1">
+            <span onclick="clearDateField('e_sold')" title="Datum entfernen" style="cursor:pointer;color:var(--text3);font-size:15px;padding:0 4px" onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--text3)'">✕</span>
+          </div>
+        </div>
         <div class="form-field"><label>${t('fld_instock')}</label>
           <select id="e_instock">
             <option value="true" ${p.instock!==false?'selected':''}>${t('yes_word')}</option>
@@ -6970,6 +6986,10 @@ function toggleNachGenFilter(key){
   S.nachGenFilter = (S.nachGenFilter===key) ? null : key;
   render();
 }
+function toggleNachCollapse(key){
+  S.nachCollapsed[key] = !S.nachCollapsed[key];
+  render();
+}
 
 function renderNachSearch(){
   return '<div class="card">'
@@ -7019,7 +7039,7 @@ function birdCard(p){
     +'</div></div>';
 }
 
-function renderGen(arr,gen,emptyMsg){
+function renderGen(arr,gen,emptyMsg,groupKey){
   if(!arr.length) return '<div style="color:var(--text3);font-size:13px;padding:8px 0">'+(emptyMsg||('Keine '+gen+' in der Datenbank erfasst.'))+'</div>';
   var groups={};
   arr.forEach(function(p){
@@ -7027,15 +7047,19 @@ function renderGen(arr,gen,emptyMsg){
     if(!groups[st.label]) groups[st.label]={style:st,birds:[]};
     groups[st.label].birds.push(p);
   });
-  return Object.values(groups).map(function(g){
+  return Object.entries(groups).map(function(entry){
+    var label=entry[0], g=entry[1];
+    var key=groupKey+':'+encodeURIComponent(label);
+    var collapsed=!!S.nachCollapsed[key];
     return '<div style="margin-bottom:14px">'
-      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+      +'<div onclick="toggleNachCollapse(\''+key+'\')" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;user-select:none">'
+      +'<span style="color:var(--text3);font-size:11px;width:12px;display:inline-block">'+(collapsed?'▸':'▾')+'</span>'
       +'<span style="background:'+g.style.bg+';color:'+g.style.color+';padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500">'+g.style.label+'</span>'
       +'<span style="font-size:12px;color:var(--text3)">'+g.birds.length+' Taube'+(g.birds.length!==1?'n':'')+'</span>'
       +'</div>'
-      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px">'
+      +(collapsed?'':'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px">'
       +g.birds.map(birdCard).join('')
-      +'</div></div>';
+      +'</div>')+'</div>';
   }).join('');
 }
 
@@ -7091,9 +7115,13 @@ function renderNachkommen(pid){
   var genHtml=gens.map(function(g){
     var birds=applyStatusFilter(g[1]);
     var emptyMsg = statusLabel ? 'Keine '+g[2]+' mit Status "'+statusLabel+'".' : null;
+    var genKey='gen:'+g[3];
+    var genCollapsed=!!S.nachCollapsed[genKey];
     return '<div class="card" style="margin-bottom:12px">'
-      +'<div class="card-title">'+g[0]+' <span style="color:var(--text3);font-weight:400">('+birds.length+(statusLabel?' von '+g[1].length:'')+')</span></div>'
-      +renderGen(birds,g[2],emptyMsg)+'</div>';
+      +'<div class="card-title" onclick="toggleNachCollapse(\''+genKey+'\')" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">'
+      +'<span style="color:var(--text3);font-size:11px">'+(genCollapsed?'▸':'▾')+'</span>'
+      +g[0]+' <span style="color:var(--text3);font-weight:400">('+birds.length+(statusLabel?' von '+g[1].length:'')+')</span></div>'
+      +(genCollapsed?'':renderGen(birds,g[2],emptyMsg,genKey))+'</div>';
   }).join('');
 
   return '<div class="card" style="margin-bottom:12px">'
