@@ -2441,7 +2441,7 @@ function renderPedigreeInner(root, opts, embedded){
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span style="font-size:11px;color:var(--text3)">${t('print_label')}</span>
             <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);cursor:pointer">
-              <input type="checkbox" id="ped-print-photo" style="width:14px;height:14px;cursor:pointer"> ${t('with_photo')}
+              <input type="checkbox" id="ped-print-photo" checked style="width:14px;height:14px;cursor:pointer"> ${t('with_photo')}
             </label>
             <button class="btn btn-outline btn-sm" onclick="openPedigreePrintMenu(event,'${root.pigeonid}',4)">🖨 4 ${t('gens')}</button>
             <button class="btn btn-outline btn-sm" onclick="openPedigreePrintMenu(event,'${root.pigeonid}',5)">🖨 5 ${t('gens')}</button>
@@ -2600,56 +2600,66 @@ function renderPedigreeInner(root, opts, embedded){
 }
 
 // ── DRUCK / PDF ────────────────────────────────────────────────
+// Baum-Aufbau, Reiseleistungs-Vorladen und Seitenmaße — gemeinsame Basis für den
+// HTML-Druck UND den Vektor-PDF-Export, damit beide garantiert exakt dieselbe
+// Struktur/Größenlogik verwenden (kein doppelt gepflegter Code, keine Abweichungen).
+async function buildPedigreeTreeData(pid, gens){
+  gens = parseInt(gens)||4;
+  const root = findById(pid);
+  if(!root) return null;
+
+  const _ring   = p => p?(p.ringnumber||p.ringnumberold||'—'):'—';
+  const _sex    = p => { if(!p) return '?'; const g=String(p.gender||p.sex||'').trim().toLowerCase(); if(['m','1','male','cock'].includes(g))return'M'; if(['f','2','w','female','hen'].includes(g))return'F'; return '?'; };
+  const _father = p => { if(!p) return null; if(p.fatherid) return S.pigeons.find(x=>x.pigeonid===p.fatherid)||null; if(p.ringnumberfather) return S.pigeons.find(x=>x.ringnumber===p.ringnumberfather)||null; return null; };
+  const _mother = p => { if(!p) return null; if(p.motherid) return S.pigeons.find(x=>x.pigeonid===p.motherid)||null; if(p.ringnumbermother) return S.pigeons.find(x=>x.ringnumber===p.ringnumbermother)||null; return null; };
+
+  // Baum aufbauen
+  function buildTree(p, gen, pos, arr){
+    if(!arr[gen]) arr[gen]=[];
+    arr[gen][pos]=p||null;
+    if(gen>=gens-1) return;
+    buildTree(_father(p), gen+1, pos*2,   arr);
+    buildTree(_mother(p), gen+1, pos*2+1, arr);
+  }
+  const tree=[];
+  buildTree(root, 0, 0, tree);
+
+  // Reiseleistung für Proband, Eltern und Großeltern laden (kompakte Jahreszeilen in
+  // den Boxen bis Gen. 2, ausführliche Top-20-Liste für Proband + Eltern).
+  const travelIds=[];
+  [0,1,2].forEach(g=>{ (tree[g]||[]).forEach(p=>{ if(p&&p.pigeonid) travelIds.push(p.pigeonid); }); });
+  await loadPigeonTripsBatch(travelIds);
+
+  // Züchterdaten für die Kopfzeile (bereits über triggerPrint geladen).
+  const breederProf = BREEDER_PROFILE || {};
+
+  const rows   = Math.pow(2, gens-1);   // 8 (4gen) oder 16 (5gen)
+  // Ab 5 Generationen reicht Hochformat nicht mehr aus (Spalten würden zu schmal für
+  // vollständige Ringnummern) → automatisch auf Querformat wechseln, das gibt ca. 45%
+  // mehr nutzbare Breite pro Spalte.
+  const landscape = gens>=5;
+  const pageWmm   = landscape ? 281 : 194;  // nutzbare Breite (A4 minus Ränder)
+  const pageHmm   = landscape ? 194 : 281;  // nutzbare Gesamthöhe (A4 minus Rändern, inkl. Kopfzeile)
+  const totalConn = (gens-1)*5;
+  const datWmm    = Math.floor((pageWmm - totalConn) / gens);
+  const conWmm    = 5;
+
+  const safeName = (root.name || _ring(root) || 'Taube').toString()
+    .replace(/[^\p{L}\p{N}\-]+/gu,'_').replace(/_+/g,'_').replace(/^_|_$/g,'') || 'Taube';
+  const filenameBase = `Stammbaum_${safeName}`;
+
+  return { root, gens, tree, rows, landscape, pageWmm, pageHmm, totalConn, datWmm, conWmm, breederProf, filenameBase, _ring, _sex, _father, _mother };
+}
+
 async function buildPedigreeHtml(pid, gens, withPhoto, erfolgeText){
   try{
-    gens = parseInt(gens)||4;
     withPhoto = !!withPhoto;
-    const root = findById(pid);
-    if(!root){ alert('Taube nicht gefunden'); return; }
+    const data = await buildPedigreeTreeData(pid, gens);
+    if(!data){ alert('Taube nicht gefunden'); return null; }
+    const { root, gens:gensN, tree, rows, landscape, pageWmm, pageHmm, datWmm, conWmm, breederProf, filenameBase, _ring, _sex } = data;
+    gens = gensN;
 
     const _esc    = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    const _ring   = p => p?(p.ringnumber||p.ringnumberold||'—'):'—';
-    const _sex    = p => { if(!p) return '?'; const g=String(p.gender||p.sex||'').trim().toLowerCase(); if(['m','1','male','cock'].includes(g))return'M'; if(['f','2','w','female','hen'].includes(g))return'F'; return '?'; };
-    const _father = p => { if(!p) return null; if(p.fatherid) return S.pigeons.find(x=>x.pigeonid===p.fatherid)||null; if(p.ringnumberfather) return S.pigeons.find(x=>x.ringnumber===p.ringnumberfather)||null; return null; };
-    const _mother = p => { if(!p) return null; if(p.motherid) return S.pigeons.find(x=>x.pigeonid===p.motherid)||null; if(p.ringnumbermother) return S.pigeons.find(x=>x.ringnumber===p.ringnumbermother)||null; return null; };
-
-    // Baum aufbauen
-    function buildTree(p, gen, pos, arr){
-      if(!arr[gen]) arr[gen]=[];
-      arr[gen][pos]=p||null;
-      if(gen>=gens-1) return;
-      buildTree(_father(p), gen+1, pos*2,   arr);
-      buildTree(_mother(p), gen+1, pos*2+1, arr);
-    }
-    const tree=[];
-    buildTree(root, 0, 0, tree);
-
-    // Reiseleistung für Proband, Eltern und Großeltern laden (kompakte Jahreszeilen in
-    // den Boxen bis Gen. 2, ausführliche Top-20-Liste für Proband + Eltern).
-    const travelIds=[];
-    [0,1,2].forEach(g=>{ (tree[g]||[]).forEach(p=>{ if(p&&p.pigeonid) travelIds.push(p.pigeonid); }); });
-    await loadPigeonTripsBatch(travelIds);
-
-    // Züchterdaten für die Kopfzeile (bereits über triggerPrint geladen).
-    const breederProf = BREEDER_PROFILE || {};
-
-    const rows   = Math.pow(2, gens-1);   // 8 (4gen) oder 16 (5gen)
-    // Ab 5 Generationen reicht Hochformat nicht mehr aus (Spalten würden zu schmal für
-    // vollständige Ringnummern) → automatisch auf Querformat wechseln, das gibt ca. 45%
-    // mehr nutzbare Breite pro Spalte.
-    const landscape = gens>=5;
-    const pageWmm   = landscape ? 281 : 194;  // nutzbare Breite (A4 minus Ränder)
-    const pageHmm   = landscape ? 194 : 281;  // nutzbare Gesamthöhe (A4 minus Rändern, inkl. Kopfzeile)
-    // Die Zeilenhöhe wird NICHT mehr fix in mm vorberechnet, sondern per Flexbox erst im
-    // Browser ermittelt: Kopfzeile(n) bekommen ihre natürliche Höhe, der Stammbaum-Raster
-    // erhält den kompletten Rest der Seite (flex:1) und teilt ihn per 1fr gleichmäßig auf
-    // die Zeilen auf. So passt der Ausdruck garantiert auf eine A4-Seite, unabhängig davon
-    // wie hoch die Züchter-Kopfzeile (Adresse/Logo/Erfolge) tatsächlich ausfällt.
-    // Spaltenbreiten: kein Header-Overhead mehr → volle Breite für Daten
-    // Verbinder: 5mm, Rest gleichmäßig auf Datenspalten
-    const totalConn = (gens-1)*5;
-    const datWmm    = Math.floor((pageWmm - totalConn) / gens);
-    const conWmm    = 5;
 
     // Box-HTML — Infomenge abhängig von Generation und verfügbarem Platz
     function box(p, gen){
@@ -2751,11 +2761,6 @@ async function buildPedigreeHtml(pid, gens, withPhoto, erfolgeText){
 
     const sx=_sex(root);
     const today=new Date().toLocaleDateString('de-DE');
-    // Für Dateinamen (PNG-Export etc.) — Sonderzeichen entfernen, nichts mit
-    // Umlauten/Leerzeichen, das auf manchen Systemen Probleme machen könnte.
-    const safeName = (root.name || _ring(root) || 'Taube').toString()
-      .replace(/[^\p{L}\p{N}\-]+/gu,'_').replace(/_+/g,'_').replace(/^_|_$/g,'') || 'Taube';
-    const filenameBase = `Stammbaum_${safeName}`;
 
     // Kopfzeile: Züchterdaten links, Logo/Foto mittig, im Druckdialog ausgewählte
     // Züchtererfolge rechts. Grid statt flex-space-between, damit das Logo unabhängig
@@ -2899,6 +2904,218 @@ async function exportPedigreeImage(pid, gens, withPhoto, erfolgeText){
     alert('Bild-Export fehlgeschlagen: '+e.message);
   } finally {
     if(iframe) iframe.remove();
+  }
+}
+
+// ── Vektor-PDF-Export (durchsuchbarer/kopierbarer Text, scharf, klein) ──
+// Zeichnet dieselbe Baumstruktur direkt mit jsPDF-Text-/Linienbefehlen in
+// mm-Koordinaten (statt das HTML zu rastern wie beim PNG-Export). Nutzt
+// dieselbe buildPedigreeTreeData()-Basis wie Druck & Bild-Export, damit die
+// Struktur immer identisch bleibt. Layout ist eine bewusste Annäherung an das
+// HTML/Druck-Layout (gleiche Schriftgrößen-Stufen je Generation, gleiche
+// Verbinder-Logik) — keine 1:1-Pixelkopie, dafür deutlich kleinere Datei mit
+// echtem, durchsuchbarem Text.
+let _jspdfLoadPromise = null;
+function ensureJsPDF(){
+  if(window.jspdf && window.jspdf.jsPDF) return Promise.resolve();
+  if(_jspdfLoadPromise) return _jspdfLoadPromise;
+  _jspdfLoadPromise = new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = ()=>resolve();
+    s.onerror = ()=>{ _jspdfLoadPromise=null; reject(new Error('jsPDF konnte nicht geladen werden (Internetverbindung prüfen)')); };
+    document.head.appendChild(s);
+  });
+  return _jspdfLoadPromise;
+}
+
+// Bildformat aus einer data:-URI ableiten, wie sie Fotos/Logo in diesem
+// Projekt üblicherweise verwenden. addImage() bricht bei nicht unterstützten
+// Formaten (z.B. eine externe http(s)-URL statt Base64) via try/catch ab —
+// die Box wird dann einfach ohne Bild weitergezeichnet statt den ganzen
+// Export abzubrechen.
+function _pdfImgFormat(dataUrl){
+  const m = /^data:image\/(\w+);base64,/.exec(dataUrl||'');
+  if(!m) return 'JPEG';
+  const f = m[1].toUpperCase();
+  if(f==='JPG') return 'JPEG';
+  return ['PNG','JPEG','WEBP'].includes(f) ? f : 'JPEG';
+}
+
+function _pdfDrawBox(doc, p, gen, x, y, w, h, landscape, withPhoto, mmPerPt, _sex, _ring){
+  if(!p){
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(180,180,180);
+    doc.text('–', x+w/2, y+h/2, {align:'center'});
+    return;
+  }
+  const sx  = _sex(p);
+  const col = sx==='M' ? [58,123,213] : sx==='F' ? [142,68,173] : [136,136,136];
+  doc.setFillColor(col[0],col[1],col[2]);
+  doc.rect(x, y, 0.8, h, 'F');  // farbiger linker Rand als Geschlechts-Indikator
+
+  const rn    = _ring(p);
+  const tags  = [p.color, p.strain, p.breeder?('Z: '+p.breeder):null].filter(Boolean);
+  const info  = (p.info||'').trim();
+
+  // Gleiche Schriftgrößen-Stufen je Generation wie im HTML/Druck-Export.
+  const szRing   = gen===0?8:gen===1?7.5:gen===2?7:gen===3?6.5:6;
+  const szName   = gen===0?9:gen===1?8:gen===2?7.5:6.5;
+  const szTag    = gen===0?7:gen===1?6.5:6;
+  const szInfo   = gen===0?7.5:gen===1?7:gen===2?6.5:6;
+  const szTravel = gen===0?7:gen===1?6.5:6;
+  const szTop    = gen===0?7:6.5;
+  const showTags = gen<=3;
+  const showInfo = gen<=2 && info;
+  const showName = gen<=3 || !landscape;
+  const travelMaxYears = gen===0?3:gen===1?2:1;
+  const travelLines = (gen<=2 && p.pigeonid) ? pigeonTravelCompactLines(p.pigeonid, travelMaxYears) : [];
+  const topLines    = (gen<=1 && p.pigeonid) ? pigeonTopPlacementsCompactLines(p.pigeonid) : [];
+
+  const photoSize = withPhoto && p.photo ? (gen===0?15:gen===1?11:8) : 0;
+  if(photoSize){
+    try{ doc.addImage(p.photo, _pdfImgFormat(p.photo), x+w-photoSize-0.4, y+0.4, photoSize, photoSize); }
+    catch(e){ /* Foto überspringen statt Export abzubrechen */ }
+  }
+
+  const padX  = 2;
+  const textX = x + padX;
+  const maxW  = Math.max(4, w - padX*1.5 - (photoSize?photoSize+1:0));
+  const bottomLimit = y + h - 0.6;
+  let curY = y + 1.5 + szRing*mmPerPt;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(szRing); doc.setTextColor(26,107,26);
+  const sexChar = sx==='M'?'T':sx==='F'?'W':'?';  // ♂/♀ sind in jsPDFs Standardfonts nicht enthalten — T(äuber)/W(eibchen) statt Symbol
+  doc.splitTextToSize(sexChar+' '+rn, maxW).forEach(line=>{
+    if(curY<=bottomLimit){ doc.text(line, textX, curY); curY += szRing*mmPerPt*1.15; }
+  });
+
+  if(p.name && showName && curY<=bottomLimit){
+    doc.setFont('helvetica','bold'); doc.setFontSize(szName); doc.setTextColor(20,20,20);
+    doc.text(doc.splitTextToSize(p.name, maxW)[0]||'', textX, curY);
+    curY += szName*mmPerPt*1.2;
+  }
+  if(showTags && tags.length && curY<=bottomLimit){
+    doc.setFont('helvetica','normal'); doc.setFontSize(szTag); doc.setTextColor(102,102,102);
+    doc.text(doc.splitTextToSize(tags.join(' · '), maxW)[0]||'', textX, curY);
+    curY += szTag*mmPerPt*1.2;
+  }
+  if(travelLines.length){
+    doc.setFont('helvetica','normal'); doc.setFontSize(szTravel); doc.setTextColor(26,107,26);
+    travelLines.forEach(line=>{
+      if(curY<=bottomLimit){ doc.text(String(line), textX, curY); curY += szTravel*mmPerPt*1.25; }
+    });
+  }
+  if(topLines.length){
+    doc.setFont('helvetica','normal'); doc.setFontSize(szTop); doc.setTextColor(51,51,51);
+    topLines.forEach(line=>{
+      if(curY<=bottomLimit){ doc.text(String(line), textX, curY); curY += szTop*mmPerPt*1.25; }
+    });
+  }
+  if(showInfo && curY<=bottomLimit){
+    doc.setFont('helvetica','normal'); doc.setFontSize(szInfo); doc.setTextColor(51,51,51);
+    const maxLines = Math.max(1, Math.floor((bottomLimit-curY)/(szInfo*mmPerPt*1.3)));
+    doc.splitTextToSize(info, maxW).slice(0,maxLines).forEach(line=>{
+      doc.text(line, textX, curY); curY += szInfo*mmPerPt*1.3;
+    });
+  }
+}
+
+async function exportPedigreePdf(pid, gens, withPhoto, erfolgeText){
+  try{
+    await ensureJsPDF();
+    const data = await buildPedigreeTreeData(pid, gens);
+    if(!data){ alert('Taube nicht gefunden'); return; }
+    const { gens:gensN, tree, rows, landscape, pageWmm, pageHmm, datWmm, conWmm, breederProf, filenameBase, _ring, _sex } = data;
+    gens = gensN;
+    withPhoto = !!withPhoto;
+
+    const mmPerPt  = 0.352778;
+    const marginMm = 8;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: landscape?'landscape':'portrait', unit:'mm', format:'a4' });
+    doc.setProperties({ title: filenameBase });
+
+    // ── Kopfzeile: Züchterdaten links, Logo mittig, Erfolge rechts ──
+    const bp = breederProf || {};
+    const hasHeader = !!(bp.name || bp.strasse || bp.ort || bp.verein || bp.logo || erfolgeText);
+    const logoW = 40, logoH = 18, colGap = 4;
+    const midW  = bp.logo ? logoW : 0;
+    const sideW = (pageWmm - midW - colGap*2) / 2;
+    const leftX = marginMm, midX = marginMm+sideW+colGap, rightX = midX+midW+colGap;
+
+    const leftLines = [];
+    if(bp.name) leftLines.push({t:bp.name, size:11, bold:true, color:[20,20,20]});
+    const addr = [bp.strasse, bp.ort].filter(Boolean).join(', ');
+    if(addr) leftLines.push({t:addr, size:7, bold:false, color:[85,85,85]});
+    if(bp.verein) leftLines.push({t:bp.verein, size:7, bold:false, color:[85,85,85]});
+    if(bp.telefon) leftLines.push({t:'Tel. '+bp.telefon, size:7, bold:false, color:[85,85,85]});
+
+    const rightLines = [];
+    if(erfolgeText){
+      rightLines.push({t:'Züchtererfolge', size:8, bold:true, color:[26,107,26]});
+      doc.setFont('helvetica','normal'); doc.setFontSize(7);
+      doc.splitTextToSize(erfolgeText.replace(/\n{2,}/g,'\n'), sideW).forEach(line=>{
+        rightLines.push({t:line, size:7, bold:false, color:[85,85,85]});
+      });
+    }
+
+    let headerHeight = 0;
+    if(hasHeader){
+      const lh = arr=>arr.reduce((h,l)=>h+l.size*mmPerPt*1.3,0);
+      headerHeight = Math.max(lh(leftLines), lh(rightLines), bp.logo?logoH:0) + 4;
+    }
+
+    let ly = marginMm + 3;
+    leftLines.forEach(l=>{
+      doc.setFont('helvetica', l.bold?'bold':'normal'); doc.setFontSize(l.size); doc.setTextColor(l.color[0],l.color[1],l.color[2]);
+      doc.text(l.t, leftX, ly); ly += l.size*mmPerPt*1.3;
+    });
+    if(bp.logo){
+      try{ doc.addImage(bp.logo, _pdfImgFormat(bp.logo), midX, marginMm, midW, logoH); }
+      catch(e){ /* Logo überspringen statt Export abzubrechen */ }
+    }
+    let ry = marginMm + 3;
+    rightLines.forEach(l=>{
+      doc.setFont('helvetica', l.bold?'bold':'normal'); doc.setFontSize(l.size); doc.setTextColor(l.color[0],l.color[1],l.color[2]);
+      doc.text(l.t, rightX, ry); ry += l.size*mmPerPt*1.3;
+    });
+    if(hasHeader){
+      doc.setDrawColor(200,200,200); doc.setLineWidth(0.3);
+      doc.line(marginMm, marginMm+headerHeight, marginMm+pageWmm, marginMm+headerHeight);
+    }
+
+    // ── Baum-Raster ──
+    const gapAfterHeader = hasHeader ? 3 : 0;
+    const gridY0 = marginMm + headerHeight + gapAfterHeader;
+    const gridH  = pageHmm - headerHeight - gapAfterHeader;
+    const rowH   = gridH / rows;
+    const colX   = g => marginMm + g*(datWmm+conWmm);
+
+    for(let g=0; g<gens; g++){
+      const count = Math.pow(2,g);
+      const span  = rows/count;
+      const x = colX(g);
+      for(let i=0;i<count;i++){
+        const pig = tree[g] ? tree[g][i] : null;
+        const y = gridY0 + i*span*rowH;
+        _pdfDrawBox(doc, pig, g, x, y, datWmm, span*rowH, landscape, withPhoto, mmPerPt, _sex, _ring);
+      }
+      if(g<gens-1){
+        const xStart = x + datWmm, xEnd = xStart + conWmm;
+        doc.setDrawColor(170,170,170); doc.setLineWidth(0.25);
+        for(let i=0;i<count;i++){
+          const y0 = gridY0 + i*span*rowH;
+          const c1 = y0 + (span/4)*rowH, c2 = y0 + (3*span/4)*rowH;
+          doc.line(xStart, c1, xEnd, c1);
+          doc.line(xStart, c2, xEnd, c2);
+          doc.line(xStart, c1, xStart, c2);
+        }
+      }
+    }
+
+    doc.save(filenameBase + '.pdf');
+  } catch(e){
+    alert('PDF-Export fehlgeschlagen: '+e.message);
   }
 }
 
@@ -5035,6 +5252,10 @@ async function triggerImageExport(pid, gens, withPhoto){
   const erfolgeText = await loadPrintErfolgeText();
   exportPedigreeImage(pid, gens, withPhoto, erfolgeText);
 }
+async function triggerPdfExport(pid, gens, withPhoto){
+  const erfolgeText = await loadPrintErfolgeText();
+  exportPedigreePdf(pid, gens, withPhoto, erfolgeText);
+}
 
 // ── Druck/Export-Auswahlmenü (🖨-Buttons im Stammbaum) ──────────
 function closePedigreePrintMenu(){
@@ -5053,6 +5274,7 @@ function openPedigreePrintMenu(evt, pid, gens){
   menu.onclick = e=>e.stopPropagation();
   menu.innerHTML = `
     <button style="${itemStyle};border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg3,rgba(255,255,255,.06))'" onmouseout="this.style.background='none'" onclick="closePedigreePrintMenu();triggerPrint('${pid}',${gens},${withPhoto})">🖨 Drucken</button>
+    <button style="${itemStyle};border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg3,rgba(255,255,255,.06))'" onmouseout="this.style.background='none'" onclick="closePedigreePrintMenu();triggerPdfExport('${pid}',${gens},${withPhoto})">📄 Als PDF speichern</button>
     <button style="${itemStyle}" onmouseover="this.style.background='var(--bg3,rgba(255,255,255,.06))'" onmouseout="this.style.background='none'" onclick="closePedigreePrintMenu();triggerImageExport('${pid}',${gens},${withPhoto})">🖼 Als Bild speichern (PNG)</button>
   `;
   document.body.appendChild(menu);
