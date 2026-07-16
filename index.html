@@ -6992,20 +6992,20 @@ function findChildren(pigeonId){
 }
 
 function statusStyle(p){
-  if(p.died) return {label:t('status_died'),color:'#e07070',bg:'#1e0f0f'};
+  if(p.died) return {label:t('status_died')+(p.sold?' · zuvor verkauft':''),color:'#e07070',bg:'#1e0f0f'};
   if(p.sold) return {label:t('status_sold'),color:'var(--orange)',bg:'#2a1a0a'};
   if(p.instock===false) return {label:t('status_not_instock'),color:'#c8883a',bg:'#2a1a0a'};
-  if(sex_(p)==='M') return {label:t('status_cock_active'),color:'#7ab3e0',bg:'#1a2d4a'};
-  if(sex_(p)==='F') return {label:t('status_hen_active'),color:'#c97fd4',bg:'#2d1a3d'};
   return {label:t('status_instock'),color:'var(--green)',bg:'color-mix(in srgb,var(--green) 10%,var(--bg3))'};
 }
 
 function birdCard(p){
   var via=p._via?findById(p._via):null;
+  var sx=sex_(p);
   return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;cursor:pointer;transition:border-color .15s"'
     +' onmouseover="this.style.borderColor=\'var(--green)\'" onmouseout="this.style.borderColor=\'var(--border)\'"'
     +' onclick="selectPigeon(\''+p.pigeonid+'\')">'
-    +'<div style="font-family:monospace;font-size:11px;color:var(--green)">'+escH(ring(p))+'</div>'
+    +'<div style="font-family:monospace;font-size:11px;color:var(--green);display:flex;align-items:center;gap:5px">'+escH(ring(p))
+    +'<span style="color:'+(sx==='M'?'#7ab3e0':sx==='F'?'#c97fd4':'var(--text3)')+'">'+(sx==='M'?'♂':sx==='F'?'♀':'?')+'</span></div>'
     +(p.name?'<div style="font-size:13px;font-weight:500;color:var(--text);margin-top:2px">'+escH(p.name)+'</div>':'')
     +'<div style="font-size:11px;color:var(--text3);margin-top:3px">'
     +[p.date_year,tColor(p.color),p.strain].filter(Boolean).map(escH).join(' · ')
