@@ -1217,7 +1217,7 @@ async function loadData(){
   try{
     // Erste Batch sofort laden → UI erscheint schnell
     const first = await apiGet('/pigeons?deleted=eq.false&limit='+BATCH+'&offset=0&order=date_year.desc,number.asc');
-    S.pigeons = first||[];
+    S.pigeons = first||[]; invalidatePedigreeCache();
     S.error=null;
     S.loading=false;
     updateHeaderStats();
@@ -1233,7 +1233,7 @@ async function loadData(){
       while(true){
         const batch = await apiGet('/pigeons?deleted=eq.false&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc');
         if(!batch||batch.length===0) break;
-        S.pigeons = S.pigeons.concat(batch);
+        S.pigeons = S.pigeons.concat(batch); invalidatePedigreeCache();
         updateHeaderStats();
         // Hintergrund-Batch: Tabelle still aktualisieren
         S.filtered=[...S.pigeons];
@@ -1439,6 +1439,7 @@ async function applyBulkEdit(){
       await apiPatch('pigeons', id, {[f.key]: value});
       const idx=S.pigeons.findIndex(p=>p.pigeonid===id);
       if(idx!==-1) S.pigeons[idx][f.key]=value;
+      if(f.key==='fatherid'||f.key==='motherid'||f.key==='ringnumberfather'||f.key==='ringnumbermother'||f.key==='ringnumber') invalidatePedigreeCache();
     } catch(e){ err++; errMsgs.push(e.message); }
     done++;
     if(prog){
@@ -2339,7 +2340,7 @@ async function deletePigeon(id){
   if(!confirm(`Taube "${label}" wirklich löschen?\n\nSie wird aus der Liste entfernt (Soft-Delete). Verknüpfungen als Vater/Mutter anderer Tauben bleiben über die Ringnummer-Textfelder erhalten, falls vorhanden.`)) return;
   try {
     await apiPatch('pigeons', id, {deleted:true, instock:false});
-    S.pigeons = S.pigeons.filter(x=>x.pigeonid!==id);
+    S.pigeons = S.pigeons.filter(x=>x.pigeonid!==id); invalidatePedigreeCache();
     if(S.selected && S.selected.pigeonid===id) S.selected=null;
     applyFilter();
     render();
@@ -2392,6 +2393,7 @@ async function saveEdit(id){
     // Lokalen State aktualisieren
     const idx=S.pigeons.findIndex(p=>p.pigeonid===id);
     if(idx!==-1){ S.pigeons[idx]=Object.assign({},S.pigeons[idx],row,{pigeonid:id}); }
+    invalidatePedigreeCache();
     S.selected=S.pigeons.find(p=>p.pigeonid===id)||null;
     if(S.selected) delete S.selected._editMode;
     applyFilter();
@@ -4297,7 +4299,7 @@ async function submitQuick(){
 
   try {
     await apiPost('pigeons', row);
-    S.pigeons.push(row);
+    S.pigeons.push(row); invalidatePedigreeCache();
     QUICK = { ringnumber:'', duplicateMatch:null, lastCreated:row };
     applyFilter();
     render();
@@ -4442,7 +4444,7 @@ async function mergeDuplicateGroup(group){
     await apiPatch('pigeons', d.pigeonid, {deleted:true, instock:false});
   }
 
-  S.pigeons = S.pigeons.filter(p=>!dupIds.has(p.pigeonid));
+  S.pigeons = S.pigeons.filter(p=>!dupIds.has(p.pigeonid)); invalidatePedigreeCache();
   return dups.length;
 }
 
@@ -4676,7 +4678,7 @@ async function doImport() {
       if (!row.row.pigeonid) row.row.pigeonid = crypto.randomUUID();
 
       await apiPost('pigeons', row.row);
-      S.pigeons.push(row.row);
+      S.pigeons.push(row.row); invalidatePedigreeCache();
       IMP.stats.done++;
       IMP.stats.new++;
     } catch (e) {
@@ -5493,6 +5495,9 @@ function closePigeonTripYear(){ S.pigeonTripYear=null; render(); }
 // — bewusst einfach & transparent gehalten, Einzelwerte werden immer mit
 // angezeigt, damit die Zahl nachvollziehbar bleibt (kein Blackbox-Ranking).
 function getVererbungDescendants(pigeonid){
+  // Wird pro Render sowohl für die "neededIds"-Ermittlung als auch nochmal
+  // in computeVererbungsstaerke() aufgerufen -> cachen statt doppelt rechnen.
+  if(DESC_CACHE.has(pigeonid)) return DESC_CACHE.get(pigeonid);
   var children = findChildren(pigeonid);
   var seen = {}; children.forEach(function(c){ seen[c.pigeonid]=true; });
   var out = children.slice();
@@ -5501,6 +5506,7 @@ function getVererbungDescendants(pigeonid){
       if(!seen[g.pigeonid] && g.pigeonid!==pigeonid){ seen[g.pigeonid]=true; out.push(g); }
     });
   });
+  DESC_CACHE.set(pigeonid, out);
   return out;
 }
 const VER_RANK = { loading:false, error:null, total:0 };
@@ -7173,12 +7179,32 @@ function renderNachSearch(){
     +'<div class="empty-state"><div class="icon">🐣</div>Suche eine Taube, um alle Kinder, Enkel und Urenkel anzuzeigen</div>';
 }
 
-function findChildren(pigeonId){
-  var p=S.pigeons.find(function(x){return x.pigeonid===pigeonId;});
-  var rn=p?p.ringnumber:'';
-  return S.pigeons.filter(function(c){
-    return c.fatherid===pigeonId||c.motherid===pigeonId||(rn&&(c.ringnumberfather===rn||c.ringnumbermother===rn));
+// ── Kinder-Index ──────────────────────────────────────────────────
+// findChildren() wurde vorher pro Aufruf mit einem vollen Scan über
+// S.pigeons berechnet (O(n) je Aufruf). In renderVererberRanking() wird
+// das aber pro Taube UND pro Kind aufgerufen (Enkel-Ebene), was bei
+// größeren Beständen zu O(n²)/O(n³) und spürbaren Hängern führt.
+// Stattdessen bauen wir den Index einmalig (O(n)) und cachen ihn, bis
+// sich S.pigeons ändert (siehe invalidatePedigreeCache()).
+var CHILDREN_INDEX=null;      // pigeonid -> Array<pigeon>
+var DESC_CACHE=new Map();     // pigeonid -> Array<pigeon> (Kinder+Enkel, für Vererbung)
+function invalidatePedigreeCache(){ CHILDREN_INDEX=null; DESC_CACHE.clear(); }
+function buildChildrenIndex(){
+  var byId={}, byRing={};
+  S.pigeons.forEach(function(p){ byId[p.pigeonid]=p; if(p.ringnumber) byRing[p.ringnumber]=p; });
+  var idx={};
+  function add(parentId, child){ if(!idx[parentId]) idx[parentId]=[]; idx[parentId].push(child); }
+  S.pigeons.forEach(function(c){
+    if(c.fatherid) add(c.fatherid, c);
+    if(c.motherid) add(c.motherid, c);
+    if(c.ringnumberfather){ var f=byRing[c.ringnumberfather]; if(f && f.pigeonid!==c.fatherid) add(f.pigeonid, c); }
+    if(c.ringnumbermother){ var m=byRing[c.ringnumbermother]; if(m && m.pigeonid!==c.motherid) add(m.pigeonid, c); }
   });
+  CHILDREN_INDEX=idx;
+}
+function findChildren(pigeonId){
+  if(!CHILDREN_INDEX) buildChildrenIndex();
+  return CHILDREN_INDEX[pigeonId]||[];
 }
 
 function statusStyle(p){
