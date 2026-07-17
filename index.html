@@ -1820,7 +1820,7 @@ function renderReisenSubnav(active){
 function renderTaubenOverviewNav(active){
   const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="S.taubenView='${key}';render();window.scrollTo(0,0)">${icon} ${label}</button>`;
   return `<div class="subnav">
-    ${btn('liste',t('sub_liste'),'📋')}${btn('statistik',t('sub_statistik'),'📊')}
+    ${btn('liste',t('sub_liste'),'📋')}${btn('statistik',t('sub_statistik'),'📊')}${btn('vererber','Beste Vererber','🧬')}
   </div>`;
 }
 // Subnav: Wege, eine neue Taube anzulegen (manuell, per Scan, per Datei-Import)
@@ -1839,7 +1839,7 @@ function render(){
   const nrl=document.getElementById('navRacingLabel'); if(nrl) nrl.textContent=t('nav_racing');
   const lsw=document.getElementById('langSwitch'); if(lsw && !lsw.innerHTML) renderLangSwitch();
   if(S.loading){ m.innerHTML='<div class="loading"><div class="spinner"></div>Lade Tauben…</div>'; return; }
-  if(S.tab==='tauben')     m.innerHTML=S.selected ? renderTaubenSubnav('detail',S.selected)+renderDetail(S.selected) : renderTaubenOverviewNav(S.taubenView)+(S.taubenView==='statistik'?renderStats():renderList());
+  if(S.tab==='tauben')     m.innerHTML=S.selected ? renderTaubenSubnav('detail',S.selected)+renderDetail(S.selected) : renderTaubenOverviewNav(S.taubenView)+(S.taubenView==='statistik'?renderStats():S.taubenView==='vererber'?renderVererberRanking():renderList());
   else if(S.tab==='stammbaum')  m.innerHTML=S.selectedPed ? renderTaubenSubnav('stammbaum',findById(S.selectedPed))+renderPedigree(S.selectedPed) : (showTab('tauben'),'');
   else if(S.tab==='nachkommen') m.innerHTML=S.selectedNach ? renderTaubenSubnav('nachkommen',findById(S.selectedNach))+renderNachkommen(S.selectedNach) : renderTaubenSubnav('nachkommen',null)+renderNachSearch();
   else if(S.tab==='paarung')    m.innerHTML=renderTaubenSubnav('paarung', S.paarungM||S.paarungF||null) + renderPaarung();
@@ -2136,6 +2136,7 @@ function renderDetail(p){
       </div>
 
       ${renderPigeonTripsSection(p)}
+      ${renderVererbungCard(p.pigeonid)}
     </div>`;
 }
 
@@ -5480,6 +5481,130 @@ function pigeonTopPlacementsCompactLines(pigeonid){
 function openPigeonTripYear(yr){ S.pigeonTripYear=yr; render(); }
 function closePigeonTripYear(){ S.pigeonTripYear=null; render(); }
 
+// ── Vererbungsstärke ─────────────────────────────────────────────────────
+// Misst, wie gut eine Taube ihre Flugleistung an ihre Nachkommen (Kinder +
+// Enkel) weitergibt. Grundlage: die gepoolten Flugergebnisse aller Kinder
+// und Enkel aus `pigeontrips` (über PT_CACHE, gleiche Quelle wie die
+// Reiseleistung einer einzelnen Taube).
+//   Preisquote      = Anteil der Nachkommen-Flüge mit Preis
+//   Top10-Quote     = Anteil der Nachkommen-Flüge mit Platzierung 1.–10.
+//   Aktivenanteil   = Anteil der Nachkommen, die überhaupt geflogen sind
+// Score (0–100) = 0.6·Preisquote + min(8·Top10-Quote,25) + 0.15·Aktivenanteil
+// — bewusst einfach & transparent gehalten, Einzelwerte werden immer mit
+// angezeigt, damit die Zahl nachvollziehbar bleibt (kein Blackbox-Ranking).
+function getVererbungDescendants(pigeonid){
+  var children = findChildren(pigeonid);
+  var seen = {}; children.forEach(function(c){ seen[c.pigeonid]=true; });
+  var out = children.slice();
+  children.forEach(function(c){
+    findChildren(c.pigeonid).forEach(function(g){
+      if(!seen[g.pigeonid] && g.pigeonid!==pigeonid){ seen[g.pigeonid]=true; out.push(g); }
+    });
+  });
+  return out;
+}
+const VER_RANK = { loading:false };
+function renderVererberRanking(){
+  var ids = S.pigeons.map(function(p){return p.pigeonid;});
+  var missing = ids.filter(function(id){return !PT_CACHE[id];});
+  if(missing.length){
+    if(!VER_RANK.loading){
+      VER_RANK.loading = true;
+      loadPigeonTripsBatchChunked(ids).then(function(){ VER_RANK.loading=false; render(); });
+    }
+    return '<div class="loading"><div class="spinner"></div>Lade Flugdaten für die Vererbungsauswertung…</div>';
+  }
+  var candidates = S.pigeons.filter(function(p){ return findChildren(p.pigeonid).length>0; });
+  var results = candidates.map(function(p){
+    var r = computeVererbungsstaerke(p.pigeonid);
+    r.pigeon = p;
+    return r;
+  }).filter(function(r){ return r.ready && r.score!=null; });
+  results.sort(function(a,b){ return b.score-a.score; });
+
+  var rows = results.map(function(r,i){
+    var p=r.pigeon, sx=sex_(p);
+    return '<tr onclick="selectPigeon(\''+p.pigeonid+'\')" style="cursor:pointer">'
+      +'<td style="text-align:center;font-weight:600;color:'+(i<3?'var(--green)':'var(--text3)')+'">'+(i+1)+'</td>'
+      +'<td style="font-family:monospace;font-size:12px">'+escH(ring(p))+' '+(sx==='M'?'♂':sx==='F'?'♀':'')+'</td>'
+      +'<td>'+escH(p.name||'—')+'</td>'
+      +'<td style="text-align:center;font-weight:700;color:'+(r.score>=60?'var(--green)':r.score>=35?'var(--orange)':'#e07070')+'">'+r.score+'</td>'
+      +'<td style="text-align:center">'+r.preisquote.toFixed(1)+'%</td>'
+      +'<td style="text-align:center">'+r.top10quote.toFixed(1)+'%</td>'
+      +'<td style="text-align:center">'+r.activeCount+'/'+r.totalDescendants+'</td>'
+      +'</tr>';
+  }).join('');
+
+  return '<div class="card">'
+    +'<div class="card-title">🧬 Beste Vererber</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Bewertet alle Tauben mit Nachkommen (Kinder + Enkel) anhand der Preisquote, Top-10-Quote und dem Anteil geflogener Nachkommen. Höherer Score = stärkere Vererbung.</div>'
+    +(rows
+      ? '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+        +'<thead><tr><th>#</th><th>Ring</th><th>Name</th><th>Score</th><th>Preisquote</th><th>Top-10</th><th>Nachk. geflogen</th></tr></thead>'
+        +'<tbody>'+rows+'</tbody></table></div>'
+      : '<div style="color:var(--text3);font-size:13px;padding:12px 0">Noch keine Nachkommen mit Flugergebnissen gefunden.</div>')
+    +'</div>';
+}
+const VER_LOADING = new Set();
+function ensureVererbungLoaded(pigeonid){
+  if(VER_LOADING.has(pigeonid)) return;
+  var ids = getVererbungDescendants(pigeonid).map(function(d){return d.pigeonid;});
+  if(!ids.length) return;
+  VER_LOADING.add(pigeonid);
+  loadPigeonTripsBatchChunked(ids).then(function(){ VER_LOADING.delete(pigeonid); render(); });
+}
+function computeVererbungsstaerke(pigeonid){
+  var desc = getVererbungDescendants(pigeonid);
+  if(!desc.length) return {ready:true, noDescendants:true};
+  var missing = desc.some(function(d){ return !PT_CACHE[d.pigeonid]; });
+  if(missing) return {ready:false};
+  var totalGesetzt=0, totalPreise=0, totalTop10=0, activeCount=0;
+  desc.forEach(function(d){
+    var rows = PT_CACHE[d.pigeonid]||[];
+    if(rows.length){
+      activeCount++;
+      rows.forEach(function(r){
+        totalGesetzt++;
+        if(r.prize_rv!=null||r.prize_reggr!=null||r.prize_reg!=null||r.prize_fg!=null) totalPreise++;
+      });
+      totalTop10 += getTop10Placements(rows).length;
+    }
+  });
+  if(!totalGesetzt) return {ready:true, noFlights:true, totalDescendants:desc.length};
+  var preisquote = totalPreise/totalGesetzt*100;
+  var top10quote = totalTop10/totalGesetzt*100;
+  var aktivenanteil = activeCount/desc.length*100;
+  var score = Math.round(Math.min(100, preisquote*0.6 + Math.min(top10quote*8,25) + aktivenanteil*0.15));
+  return {ready:true, score:score, preisquote:preisquote, top10quote:top10quote, aktivenanteil:aktivenanteil,
+    totalDescendants:desc.length, activeCount:activeCount, totalGesetzt:totalGesetzt, totalPreise:totalPreise, totalTop10:totalTop10};
+}
+// Kompakte Karte für die Tauben-Detailseite und für andere Views wiederverwendbar.
+function renderVererbungCard(pigeonid){
+  var desc = getVererbungDescendants(pigeonid);
+  if(!desc.length) return '';
+  var r = computeVererbungsstaerke(pigeonid);
+  if(!r.ready){ ensureVererbungLoaded(pigeonid);
+    return `<div class="section-label" style="margin-top:14px">🧬 Vererbungsstärke</div>
+      <div style="color:var(--text3);font-size:13px;padding:8px 0">Lade Flugdaten der Nachkommen…</div>`;
+  }
+  if(r.noFlights) return `<div class="section-label" style="margin-top:14px">🧬 Vererbungsstärke</div>
+    <div style="color:var(--text3);font-size:13px;padding:8px 0">${r.totalDescendants} Nachkommen (Kinder+Enkel), aber noch keine Flugergebnisse erfasst.</div>`;
+  var col = r.score>=60?'var(--green)':r.score>=35?'var(--orange)':'#e07070';
+  return `<div class="section-label" style="margin-top:14px">🧬 Vererbungsstärke <span style="color:var(--text3);font-weight:400">(Kinder + Enkel)</span></div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center">
+      <div style="text-align:center">
+        <div style="font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:${col}">${r.score}</div>
+        <div style="font-size:10px;color:var(--text3)">Score / 100</div>
+      </div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--text2)">
+        <div><div style="font-weight:600">${r.preisquote.toFixed(1)}%</div><div style="color:var(--text3);font-size:10px">Preisquote</div></div>
+        <div><div style="font-weight:600">${r.top10quote.toFixed(1)}%</div><div style="color:var(--text3);font-size:10px">Top-10-Quote</div></div>
+        <div><div style="font-weight:600">${r.activeCount}/${r.totalDescendants}</div><div style="color:var(--text3);font-size:10px">Nachk. geflogen</div></div>
+        <div><div style="font-weight:600">${r.totalGesetzt}</div><div style="color:var(--text3);font-size:10px">Flüge gesamt</div></div>
+      </div>
+    </div>`;
+}
+
 function renderPigeonTripsSection(p){
   const cached=PT_CACHE[p.pigeonid];
   if(!cached){
@@ -7158,6 +7283,7 @@ function renderNachkommen(pid){
     +'</div></div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">'+kpiHtml+'</div>'
+    +renderVererbungCard(pid)
     +'</div>'+genHtml;
 }
 
