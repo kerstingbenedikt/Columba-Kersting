@@ -5357,12 +5357,28 @@ async function loadPigeonTripsBatch(pigeonids){
   }catch(e){ missing.forEach(id=>{ if(!PT_CACHE[id]) PT_CACHE[id]=[]; }); }
 }
 // Wie loadPigeonTripsBatch, aber in Häppchen (z.B. für CSV/PDF-Export über
-// tausende Tauben hinweg), um die Query-URL nicht zu sprengen.
-async function loadPigeonTripsBatchChunked(pigeonids, chunkSize=150){
+// tausende Tauben hinweg oder die Vererbungsstärke-Auswertung), um die
+// Query-URL nicht zu sprengen. Die Häppchen liefen vorher sequenziell
+// (ein Chunk nach dem anderen) — bei vielen hundert/tausend Tauben summierte
+// sich das schnell auf 20-30s+. Jetzt laufen mehrere Chunks parallel
+// (begrenzte Nebenläufigkeit, damit wir das Backend nicht fluten).
+async function loadPigeonTripsBatchChunked(pigeonids, chunkSize=150, concurrency=6){
   const missing=[...new Set(pigeonids.filter(id=>id && !PT_CACHE[id]))];
-  for(let i=0;i<missing.length;i+=chunkSize){
-    await loadPigeonTripsBatch(missing.slice(i,i+chunkSize));
+  if(!missing.length) return;
+  // Referenztabelle (RT.trips) einmal vorab laden statt jeden Chunk einzeln
+  // prüfen zu lassen — sonst würden mehrere parallele Chunks gleichzeitig
+  // versuchen, sie zu laden.
+  if(!RT.trips.length) await loadTrips();
+  const chunks=[];
+  for(let i=0;i<missing.length;i+=chunkSize) chunks.push(missing.slice(i,i+chunkSize));
+  let next=0;
+  async function worker(){
+    while(next<chunks.length){
+      const my=chunks[next++];
+      await loadPigeonTripsBatch(my);
+    }
   }
+  await Promise.all(Array.from({length:Math.min(concurrency, chunks.length)}, worker));
 }
 
 // Kompakte Reiseleistungs-Kennzahlen einer Taube für die Tauben-Übersicht.
@@ -5572,7 +5588,7 @@ function renderVererberRanking(){
   if(missing.length){
     if(!VER_RANK.loading){
       VER_RANK.loading = true; VER_RANK.total = idList.length;
-      withTimeout(loadPigeonTripsBatchChunked(idList), 30000)
+      withTimeout(loadPigeonTripsBatchChunked(idList), 45000)
         .then(function(){ VER_RANK.loading=false; render(); })
         .catch(function(e){ VER_RANK.loading=false; VER_RANK.error=(e&&e.message)||'Unbekannter Fehler'; render(); });
     }
