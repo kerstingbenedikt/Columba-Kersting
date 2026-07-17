@@ -5503,18 +5503,43 @@ function getVererbungDescendants(pigeonid){
   });
   return out;
 }
-const VER_RANK = { loading:false };
+const VER_RANK = { loading:false, error:null, total:0 };
+function withTimeout(promise, ms){
+  return Promise.race([
+    promise,
+    new Promise(function(_,reject){ setTimeout(function(){ reject(new Error('Zeitüberschreitung beim Laden der Flugdaten')); }, ms); })
+  ]);
+}
+function retryVererberRanking(){ VER_RANK.error=null; render(); }
 function renderVererberRanking(){
-  var ids = S.pigeons.map(function(p){return p.pigeonid;});
-  var missing = ids.filter(function(id){return !PT_CACHE[id];});
+  // Nur Zuchttauben (mit Nachkommen) und deren tatsächliche Nachkommen brauchen
+  // Flugdaten — nicht der komplette Tauben-Bestand. Das reduziert die zu ladende
+  // Datenmenge erheblich gegenüber "alle Tauben laden".
+  var candidates = S.pigeons.filter(function(p){ return findChildren(p.pigeonid).length>0; });
+  var neededIds = {};
+  candidates.forEach(function(p){
+    getVererbungDescendants(p.pigeonid).forEach(function(d){ neededIds[d.pigeonid]=true; });
+  });
+  var idList = Object.keys(neededIds);
+  var missing = idList.filter(function(id){return !PT_CACHE[id];});
+
+  if(VER_RANK.error){
+    return '<div class="card"><div style="color:#e07070;font-size:13px">Fehler beim Laden der Flugdaten: '+escH(VER_RANK.error)+'</div>'
+      +'<button class="btn btn-sm" style="margin-top:10px" onclick="retryVererberRanking()">Erneut versuchen</button></div>';
+  }
+  if(!idList.length){
+    return '<div class="card"><div style="color:var(--text3);font-size:13px">Noch keine Zuchttauben mit Nachkommen gefunden.</div></div>';
+  }
   if(missing.length){
     if(!VER_RANK.loading){
-      VER_RANK.loading = true;
-      loadPigeonTripsBatchChunked(ids).then(function(){ VER_RANK.loading=false; render(); });
+      VER_RANK.loading = true; VER_RANK.total = idList.length;
+      withTimeout(loadPigeonTripsBatchChunked(idList), 30000)
+        .then(function(){ VER_RANK.loading=false; render(); })
+        .catch(function(e){ VER_RANK.loading=false; VER_RANK.error=(e&&e.message)||'Unbekannter Fehler'; render(); });
     }
-    return '<div class="loading"><div class="spinner"></div>Lade Flugdaten für die Vererbungsauswertung…</div>';
+    return '<div class="loading"><div class="spinner"></div>Lade Flugdaten für die Vererbungsauswertung… ('+idList.length+' Nachkommen)</div>';
   }
-  var candidates = S.pigeons.filter(function(p){ return findChildren(p.pigeonid).length>0; });
+  VER_RANK.loading=false;
   var results = candidates.map(function(p){
     var r = computeVererbungsstaerke(p.pigeonid);
     r.pigeon = p;
@@ -5551,7 +5576,9 @@ function ensureVererbungLoaded(pigeonid){
   var ids = getVererbungDescendants(pigeonid).map(function(d){return d.pigeonid;});
   if(!ids.length) return;
   VER_LOADING.add(pigeonid);
-  loadPigeonTripsBatchChunked(ids).then(function(){ VER_LOADING.delete(pigeonid); render(); });
+  loadPigeonTripsBatchChunked(ids)
+    .then(function(){ VER_LOADING.delete(pigeonid); render(); })
+    .catch(function(){ VER_LOADING.delete(pigeonid); ids.forEach(function(id){ if(!PT_CACHE[id]) PT_CACHE[id]=[]; }); render(); });
 }
 function computeVererbungsstaerke(pigeonid){
   var desc = getVererbungDescendants(pigeonid);
