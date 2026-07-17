@@ -5483,15 +5483,25 @@ function pigeonTopPlacementsCompactLines(pigeonid){
 function openPigeonTripYear(yr){ S.pigeonTripYear=yr; render(); }
 function closePigeonTripYear(){ S.pigeonTripYear=null; render(); }
 
-// ── Vererbungsstärke ─────────────────────────────────────────────────────
+// ── Vererbungsstärke nach Flügen ─────────────────────────────────────────
 // Misst, wie gut eine Taube ihre Flugleistung an ihre Nachkommen (Kinder +
 // Enkel) weitergibt. Grundlage: die gepoolten Flugergebnisse aller Kinder
 // und Enkel aus `pigeontrips` (über PT_CACHE, gleiche Quelle wie die
 // Reiseleistung einer einzelnen Taube).
-//   Preisquote      = Anteil der Nachkommen-Flüge mit Preis
-//   Top10-Quote     = Anteil der Nachkommen-Flüge mit Platzierung 1.–10.
-//   Aktivenanteil   = Anteil der Nachkommen, die überhaupt geflogen sind
-// Score (0–100) = 0.6·Preisquote + min(8·Top10-Quote,25) + 0.15·Aktivenanteil
+//
+// In die Wertung fließen NUR Nachkommen ein, die überhaupt an mind. einem
+// Flug teilgenommen haben (nie geflogene Nachkommen werden ignoriert, nicht
+// als "schlecht" gewertet). Von diesen geflogenen Nachkommen müssen
+// mindestens 2 "erfolgreich" geflogen sein (d.h. mind. 1 Preis erzielt
+// haben) — sonst ist die Datenbasis zu dünn und die Taube gilt (noch) nicht
+// als Vererber.
+//   Preisquote   = Anteil der Flüge (der geflogenen Nachkommen) mit Preis
+//   Top-Quote    = Anteil der Flüge mit mehr als 90 AS-Punkten. Ein Flug
+//                  zählt dabei nur einmal (bestes AS je Flug über RV/
+//                  RegGr./Reg. — keine Dopplung desselben Fluges).
+//   Aktivenanteil = Anteil aller Nachkommen (inkl. nie geflogener), die
+//                  überhaupt geflogen sind
+// Score (0–100) = 0.6·Preisquote + min(8·Top-Quote,25) + 0.15·Aktivenanteil
 // — bewusst einfach & transparent gehalten, Einzelwerte werden immer mit
 // angezeigt, damit die Zahl nachvollziehbar bleibt (kein Blackbox-Ranking).
 function getVererbungDescendants(pigeonid){
@@ -5517,8 +5527,11 @@ function withTimeout(promise, ms){
   ]);
 }
 function retryVererberRanking(){ VER_RANK.error=null; render(); }
-// Mindestanzahl Nachkommen (Kinder+Enkel), ab der eine Taube als "Vererber" gilt.
-const VERERBER_MIN_NACHKOMMEN = 3;
+// Grober Vorfilter, bevor überhaupt Flugdaten geladen werden: weniger als 2
+// Nachkommen können die eigentliche Regel (mind. 2 erfolgreiche Flieger)
+// ohnehin nie erfüllen. Die genaue Prüfung passiert erst in
+// computeVererbungsstaerke(), sobald die Flugdaten da sind.
+const VERERBER_MIN_NACHKOMMEN = 2;
 function renderVererberTable(results){
   if(!results.length) return '<div style="color:var(--text3);font-size:13px;padding:8px 0 4px">Keine Tauben mit Flugergebnissen bei den Nachkommen gefunden.</div>';
   var rows = results.map(function(r,i){
@@ -5529,12 +5542,12 @@ function renderVererberTable(results){
       +'<td>'+escH(p.name||'—')+'</td>'
       +'<td style="text-align:center;font-weight:700;color:'+(r.score>=60?'var(--green)':r.score>=35?'var(--orange)':'#e07070')+';text-decoration:underline dotted;text-underline-offset:3px" onclick="event.stopPropagation();showVererbungDetail(\''+p.pigeonid+'\')" title="Details zur Berechnung anzeigen">'+r.score+'</td>'
       +'<td style="text-align:center">'+r.preisquote.toFixed(1)+'%</td>'
-      +'<td style="text-align:center">'+r.top10quote.toFixed(1)+'%</td>'
+      +'<td style="text-align:center">'+r.topASquote.toFixed(1)+'%</td>'
       +'<td style="text-align:center">'+r.activeCount+'/'+r.totalDescendants+'</td>'
       +'</tr>';
   }).join('');
   return '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-    +'<thead><tr><th>#</th><th>Ring</th><th>Name</th><th>Score</th><th>Preisquote</th><th>Top-10</th><th>Nachk. geflogen</th></tr></thead>'
+    +'<thead><tr><th>#</th><th>Ring</th><th>Name</th><th>Score</th><th>Preisquote</th><th>Top (&gt;90 AS)</th><th>Nachk. geflogen</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table></div>';
 }
 function renderVererberRanking(){
@@ -5554,7 +5567,7 @@ function renderVererberRanking(){
       +'<button class="btn btn-sm" style="margin-top:10px" onclick="retryVererberRanking()">Erneut versuchen</button></div>';
   }
   if(!idList.length){
-    return '<div class="card"><div style="color:var(--text3);font-size:13px">Noch keine Tauben mit mindestens '+VERERBER_MIN_NACHKOMMEN+' Nachkommen gefunden.</div></div>';
+    return '<div class="card"><div style="color:var(--text3);font-size:13px">Noch keine Tauben mit ausreichend geflogenen Nachkommen gefunden.</div></div>';
   }
   if(missing.length){
     if(!VER_RANK.loading){
@@ -5578,7 +5591,7 @@ function renderVererberRanking(){
 
   return '<div class="card">'
     +'<div class="card-title">🧬 Vererbungsstärke nach Flügen</div>'
-    +'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Bewertet Tauben mit mind. '+VERERBER_MIN_NACHKOMMEN+' Nachkommen (Kinder + Enkel) anhand der Preisquote, Top-10-Quote und dem Anteil geflogener Nachkommen. Höherer Score = stärkere Vererbung. Auf den Score klicken zeigt die Details.</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Bewertet Tauben, deren Nachkommen (Kinder + Enkel) geflogen sind — mind. '+VERERBER_MIN_ERFOLGREICHE+' davon müssen mind. 1 Preis erzielt haben. Grundlage: Preisquote, Anteil Top-Platzierungen (&gt;90 AS-Punkte, ein Flug zählt max. 1x) und Anteil geflogener Nachkommen. Höherer Score = stärkere Vererbung. Auf den Score klicken zeigt die Details.</div>'
     +'<div style="font-size:12px;font-weight:600;color:var(--text2);margin:14px 0 6px">Bestandstauben</div>'
     +renderVererberTable(bestand)
     +'<div style="font-size:12px;font-weight:600;color:var(--text2);margin:18px 0 6px">Nicht im Bestand</div>'
@@ -5596,30 +5609,50 @@ function ensureVererbungLoaded(pigeonid){
     .catch(function(){ VER_LOADING.delete(pigeonid); ids.forEach(function(id){ if(!PT_CACHE[id]) PT_CACHE[id]=[]; }); render(); });
 }
 function hasPrizeRow(r){ return r.prize_rv!=null||r.prize_reggr!=null||r.prize_reg!=null||r.prize_fg!=null; }
+// Bestes AS (Ass-Punkte) eines einzelnen Fluges über die drei Listen
+// (Verein/RV, Regionalgruppe, Region) — dieselbe "ein Flug = ein Wert"-Logik
+// wie an anderer Stelle in der App (Rekordflüge), damit ein Flug nicht
+// mehrfach gezählt wird, nur weil er in mehreren Listen platziert war.
+function getFlightAS(r){
+  var vals=[r.as_rv,r.as_nat,r.as_reg].filter(function(v){ return v!=null && v!==''; }).map(Number).filter(function(v){ return !isNaN(v); });
+  return vals.length ? Math.max.apply(null, vals) : null;
+}
+// Mindestanzahl "erfolgreicher" (mind. 1 Preis) Nachkommen unter den
+// geflogenen Nachkommen, damit eine Taube überhaupt als Vererber gilt.
+const VERERBER_MIN_ERFOLGREICHE = 2;
 function computeVererbungsstaerke(pigeonid){
   var desc = getVererbungDescendants(pigeonid);
   if(!desc.length) return {ready:true, noDescendants:true};
   var missing = desc.some(function(d){ return !PT_CACHE[d.pigeonid]; });
   if(missing) return {ready:false};
-  var totalGesetzt=0, totalPreise=0, totalTop10=0, activeCount=0;
+
   var perDescendant = desc.map(function(d){
     var rows = PT_CACHE[d.pigeonid]||[];
-    var gesetzt=rows.length, preise=0, top10=0;
-    if(gesetzt){
-      activeCount++;
-      rows.forEach(function(r){ totalGesetzt++; if(hasPrizeRow(r)){ totalPreise++; preise++; } });
-      top10 = getTop10Placements(rows).length;
-      totalTop10 += top10;
-    }
-    return {pigeon:d, gesetzt:gesetzt, preise:preise, top10:top10, flown:gesetzt>0};
+    var gesetzt=rows.length, preise=0, topAS=0;
+    rows.forEach(function(r){
+      if(hasPrizeRow(r)) preise++;
+      var as=getFlightAS(r);
+      if(as!=null && as>90) topAS++; // ein Flug zählt max. 1x (bestes AS über RV/RegGr/Reg)
+    });
+    return {pigeon:d, gesetzt:gesetzt, preise:preise, topAS:topAS, flown:gesetzt>0, erfolgreich:preise>0};
   });
-  if(!totalGesetzt) return {ready:true, noFlights:true, totalDescendants:desc.length, perDescendant:perDescendant};
+
+  // Nur Nachkommen, die grundsätzlich geflogen sind, fließen in die Wertung ein.
+  var flown = perDescendant.filter(function(d){ return d.flown; });
+  if(!flown.length) return {ready:true, noFlights:true, totalDescendants:desc.length, perDescendant:perDescendant};
+
+  var erfolgreicheCount = flown.filter(function(d){ return d.erfolgreich; }).length;
+  if(erfolgreicheCount<VERERBER_MIN_ERFOLGREICHE) return {ready:true, notEnough:true, totalDescendants:desc.length,
+    flownCount:flown.length, erfolgreicheCount:erfolgreicheCount, perDescendant:perDescendant};
+
+  var totalGesetzt=0, totalPreise=0, totalTopAS=0;
+  flown.forEach(function(d){ totalGesetzt+=d.gesetzt; totalPreise+=d.preise; totalTopAS+=d.topAS; });
   var preisquote = totalPreise/totalGesetzt*100;
-  var top10quote = totalTop10/totalGesetzt*100;
-  var aktivenanteil = activeCount/desc.length*100;
-  var score = Math.round(Math.min(100, preisquote*0.6 + Math.min(top10quote*8,25) + aktivenanteil*0.15));
-  return {ready:true, score:score, preisquote:preisquote, top10quote:top10quote, aktivenanteil:aktivenanteil,
-    totalDescendants:desc.length, activeCount:activeCount, totalGesetzt:totalGesetzt, totalPreise:totalPreise, totalTop10:totalTop10,
+  var topASquote = totalTopAS/totalGesetzt*100;
+  var aktivenanteil = flown.length/desc.length*100;
+  var score = Math.round(Math.min(100, preisquote*0.6 + Math.min(topASquote*8,25) + aktivenanteil*0.15));
+  return {ready:true, score:score, preisquote:preisquote, topASquote:topASquote, aktivenanteil:aktivenanteil,
+    totalDescendants:desc.length, activeCount:flown.length, totalGesetzt:totalGesetzt, totalPreise:totalPreise, totalTopAS:totalTopAS,
     perDescendant:perDescendant};
 }
 // ── Detail-Overlay: zeigt die Formel und pro Nachkomme, wie gut geflogen wurde ──
@@ -5632,12 +5665,19 @@ function showVererbungDetail(pigeonid){
   var r = computeVererbungsstaerke(pigeonid);
   if(!r.ready){ ensureVererbungLoaded(pigeonid); return; }
 
-  var body;
+  var body, banner='';
   if(r.noDescendants){
     body = '<div style="color:var(--text3);font-size:13px">Keine Nachkommen (Kinder/Enkel) vorhanden.</div>';
   } else {
+    if(r.notEnough){
+      banner = '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">'
+        +'Noch kein Score: '+r.flownCount+' Nachkommen sind geflogen, davon '+r.erfolgreicheCount+' erfolgreich (mind. '+VERERBER_MIN_ERFOLGREICHE+' nötig).</div>';
+    } else if(r.noFlights){
+      banner = '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">'
+        +r.totalDescendants+' Nachkommen (Kinder+Enkel), aber noch keine Flugergebnisse erfasst.</div>';
+    }
     var rowsHtml = r.perDescendant.slice().sort(function(a,b){
-      return (b.flown-a.flown) || (b.top10-a.top10) || (b.preise-a.preise);
+      return (b.flown-a.flown) || (b.topAS-a.topAS) || (b.preise-a.preise);
     }).map(function(d){
       var dp=d.pigeon, sx=sex_(dp);
       return '<tr onclick="closeVererbungDetail();selectPigeon(\''+dp.pigeonid+'\')" style="cursor:pointer">'
@@ -5645,20 +5685,20 @@ function showVererbungDetail(pigeonid){
         +'<td>'+escH(dp.name||'—')+'</td>'
         +'<td style="text-align:center">'+(d.flown?d.gesetzt:'—')+'</td>'
         +'<td style="text-align:center">'+(d.flown?d.preise:'—')+'</td>'
-        +'<td style="text-align:center">'+(d.flown?d.top10:'—')+'</td>'
-        +'<td style="text-align:center;color:'+(d.flown?'var(--green)':'var(--text3)')+'">'+(d.flown?'✓ geflogen':'– keine Flüge')+'</td>'
+        +'<td style="text-align:center">'+(d.flown?d.topAS:'—')+'</td>'
+        +'<td style="text-align:center;color:'+(d.flown?(d.erfolgreich?'var(--green)':'var(--text2)'):'var(--text3)')+'">'+(d.flown?(d.erfolgreich?'✓ erfolgreich':'geflogen, kein Preis'):'– keine Flüge')+'</td>'
         +'</tr>';
     }).join('');
     body = '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-      +'<thead><tr><th>Ring</th><th>Name</th><th>Flüge</th><th>Preise</th><th>Top-10</th><th>Status</th></tr></thead>'
+      +'<thead><tr><th>Ring</th><th>Name</th><th>Flüge</th><th>Preise</th><th>Top (&gt;90 AS)</th><th>Status</th></tr></thead>'
       +'<tbody>'+rowsHtml+'</tbody></table></div>';
   }
 
-  var scoreLine = r.ready && !r.noDescendants && !r.noFlights
+  var scoreLine = r.score!=null
     ? '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">'
-      +'Score = 0,6 × Preisquote ('+r.preisquote.toFixed(1)+'%) + min(8 × Top-10-Quote ('+r.top10quote.toFixed(1)+'%), 25) + 0,15 × Aktivenanteil ('+r.aktivenanteil.toFixed(1)+'%) = <strong>'+r.score+' / 100</strong>'
+      +'Score = 0,6 × Preisquote ('+r.preisquote.toFixed(1)+'%) + min(8 × Top-Quote ('+r.topASquote.toFixed(1)+'%), 25) + 0,15 × Aktivenanteil ('+r.aktivenanteil.toFixed(1)+'%) = <strong>'+r.score+' / 100</strong>'
       +'</div>'
-    : '';
+    : banner;
 
   var overlay=document.createElement('div');
   overlay.className='lightbox-overlay veret-detail-overlay';
@@ -5672,7 +5712,7 @@ function showVererbungDetail(pigeonid){
       +'<div class="card-title" style="margin:0">🧬 Vererbungsstärke nach Flügen — '+escH(ring(p))+(p.name?' · '+escH(p.name):'')+'</div>'
       +'<span onclick="closeVererbungDetail()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>'
     +'</div>'
-    +'<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Misst, wie gut eine Taube ihre Flugleistung an ihre Nachkommen (Kinder + Enkel) weitergibt — auf Basis der gepoolten Flugergebnisse aller Nachkommen. Preisquote = Anteil Flüge mit Preis, Top-10-Quote = Anteil Flüge mit Platzierung 1.–10., Aktivenanteil = Anteil der Nachkommen, die überhaupt geflogen sind.</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Misst, wie gut eine Taube ihre Flugleistung an ihre Nachkommen (Kinder + Enkel) weitergibt. Gewertet werden nur Nachkommen, die geflogen sind — davon müssen mind. '+VERERBER_MIN_ERFOLGREICHE+' erfolgreich (Preis) gewesen sein. Preisquote = Anteil Flüge mit Preis, Top-Quote = Anteil Flüge mit mehr als 90 AS-Punkten (ein Flug zählt nur einmal), Aktivenanteil = Anteil aller Nachkommen, die überhaupt geflogen sind.</div>'
     + scoreLine
     + body;
   overlay.appendChild(panel);
@@ -5687,7 +5727,8 @@ function renderVererbungCard(pigeonid){
   if(!r.ready){ ensureVererbungLoaded(pigeonid);
     return label + `<div style="color:var(--text3);font-size:13px;padding:8px 0">Lade Flugdaten der Nachkommen…</div>`;
   }
-  if(r.noFlights) return label + `<div style="color:var(--text3);font-size:13px;padding:8px 0">${r.totalDescendants} Nachkommen (Kinder+Enkel), aber noch keine Flugergebnisse erfasst.</div>`;
+  if(r.noFlights) return label + `<div style="color:var(--text3);font-size:13px;padding:8px 0;cursor:pointer" onclick="showVererbungDetail('${pigeonid}')">${r.totalDescendants} Nachkommen (Kinder+Enkel), aber noch keine Flugergebnisse erfasst.</div>`;
+  if(r.notEnough) return label + `<div style="color:var(--text3);font-size:13px;padding:8px 0;cursor:pointer" onclick="showVererbungDetail('${pigeonid}')">${r.flownCount} Nachkommen geflogen, ${r.erfolgreicheCount} davon erfolgreich (mind. ${VERERBER_MIN_ERFOLGREICHE} nötig für einen Score). Details anzeigen →</div>`;
   var col = r.score>=60?'var(--green)':r.score>=35?'var(--orange)':'#e07070';
   return label
     +`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;cursor:pointer" onclick="showVererbungDetail('${pigeonid}')" title="Details zur Berechnung anzeigen">
@@ -5697,7 +5738,7 @@ function renderVererbungCard(pigeonid){
       </div>
       <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--text2)">
         <div><div style="font-weight:600">${r.preisquote.toFixed(1)}%</div><div style="color:var(--text3);font-size:10px">Preisquote</div></div>
-        <div><div style="font-weight:600">${r.top10quote.toFixed(1)}%</div><div style="color:var(--text3);font-size:10px">Top-10-Quote</div></div>
+        <div><div style="font-weight:600">${r.topASquote.toFixed(1)}%</div><div style="color:var(--text3);font-size:10px">Top-Quote (&gt;90 AS)</div></div>
         <div><div style="font-weight:600">${r.activeCount}/${r.totalDescendants}</div><div style="color:var(--text3);font-size:10px">Nachk. geflogen</div></div>
         <div><div style="font-weight:600">${r.totalGesetzt}</div><div style="color:var(--text3);font-size:10px">Flüge gesamt</div></div>
       </div>
