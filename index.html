@@ -6054,6 +6054,11 @@ async function handleTripsFiles(fileList){
   render();
 
   let combined = RT.imp.rows && RT.imp.rows.length ? RT.imp.rows : [];
+  // Nummer -> kanonischer Name (erster gesehener Name für diese Züchternummer
+  // in diesem Import-Vorgang). Verhindert, dass leicht unterschiedliche
+  // Schreibweisen derselben Züchternummer (z.B. "Kersting-tauben.de" vs. einer
+  // Variante) als separate Züchter im Import auftauchen.
+  const nameByNumber = RT.imp.breederNameByNumber || (RT.imp.breederNameByNumber = {});
   const breeders = RT.imp.breeders ? [...RT.imp.breeders] : [];
   const errors = [];
 
@@ -6064,7 +6069,16 @@ async function handleTripsFiles(fileList){
       const m = file.name.match(/\.(\d{2,4})$/);
       const parsed = m ? await parseKrausRows(file, m[1]) : await parseXlsxRows(file);
       if(parsed.breedername){
-        const label = parsed.breedername + (m?(' (Nr. '+m[1]+')'):'');
+        const num = m ? m[1] : null;
+        let canonicalName = parsed.breedername;
+        if(num){
+          if(nameByNumber[num]) canonicalName = nameByNumber[num];
+          else nameByNumber[num] = canonicalName;
+          // Alle Ergebniszeilen dieser Datei auf den kanonischen Namen normalisieren,
+          // bevor sie gespeichert werden — das ist die eigentliche Deduplizierung.
+          parsed.rows.forEach(item=>item.results.forEach(res=>{ res.breedername = canonicalName; }));
+        }
+        const label = zuechterLabel(canonicalName, num);
         if(!breeders.includes(label)) breeders.push(label);
       }
       combined = mergeTripRows(combined, parsed.rows);
@@ -6127,6 +6141,35 @@ function mergeTripRows(existing, incoming){
   return list.sort((a,b)=>a.trip.number-b.trip.number);
 }
 
+// ── Züchternummer (RegV/RV/Verein/lfd.) ──────────────────────────────────
+// Die EDV-Kraus-Dateiendung (z.B. ".009") liefert nur die laufende
+// Züchternummer INNERHALB des Vereins. RegV/RV/Verein sind für alle
+// Mitglieder desselben Vereins identisch — hier fest hinterlegt.
+// Vollständige Züchternummer = RegV(3) + RV(3) + Verein(2) + lfd.(3) = 11-stellig,
+// z.B. 405 015 05 009 → 40501505009.
+const VEREIN_REGV='405', VEREIN_RV='015', VEREIN_NR='05';
+function zuechterFullNumber(breedernumber){
+  if(breedernumber==null || breedernumber==='') return null;
+  return VEREIN_REGV+VEREIN_RV+VEREIN_NR+String(breedernumber).padStart(3,'0');
+}
+function zuechterNumberBreakdown(breedernumber){
+  if(breedernumber==null || breedernumber==='') return null;
+  return 'RegV '+VEREIN_REGV+' · RV '+VEREIN_RV+' · Verein '+VEREIN_NR+' · lfd. Züchternummer '+String(breedernumber).padStart(3,'0');
+}
+// Kanonischer Gruppierungs-Schlüssel für einen pigeontrips-Datensatz: die
+// Züchternummer ist eindeutig, der Freitext-Züchtername aus der Import-Datei
+// kann je nach Export leicht unterschiedlich geschrieben sein (z.B. mit/ohne
+// Bindestrich oder Domain-Zusatz) und würde beim reinen Namensabgleich
+// fälschlich als mehrere verschiedene Züchter auftauchen. Gruppierung
+// erfolgt daher bevorzugt über breedernumber, nur ohne Nummer wird auf den
+// Namen zurückgefallen.
+function zuechterKey(r){
+  return (r.breedernumber!=null && r.breedernumber!=='') ? 'nr:'+r.breedernumber : 'name:'+(r.breedername||'Unbekannt');
+}
+function zuechterLabel(name, breedernumber){
+  var full = zuechterFullNumber(breedernumber);
+  return full ? (name||'Unbekannt')+' · '+full : (name||'Unbekannt');
+}
 async function parseKrausRows(file, breedernumber){
   const buf   = await file.arrayBuffer();
   const text  = decodeLatin1(new Uint8Array(buf));
@@ -6633,9 +6676,14 @@ function zuechterAgg(){
   const tripById={}; RT.trips.forEach(t=>tripById[t.tripid]=t);
   const g={};
   ZT.rows.forEach(r=>{
-    const key=r.breedername||'Unbekannt';
-    if(!g[key]) g[key]={name:key, number:r.breedernumber||null, total:0, rvSet:0,rvWon:0, reggrSet:0,reggrWon:0, regSet:0,regWon:0, trips:new Set(), bestAS:0};
+    const key=zuechterKey(r);
+    if(!g[key]) g[key]={key, name:r.breedername||'Unbekannt', number:r.breedernumber||null, total:0, rvSet:0,rvWon:0, reggrSet:0,reggrWon:0, regSet:0,regWon:0, trips:new Set(), bestAS:0};
     const b=g[key];
+    // Falls für dieselbe Züchternummer mehrere Schreibweisen in der DB stehen
+    // (ältere Importe vor dieser Normalisierung), den längsten/vollständigsten
+    // Namen als Anzeige-Namen verwenden.
+    if(r.breedername && r.breedername.length>b.name.length) b.name=r.breedername;
+    if(!b.number && r.breedernumber) b.number=r.breedernumber;
     b.total++;
     if(r.tripid) b.trips.add(r.tripid);
     const trip=tripById[r.tripid];
@@ -6655,7 +6703,7 @@ function zuechterAgg(){
   })).sort((a,b)=>b.total-a.total);
 }
 
-function selectZuechter(name){ ZT.selected=name; render(); window.scrollTo(0,0); }
+function selectZuechter(key){ ZT.selected=key; render(); window.scrollTo(0,0); }
 
 async function openTripFromZuechter(tripid,breederName){
   const t=RT.trips.find(x=>x.tripid===tripid); if(!t) return;
@@ -6670,9 +6718,9 @@ function renderZuechter(){
   const list=zuechterAgg();
   if(list.length===0) return '<div class="card" style="text-align:center;padding:48px;color:var(--text3)">'+t('zt_empty1')+'<br>'+t('zt_empty2').replace('{tab}',t('nav_racing'))+'</div>';
   const rows=list.map(b=>`
-    <tr data-name="${escH(b.name)}" onclick="selectZuechter(this.dataset.name)" style="cursor:pointer">
+    <tr data-key="${escH(b.key)}" onclick="selectZuechter(this.dataset.key)" style="cursor:pointer">
       <td style="font-weight:500">${escH(b.name)}</td>
-      <td style="font-family:monospace;font-size:11px">${escH(b.number||'—')}</td>
+      <td style="font-family:monospace;font-size:11px" title="${b.number?escH(zuechterNumberBreakdown(b.number)):''}">${escH(zuechterFullNumber(b.number)||b.number||'—')}</td>
       <td style="text-align:center">${b.tripCount}</td>
       <td style="text-align:center">${b.total}</td>
       <td style="text-align:center">${b.pctRV!=null?b.pctRV.toFixed(0)+'%':'—'}</td>
@@ -6688,9 +6736,29 @@ function renderZuechter(){
       <tbody>${rows}</tbody></table></div></div></div>`;
 }
 
-function renderZuechterDetail(name){
+async function deleteZuechterData(key){
+  const b = zuechterAgg().find(x=>x.key===key);
+  if(!b) return;
+  const label = zuechterLabel(b.name, b.number);
+  if(!confirm('Wirklich ALLE Flugdaten von "'+label+'" löschen?\n\n'+b.total+' Ergebnisse aus '+b.tripCount+' Reise(n).\n\nDas kann nicht rückgängig gemacht werden.')) return;
+  try{
+    // Über die Züchternummer löschen (falls vorhanden) statt über den Namen —
+    // erwischt so auch ältere Datensätze mit abweichender Namens-Schreibweise
+    // derselben Züchternummer zuverlässig mit.
+    if(b.number) await apiDeleteBy('pigeontrips', 'breedernumber=eq.'+encodeURIComponent(b.number));
+    else await apiDeleteBy('pigeontrips', 'breedername=eq.'+encodeURIComponent(b.name));
+    // Lokale Caches, die Flugdaten enthalten könnten, sind jetzt veraltet.
+    Object.keys(PT_CACHE).forEach(id=>delete PT_CACHE[id]);
+    ZT.loaded=false; ZT.selected=null;
+    render();
+  }catch(e){ alert('Löschen fehlgeschlagen: '+e.message); }
+}
+
+function renderZuechterDetail(key){
+  const b0 = zuechterAgg().find(x=>x.key===key);
+  const name = b0 ? b0.name : 'Unbekannt';
   const tripById={}; RT.trips.forEach(t=>tripById[t.tripid]=t);
-  const myRows=ZT.rows.filter(r=>(r.breedername||'Unbekannt')===name);
+  const myRows=ZT.rows.filter(r=>zuechterKey(r)===key);
   const byTrip={};
   myRows.forEach(r=>{
     if(!byTrip[r.tripid]) byTrip[r.tripid]={tripid:r.tripid, total:0, rv:0, reggr:0, reg:0, bestAS:0, bestSpeed:null};
@@ -6724,9 +6792,15 @@ function renderZuechterDetail(name){
         <td style="text-align:center;font-weight:600">${t.bestSpeed!=null?t.bestSpeed.toFixed(3):'—'}</td>
       </tr>`;}).join('');
   const totalTauben=myRows.length;
-  const agg=zuechterAgg().find(b=>b.name===name)||{pctRV:null,pctRegGr:null,pctReg:null};
+  const agg=b0||{pctRV:null,pctRegGr:null,pctReg:null,number:null};
   return `<div><button class="back-btn" onclick="ZT.selected=null;render()">${t('zt_back_all')}</button>
-    <div class="card"><div class="serif" style="font-size:22px;margin-bottom:4px">${escH(name)}</div>
+    <div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <div>
+        <div class="serif" style="font-size:22px;margin-bottom:2px">${escH(name)}</div>
+        ${agg.number?`<div style="font-family:monospace;font-size:12px;color:var(--text3)" title="${escH(zuechterNumberBreakdown(agg.number))}">${escH(zuechterFullNumber(agg.number))}</div>`:''}
+      </div>
+      <button class="btn btn-outline btn-sm" style="color:#d9534f;border-color:#d9534f" onclick="deleteZuechterData(${jsAttr(key)})" title="Alle Flugdaten dieses Züchters löschen">🗑 Flugdaten löschen</button>
+    </div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 16px">
       <span class="badge badge-u">${Object.keys(byTrip).length} ${t('trips_word')} · ${totalTauben} ${t('nav_pigeons')}</span>
       <span class="badge badge-u">${t('zt_rv_label')} ${agg.pctRV!=null?agg.pctRV.toFixed(0)+'%':'—'}</span>
