@@ -5839,14 +5839,57 @@ function renderReisen(){
   return renderTripsList();
 }
 
+// Kurzes Datum ohne Jahr, z.B. "2026-05-30" -> "30.05." (Jahr steht bereits
+// in der Saison-Überschrift und muss hier nicht wiederholt werden).
+function shortTripDate(iso){
+  if(!iso) return '?';
+  const m=String(iso).match(/^\d{4}-(\d{2})-(\d{2})/);
+  return m ? m[2]+'.'+m[1]+'.' : iso;
+}
+
 function renderTripsList(){
   if(!ZT.loaded){ loadZuechterData().then(render); }
   if(!RT.collapsedSeasons) RT.collapsedSeasons=new Set();
+  // Beim allerersten Rendern (sobald die Reisen geladen sind): alle Saisons
+  // außer der aktuellsten (höchstes Jahr) standardmäßig einklappen. Danach
+  // bleibt der individuell vom Nutzer gewählte Zustand (toggleTripSeason)
+  // maßgeblich, auch wenn zwischendurch neu gerendert wird.
+  if(!RT.collapsedSeasonsInited && RT.trips.length){
+    const years=[...new Set(RT.trips.map(t=>String(t.vintage||'?')))].sort((a,b)=>b-a);
+    years.slice(1).forEach(y=>RT.collapsedSeasons.add(y));
+    RT.collapsedSeasonsInited=true;
+  }
   if(!RT.expandedTripBreeders) RT.expandedTripBreeders=new Set();
   const grouped={};
   RT.trips.forEach(t=>{ const yr=t.vintage||'?'; if(!grouped[yr]) grouped[yr]=[]; grouped[yr].push(t); });
   const cards=Object.keys(grouped).sort((a,b)=>b-a).map(yr=>{
     const seasonCollapsed=RT.collapsedSeasons.has(String(yr));
+    const rows=grouped[yr].map(tr=>{
+      const breeders=ZT.loaded?tripBreederRows(tr.tripid):[];
+      const breedersOpen=RT.expandedTripBreeders.has(tr.tripid);
+      const km=tr.averagedistance3!=null?Math.round(Number(tr.averagedistance3))+' km':'—';
+      return `
+        <tr onclick="openTrip('${tr.tripid}')">
+          <td style="font-family:'Playfair Display',serif;font-weight:600">${tr.number}</td>
+          <td>${shortTripDate(tr.tripdate)}</td>
+          <td>${escH(tr.location||'?')}</td>
+          <td style="text-align:right">${km}</td>
+          <td style="text-align:center;white-space:nowrap">${breeders.length>1?`<span onclick="event.stopPropagation();toggleTripBreeders('${tr.tripid}')" style="cursor:pointer;color:var(--text3)" title="${breeders.length} Züchter anzeigen">🧑‍🌾 ${breeders.length} ${breedersOpen?'▴':'▾'}</span>`:''}</td>
+        </tr>
+        ${breedersOpen&&breeders.length>1?`<tr onclick="event.stopPropagation()" style="cursor:default"><td colspan="5" style="background:var(--bg2);padding:8px 12px">
+          <div style="display:flex;flex-direction:column;gap:5px">
+            ${breeders.map(b=>`
+              <div onclick="openTrip('${tr.tripid}',${jsAttr(b.name)})" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;background:var(--bg3);border-radius:8px;padding:5px 9px" title="Nur Tauben von ${escH(b.name)} anzeigen (Ankunftsreihenfolge)">
+                <span style="color:var(--text2)">🧑‍🌾 ${escH(b.name)}${b.number?' <span style="color:var(--text3)">· '+escH(b.number)+'</span>':''} <span style="color:var(--text3)">· ${b.gesetzt} Tauben</span></span>
+                <span style="display:flex;gap:5px;flex-wrap:wrap">
+                  ${b.rv>0?'<span class="badge badge-u">RV: '+b.rv+'</span>':''}
+                  ${b.reggr>0?'<span class="badge badge-u">RegGr: '+b.reggr+'</span>':''}
+                  ${b.reg>0?'<span class="badge badge-u">Reg: '+b.reg+'</span>':''}
+                </span>
+              </div>`).join('')}
+          </div>
+        </td></tr>`:''}`;
+    }).join('');
     return `
     <div style="margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;user-select:none" onclick="toggleTripSeason('${yr}')">
@@ -5854,36 +5897,10 @@ function renderTripsList(){
         <span style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${t('season')} ${yr}</span>
         <span style="font-size:11px;color:var(--text3)">(${grouped[yr].length})</span>
       </div>
-      ${seasonCollapsed?'':grouped[yr].map(tr=>{
-        const breeders=ZT.loaded?tripBreederRows(tr.tripid):[];
-        const breedersOpen=RT.expandedTripBreeders.has(tr.tripid);
-        return `
-        <div class="trip-card" onclick="openTrip('${tr.tripid}')">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-            <div>
-              <div style="font-family:'Playfair Display',serif;font-size:15px">${I18N[LANG].trip_word} ${tr.number} — ${escH(tr.location||'?')}</div>
-              <div style="font-size:12px;color:var(--text3);margin-top:3px">${tr.tripdate||'?'}${tr.averagedistance3?' · ⌀ '+Number(tr.averagedistance3).toFixed(1)+' km':''}</div>
-            </div>
-          </div>
-          ${breeders.length?`
-            <div onclick="event.stopPropagation();toggleTripBreeders('${tr.tripid}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;margin-top:10px;user-select:none">
-              <span style="font-size:10px;color:var(--text3);transition:transform .15s;transform:rotate(${breedersOpen?'0':'-90'}deg);display:inline-block">▾</span>
-              <span style="font-size:12px;color:var(--text3)">🧑‍🌾 ${breeders.length} ${breeders.length===1?t('th_breeder'):t('bl_breeder_label').replace(':','')}</span>
-            </div>
-            ${breedersOpen?`<div style="margin-top:8px;display:flex;flex-direction:column;gap:5px">
-              ${breeders.map(b=>`
-                <div onclick="event.stopPropagation();openTrip('${tr.tripid}',${jsAttr(b.name)})" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;background:var(--bg2);border-radius:8px;padding:5px 9px" title="Nur Tauben von ${escH(b.name)} anzeigen (Ankunftsreihenfolge)">
-                  <span style="color:var(--text2)">🧑‍🌾 ${escH(b.name)}${b.number?' <span style="color:var(--text3)">· '+escH(b.number)+'</span>':''} <span style="color:var(--text3)">· ${b.gesetzt} Tauben</span></span>
-                  <span style="display:flex;gap:5px;flex-wrap:wrap">
-                    ${b.rv>0?'<span class="badge badge-u">RV: '+b.rv+'</span>':''}
-                    ${b.reggr>0?'<span class="badge badge-u">RegGr: '+b.reggr+'</span>':''}
-                    ${b.reg>0?'<span class="badge badge-u">Reg: '+b.reg+'</span>':''}
-                  </span>
-                </div>`).join('')}
-            </div>`:''}
-          `:''}
-        </div>`;
-      }).join('')}
+      ${seasonCollapsed?'':`<div class="table-wrap"><table>
+        <thead><tr><th>${t('trip_word')}-Nr.</th><th>Datum</th><th>Auflassort</th><th style="text-align:right">KM</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`}
     </div>`;
   }).join('');
 
