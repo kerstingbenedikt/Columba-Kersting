@@ -5050,7 +5050,7 @@ function fixUmlauts(s){
 
 let RT = {
   step:'list', trips:[], selected:null, results:[], breederFilter:null,
-  imp:{ step:'upload', rows:[], breeders:[], stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0} }
+  imp:{ step:'upload', rows:[], breeders:[], vereinId:null, stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0} }
 };
 
 // ── Züchterprofil für die Kopfzeile im Abstammungsdruck ──────────
@@ -5887,7 +5887,7 @@ function renderTripsList(){
     </div>`;
   }).join('');
 
-  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div>'+(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
+  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div>'+(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
 }
 function toggleTripSeason(yr){ const k=String(yr); if(RT.collapsedSeasons.has(k)) RT.collapsedSeasons.delete(k); else RT.collapsedSeasons.add(k); render(); }
 function toggleTripBreeders(tripid){ if(RT.expandedTripBreeders.has(tripid)) RT.expandedTripBreeders.delete(tripid); else RT.expandedTripBreeders.add(tripid); render(); }
@@ -6008,14 +6008,25 @@ function renderTripsImport(){
 }
 
 function renderTripsUpload(){
+  const vereinOptions = VEREINE.map(v=>'<option value="'+escH(v.id)+'"'+(RT.imp.vereinId===v.id?' selected':'')+'>'+escH(v.label)+'</option>').join('');
   return `<div class="card">
     <button class="back-btn" onclick="RT.step='list';render()">← Zurück</button>
     <div class="card-title serif" style="font-size:18px">📥 Leistungsdaten importieren</div>
-    <p style="color:var(--text3);font-size:13px;margin:10px 0 18px">
+    <p style="color:var(--text3);font-size:13px;margin:10px 0 14px">
       Unterstützt: <strong style="color:var(--text)">EDV-Kraus</strong> (Dateiendung = Züchternummer, z.B. <strong>.009</strong>, <strong>.040</strong>, <strong>.007</strong>) und
       <strong style="color:var(--text)">Columba XT Excel</strong> (Taubenpreise-Export).
       <strong style="color:var(--text)">Mehrere Dateien gleichzeitig möglich</strong> — alle Züchter-Dateien einer Reise können auf einmal ausgewählt/gezogen werden und landen danach in einer gemeinsamen Vorschau.
     </p>
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
+      <div style="flex:1;min-width:220px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Verein / Regionalverband dieser Dateien <span title="Macht die Züchternummer über verschiedene Vereine hinweg eindeutig — wichtig bei Importen aus mehreren RVen/Vereinen.">ⓘ</span></div>
+        <select onchange="setImportVerein(this.value)" style="width:100%;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">
+          <option value="">— kein Verein zugeordnet (nur laufende Nummer) —</option>
+          ${vereinOptions}
+        </select>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="showVereinManager()">🏛️ Vereine verwalten</button>
+    </div>
     <div class="imp-drop"
       ondragover="event.preventDefault();this.classList.add('drag-over')"
       ondragleave="this.classList.remove('drag-over')"
@@ -6054,6 +6065,7 @@ async function handleTripsFiles(fileList){
   render();
 
   let combined = RT.imp.rows && RT.imp.rows.length ? RT.imp.rows : [];
+  const verein = RT.imp.vereinId ? getVerein(RT.imp.vereinId) : null;
   // Nummer -> kanonischer Name (erster gesehener Name für diese Züchternummer
   // in diesem Import-Vorgang). Verhindert, dass leicht unterschiedliche
   // Schreibweisen derselben Züchternummer (z.B. "Kersting-tauben.de" vs. einer
@@ -6069,14 +6081,19 @@ async function handleTripsFiles(fileList){
       const m = file.name.match(/\.(\d{2,4})$/);
       const parsed = m ? await parseKrausRows(file, m[1]) : await parseXlsxRows(file);
       if(parsed.breedername){
-        const num = m ? m[1] : null;
+        const lfd = m ? m[1] : null;
+        // Mit ausgewähltem Verein: vollständige, vereinsübergreifend eindeutige
+        // Nummer (RegV+RV+Verein+lfd.) speichern. Ohne Verein: wie bisher nur
+        // die laufende Nummer aus der Dateiendung (kann zwischen Vereinen kollidieren).
+        const num = lfd!=null ? (verein ? vereinFullNumber(verein, lfd) : lfd) : null;
         let canonicalName = parsed.breedername;
         if(num){
           if(nameByNumber[num]) canonicalName = nameByNumber[num];
           else nameByNumber[num] = canonicalName;
-          // Alle Ergebniszeilen dieser Datei auf den kanonischen Namen normalisieren,
-          // bevor sie gespeichert werden — das ist die eigentliche Deduplizierung.
-          parsed.rows.forEach(item=>item.results.forEach(res=>{ res.breedername = canonicalName; }));
+          // Alle Ergebniszeilen dieser Datei auf den kanonischen Namen und die
+          // vollständige Züchternummer normalisieren, bevor sie gespeichert
+          // werden — das ist die eigentliche Deduplizierung.
+          parsed.rows.forEach(item=>item.results.forEach(res=>{ res.breedername = canonicalName; res.breedernumber = num; }));
         }
         const label = zuechterLabel(canonicalName, num);
         if(!breeders.includes(label)) breeders.push(label);
@@ -6141,20 +6158,41 @@ function mergeTripRows(existing, incoming){
   return list.sort((a,b)=>a.trip.number-b.trip.number);
 }
 
-// ── Züchternummer (RegV/RV/Verein/lfd.) ──────────────────────────────────
+// ── Vereine / Regionalverbände (RegV/RV/Verein) ──────────────────────────
 // Die EDV-Kraus-Dateiendung (z.B. ".009") liefert nur die laufende
-// Züchternummer INNERHALB des Vereins. RegV/RV/Verein sind für alle
-// Mitglieder desselben Vereins identisch — hier fest hinterlegt.
-// Vollständige Züchternummer = RegV(3) + RV(3) + Verein(2) + lfd.(3) = 11-stellig,
-// z.B. 405 015 05 009 → 40501505009.
-const VEREIN_REGV='405', VEREIN_RV='015', VEREIN_NR='05';
-function zuechterFullNumber(breedernumber){
-  if(breedernumber==null || breedernumber==='') return null;
-  return VEREIN_REGV+VEREIN_RV+VEREIN_NR+String(breedernumber).padStart(3,'0');
+// Züchternummer INNERHALB eines Vereins — die ist zwischen zwei
+// verschiedenen Vereinen NICHT eindeutig (beide können eine "009" haben).
+// Da teils aus unterschiedlichen Regionalverbänden/Vereinen importiert wird,
+// ist RegV/RV/Verein deshalb konfigurierbar statt fest hinterlegt (siehe
+// showVereinManager()). Vollständige, eindeutige Züchternummer =
+// RegV(3) + RV(3) + Verein(2) + lfd.(3) = 11-stellig, z.B. 405 015 05 009 →
+// 40501505009. Diese volle Nummer wird beim Import (falls ein Verein
+// ausgewählt wurde) direkt als breedernumber gespeichert.
+let VEREINE = (function(){
+  try{
+    const saved = JSON.parse(localStorage.getItem('pigeonVereine')||'null');
+    if(Array.isArray(saved)) return saved;
+  }catch(e){}
+  return [];
+})();
+function saveVereine(){ try{ localStorage.setItem('pigeonVereine', JSON.stringify(VEREINE)); }catch(e){} }
+function getVerein(id){ return VEREINE.find(v=>v.id===id) || null; }
+function vereinPrefix(v){ return v ? (String(v.regv).padStart(3,'0')+String(v.rv).padStart(3,'0')+String(v.verein).padStart(2,'0')) : null; }
+function vereinFullNumber(v, lfd){ const pre=vereinPrefix(v); return (pre!=null && lfd!=null && lfd!=='') ? pre+String(lfd).padStart(3,'0') : null; }
+// Ordnet eine (ggf. bereits Verein-qualifizierte) Züchternummer, falls möglich,
+// einem der konfigurierten Vereine zu (Präfix-Match).
+function vereinForNumber(breedernumber){
+  if(!breedernumber) return null;
+  const s=String(breedernumber);
+  return VEREINE.find(v=>{ const p=vereinPrefix(v); return p && s.indexOf(p)===0 && s.length===p.length+3; }) || null;
 }
+function zuechterFullNumber(breedernumber){ return breedernumber!=null && breedernumber!=='' ? String(breedernumber) : null; }
 function zuechterNumberBreakdown(breedernumber){
   if(breedernumber==null || breedernumber==='') return null;
-  return 'RegV '+VEREIN_REGV+' · RV '+VEREIN_RV+' · Verein '+VEREIN_NR+' · lfd. Züchternummer '+String(breedernumber).padStart(3,'0');
+  const s=String(breedernumber);
+  const v=vereinForNumber(s);
+  if(v) return v.label+' · RegV '+v.regv+' · RV '+v.rv+' · Verein '+v.verein+' · lfd. Züchternummer '+s.slice(-3);
+  return 'Züchternummer '+s+' (keinem Verein zugeordnet)';
 }
 // Kanonischer Gruppierungs-Schlüssel für einen pigeontrips-Datensatz: die
 // Züchternummer ist eindeutig, der Freitext-Züchtername aus der Import-Datei
@@ -6162,13 +6200,86 @@ function zuechterNumberBreakdown(breedernumber){
 // Bindestrich oder Domain-Zusatz) und würde beim reinen Namensabgleich
 // fälschlich als mehrere verschiedene Züchter auftauchen. Gruppierung
 // erfolgt daher bevorzugt über breedernumber, nur ohne Nummer wird auf den
-// Namen zurückgefallen.
+// Namen zurückgefallen. WICHTIG: nur Verein-qualifizierte Nummern (aus
+// Importen mit ausgewähltem Verein) sind über mehrere Vereine hinweg
+// wirklich eindeutig — nicht zugeordnete alte Kurz-Nummern können bei
+// gleicher laufender Nummer aus unterschiedlichen Vereinen kollidieren.
 function zuechterKey(r){
   return (r.breedernumber!=null && r.breedernumber!=='') ? 'nr:'+r.breedernumber : 'name:'+(r.breedername||'Unbekannt');
 }
 function zuechterLabel(name, breedernumber){
-  var full = zuechterFullNumber(breedernumber);
+  const full = zuechterFullNumber(breedernumber);
   return full ? (name||'Unbekannt')+' · '+full : (name||'Unbekannt');
+}
+function showVereinManager(){
+  const overlay=document.createElement('div');
+  overlay.className='lightbox-overlay verein-manager-overlay';
+  overlay.style.cursor='default';
+  overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
+  const panel=document.createElement('div');
+  panel.id='verein-manager-panel';
+  panel.style.cssText='background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:540px;width:92vw;max-height:86vh;overflow-y:auto;padding:20px;cursor:default';
+  panel.onclick=function(e){ e.stopPropagation(); };
+  renderVereinManagerInto(panel);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
+function closeVereinManager(){ const el=document.querySelector('.verein-manager-overlay'); if(el) el.remove(); }
+function renderVereinManagerInto(panel){
+  const rows = VEREINE.map(v=>'<tr>'
+    +'<td>'+escH(v.label)+'</td>'
+    +'<td style="font-family:monospace;font-size:12px">'+escH(v.regv)+' / '+escH(v.rv)+' / '+escH(v.verein)+'</td>'
+    +'<td style="text-align:right"><span onclick="deleteVerein('+jsAttr(v.id)+')" style="cursor:pointer;color:#d9534f;font-size:12px">Entfernen</span></td>'
+    +'</tr>').join('');
+  panel.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
+      +'<div class="card-title" style="margin:0">🏛️ Vereine / Regionalverbände</div>'
+      +'<span onclick="closeVereinManager()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>'
+    +'</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin:6px 0 14px">Die Kombination aus RegV, RV und Verein macht die Züchternummer über verschiedene Regionalverbände/Vereine hinweg eindeutig vergleichbar — wichtig, wenn zwei Vereine dieselbe laufende Züchternummer vergeben (z.B. beide eine "009").</div>'
+    +(VEREINE.length ? '<div class="table-wrap" style="margin-bottom:16px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Bezeichnung</th><th>RegV / RV / Verein</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+      : '<div style="color:var(--text3);font-size:13px;margin-bottom:16px">Noch kein Verein angelegt.</div>')
+    +'<div style="border-top:1px solid var(--border);padding-top:14px">'
+      +'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Neuen Verein anlegen</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
+        +'<input id="vm-label" placeholder="Bezeichnung (z.B. RV Musterstadt)" style="grid-column:1/3;padding:7px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">'
+        +'<input id="vm-regv" placeholder="RegV (z.B. 405)" style="padding:7px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">'
+        +'<input id="vm-rv" placeholder="RV (z.B. 015)" style="padding:7px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">'
+        +'<input id="vm-verein" placeholder="Verein (z.B. 05)" style="grid-column:1/3;padding:7px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">'
+      +'</div>'
+      +'<button class="btn btn-sm" onclick="addVereinFromForm()">+ Verein hinzufügen</button>'
+    +'</div>';
+}
+function addVereinFromForm(){
+  const label=document.getElementById('vm-label').value.trim();
+  const regv=document.getElementById('vm-regv').value.trim();
+  const rv=document.getElementById('vm-rv').value.trim();
+  const verein=document.getElementById('vm-verein').value.trim();
+  if(!regv||!rv||!verein){ alert('Bitte RegV, RV und Verein ausfüllen.'); return; }
+  const id='v'+Date.now();
+  VEREINE.push({id, label:label||('RegV '+regv+' · RV '+rv+' · Verein '+verein), regv, rv, verein});
+  saveVereine();
+  const panel=document.getElementById('verein-manager-panel');
+  if(panel) renderVereinManagerInto(panel);
+  render();
+}
+function deleteVerein(id){
+  if(!confirm('Verein aus der Liste entfernen?\n\nBereits importierte Flugdaten bleiben unverändert (nur die Zuordnung neuer Importe zu diesem Verein entfällt).')) return;
+  VEREINE = VEREINE.filter(v=>v.id!==id);
+  saveVereine();
+  if(RT.imp && RT.imp.vereinId===id) RT.imp.vereinId=null;
+  const panel=document.getElementById('verein-manager-panel');
+  if(panel) renderVereinManagerInto(panel);
+  render();
+}
+function setImportVerein(id){
+  RT.imp.vereinId = id||null;
+  try{ localStorage.setItem('pigeonVereinLastUsed', id||''); }catch(e){}
+  render();
+}
+function defaultVereinId(){
+  try{ const last=localStorage.getItem('pigeonVereinLastUsed'); if(last && getVerein(last)) return last; }catch(e){}
+  return VEREINE.length ? VEREINE[0].id : null;
 }
 async function parseKrausRows(file, breedernumber){
   const buf   = await file.arrayBuffer();
@@ -6455,7 +6566,7 @@ function renderTripsDone(){
       (z.B. Ass-Kategorien). Bitte die RLS-Policies für UPDATE auf <code>pigeontrips</code> in Supabase prüfen.
     </div>`:''}
     <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
-      <button class="btn btn-outline" onclick="RT.imp={step:'upload',rows:[],breeders:[],stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 Weiterer Import</button>
+      <button class="btn btn-outline" onclick="RT.imp={step:'upload',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 Weiterer Import</button>
       <button class="btn" onclick="RT.step='list';loadTrips().then(()=>render())">🏁 Zu den Reisen</button>
     </div>
   </div>`;
@@ -6650,7 +6761,7 @@ async function runTripsImport(){
 // unabhängig von den (Reise-bezogenen) prices1-4-Feldern auf trips —
 // die stammen nur vom jeweils ERSTEN importierten Züchter einer Reise
 // und sind daher bei mehreren Züchtern pro Reise nicht aussagekräftig.
-let ZT = { rows:[], loaded:false, selected:null };
+let ZT = { rows:[], loaded:false, selected:null, vereinFilter:undefined };
 
 async function loadZuechterData(){
   const FULL='breedername,breedernumber,tripid,pigeonid,ringnumber,sex,speed,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat,ass_a,ass_b,ass_c,ass_d';
@@ -6715,8 +6826,22 @@ async function openTripFromZuechter(tripid,breederName){
 function renderZuechter(){
   if(!ZT.loaded){ loadZuechterData().then(render); return '<div class="loading"><div class="spinner"></div>'+t('zt_loading')+'</div>'; }
   if(ZT.selected) return renderZuechterDetail(ZT.selected);
-  const list=zuechterAgg();
-  if(list.length===0) return '<div class="card" style="text-align:center;padding:48px;color:var(--text3)">'+t('zt_empty1')+'<br>'+t('zt_empty2').replace('{tab}',t('nav_racing'))+'</div>';
+  let list=zuechterAgg();
+  // Filter nach Verein/Regionalverband — sinnvoll, sobald aus mehreren
+  // Vereinen importiert wurde, damit die Bestenliste vergleichbar bleibt.
+  if(ZT.vereinFilter==='__none__'){
+    list = list.filter(b=>!vereinForNumber(b.number));
+  } else if(ZT.vereinFilter){
+    const v=getVerein(ZT.vereinFilter), pre=v?vereinPrefix(v):null;
+    list = list.filter(b=>pre && b.number && String(b.number).indexOf(pre)===0);
+  }
+  const filterBar = VEREINE.length ? `<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <span style="font-size:11px;color:var(--text3)">Verein:</span>
+      <span class="tag clickable" style="${!ZT.vereinFilter?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.vereinFilter=null;render()">Alle</span>
+      ${VEREINE.map(v=>`<span class="tag clickable" style="${ZT.vereinFilter===v.id?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.vereinFilter=${jsAttr(v.id)};render()">${escH(v.label)}</span>`).join('')}
+      <span class="tag clickable" style="${ZT.vereinFilter==='__none__'?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.vereinFilter='__none__';render()">Nicht zugeordnet</span>
+    </div>` : '';
+  if(list.length===0) return `<div>${filterBar}<div class="card" style="text-align:center;padding:48px;color:var(--text3)">${t('zt_empty1')}<br>${t('zt_empty2').replace('{tab}',t('nav_racing'))}</div></div>`;
   const rows=list.map(b=>`
     <tr data-key="${escH(b.key)}" onclick="selectZuechter(this.dataset.key)" style="cursor:pointer">
       <td style="font-weight:500">${escH(b.name)}</td>
@@ -6728,7 +6853,11 @@ function renderZuechter(){
       <td style="text-align:center">${b.pctReg!=null?b.pctReg.toFixed(0)+'%':'—'}</td>
       <td style="text-align:center;font-weight:600;color:var(--green)">${b.bestAS?b.bestAS.toFixed(2):'—'}</td>
     </tr>`).join('');
-  return `<div><div class="serif" style="font-size:20px;margin-bottom:16px">🧑‍🌾 ${list.length} ${t('breeders_word')}</div>
+  return `<div><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <div class="serif" style="font-size:20px">🧑‍🌾 ${list.length} ${t('breeders_word')}</div>
+      <button class="btn btn-outline btn-sm" onclick="showVereinManager()">🏛️ Vereine verwalten</button>
+    </div>
+    ${filterBar}
     <div class="card"><div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr><th>${t('th_breeder')}</th><th>${t('col_number')}</th><th style="text-align:center">${t('trips_word')}</th><th style="text-align:center">${t('col_pigeons_total')}</th>
         <th style="text-align:center">${t('col_avg_rv')}</th><th style="text-align:center">${t('col_avg_reggr')}</th><th style="text-align:center">${t('col_avg_reg')}</th>
@@ -6736,6 +6865,23 @@ function renderZuechter(){
       <tbody>${rows}</tbody></table></div></div></div>`;
 }
 
+async function assignVereinToBreeder(key){
+  const b = zuechterAgg().find(x=>x.key===key);
+  if(!b || !b.number) return;
+  if(!VEREINE.length){ alert('Bitte zuerst unter "Vereine verwalten" einen Verein anlegen.'); return; }
+  const options = VEREINE.map((v,i)=>(i+1)+') '+v.label+' (RegV '+v.regv+' · RV '+v.rv+' · Verein '+v.verein+')').join('\n');
+  const choice = prompt('Diesem Züchter (bisherige Nummer: '+b.number+') nachträglich einen Verein zuordnen — macht die Züchternummer über Vereine hinweg eindeutig.\n\n'+options+'\n\nNummer eingeben:');
+  if(!choice) return;
+  const v = VEREINE[parseInt(choice,10)-1];
+  if(!v){ alert('Ungültige Auswahl.'); return; }
+  const full = vereinFullNumber(v, b.number);
+  if(!confirm('Züchternummer für "'+b.name+'" von "'+b.number+'" auf "'+full+'" ('+v.label+') setzen?\n\nBetrifft '+b.total+' Datensätze.')) return;
+  try{
+    await apiPatchBy('pigeontrips', 'breedernumber=eq.'+encodeURIComponent(b.number)+'&breedername=eq.'+encodeURIComponent(b.name), {breedernumber:full});
+    ZT.loaded=false; ZT.selected=null;
+    render();
+  }catch(e){ alert('Fehler beim Zuordnen: '+e.message); }
+}
 async function deleteZuechterData(key){
   const b = zuechterAgg().find(x=>x.key===key);
   if(!b) return;
@@ -6799,7 +6945,10 @@ function renderZuechterDetail(key){
         <div class="serif" style="font-size:22px;margin-bottom:2px">${escH(name)}</div>
         ${agg.number?`<div style="font-family:monospace;font-size:12px;color:var(--text3)" title="${escH(zuechterNumberBreakdown(agg.number))}">${escH(zuechterFullNumber(agg.number))}</div>`:''}
       </div>
-      <button class="btn btn-outline btn-sm" style="color:#d9534f;border-color:#d9534f" onclick="deleteZuechterData(${jsAttr(key)})" title="Alle Flugdaten dieses Züchters löschen">🗑 Flugdaten löschen</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${(agg.number && !vereinForNumber(agg.number) && VEREINE.length) ? `<button class="btn btn-outline btn-sm" onclick="assignVereinToBreeder(${jsAttr(key)})" title="Diese (noch nicht zugeordnete) Züchternummer nachträglich einem Verein zuordnen">🏛️ Verein zuordnen</button>` : ''}
+        <button class="btn btn-outline btn-sm" style="color:#d9534f;border-color:#d9534f" onclick="deleteZuechterData(${jsAttr(key)})" title="Alle Flugdaten dieses Züchters löschen">🗑 Flugdaten löschen</button>
+      </div>
     </div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 16px">
       <span class="badge badge-u">${Object.keys(byTrip).length} ${t('trips_word')} · ${totalTauben} ${t('nav_pigeons')}</span>
