@@ -7077,9 +7077,13 @@ async function runTripsImport(){
       const upd={};
       if(t.tripdate) upd.tripdate=t.tripdate;
       ['prices1','prices2','prices3','prices4','prices5','averagedistance3'].forEach(k=>{ if(t[k]) upd[k]=t[k]; });
-      if(t.g_rv)    upd.pigeonsset_rv=t.g_rv;
-      if(t.g_reggr) upd.pigeonsset_reggr=t.g_reggr;
-      if(t.g_reg)   upd.pigeonsset_reg=t.g_reg;
+      // Immer setzen (auch auf null), NICHT nur wenn >0: sonst bleibt bei
+      // Flügen, wo eine Liste zwischenzeitlich wegfällt (z.B. RV ab Flug 10/11,
+      // weil zu wenig Tauben für eine eigene Auswertung), der alte/falsche Wert
+      // aus einem früheren Import für immer stehen.
+      if('g_rv' in t)    upd.pigeonsset_rv=t.g_rv||null;
+      if('g_reggr' in t) upd.pigeonsset_reggr=t.g_reggr||null;
+      if('g_reg' in t)   upd.pigeonsset_reg=t.g_reg||null;
       if(Object.keys(upd).length){
         try{ await apiPatchBy('trips','tripid=eq.'+tripid,upd); }
         catch(e2){
@@ -7098,9 +7102,9 @@ async function runTripsImport(){
         ['prices1','prices2','prices3','prices4','prices5','averagedistance3']
           .forEach(k=>{ if(t[k]) row[k]=t[k]; });
         const catRow={...row};
-        if(t.g_rv)    catRow.pigeonsset_rv=t.g_rv;
-        if(t.g_reggr) catRow.pigeonsset_reggr=t.g_reggr;
-        if(t.g_reg)   catRow.pigeonsset_reg=t.g_reg;
+        if('g_rv' in t)    catRow.pigeonsset_rv=t.g_rv||null;
+        if('g_reggr' in t) catRow.pigeonsset_reggr=t.g_reggr||null;
+        if('g_reg' in t)   catRow.pigeonsset_reg=t.g_reg||null;
         try{
           await apiPost('trips',catRow);
         } catch(e2){
