@@ -1194,6 +1194,80 @@ async function apiDeleteBy(table, filter){
   if(!r.ok){ const t=await r.text(); throw new Error(t); }
   return true;
 }
+// Holt eine komplette Tabelle seitenweise (PostgREST liefert sonst nur eine
+// begrenzte Anzahl Zeilen pro Aufruf) — wichtig bei ~9.500 Tauben.
+async function apiGetAll(path){
+  const all=[]; const pageSize=1000; let offset=0;
+  while(true){
+    const sep = path.includes('?') ? '&' : '?';
+    const page = await apiGet(path+sep+'limit='+pageSize+'&offset='+offset);
+    all.push(...page);
+    if(page.length<pageSize) break;
+    offset+=pageSize;
+  }
+  return all;
+}
+// Upsert in Batches (500 Zeilen), damit auch große Tabellen (Tauben,
+// Flugergebnisse) beim Wiederherstellen nicht an Request-Limits scheitern.
+// Gibt fehlgeschlagene Chunks zurück, statt beim ersten Fehler abzubrechen —
+// wichtig u.a. bei sich selbst referenzierenden Tauben (Vater/Mutter-IDs),
+// wo die Reihenfolge der Zeilen sonst zu FK-Fehlern führen kann.
+async function apiUpsertBatch(table, rows, onConflictCol){
+  const chunkSize=500; const failed=[];
+  for(let i=0;i<rows.length;i+=chunkSize){
+    const chunk=rows.slice(i,i+chunkSize);
+    try{
+      const url=SUPA_URL+'/'+table+'?on_conflict='+onConflictCol;
+      const r=await fetch(url,{method:'POST',
+        headers:Object.assign({},H(),{'Prefer':'resolution=merge-duplicates,return=minimal'}),
+        body:JSON.stringify(chunk)});
+      if(!r.ok){ const t=await r.text(); throw new Error(t); }
+    }catch(e){ failed.push({chunk, error:e.message}); }
+  }
+  return failed;
+}
+
+// ── Supabase Storage (für Server-seitige Backups) ────────────────
+// Erwartet einen (einmalig in Supabase manuell anzulegenden) Storage-Bucket
+// "backups", siehe Hinweis/SQL in renderBackup(). Ohne diesen Bucket schlägt
+// nur der Server-Teil fehl — lokale Sicherung/Wiederherstellung funktioniert
+// unabhängig davon.
+const SUPA_STORAGE_URL = 'https://vwdqqdmtjztduzqrdbpc.supabase.co/storage/v1';
+function storageHeaders(extra){
+  return Object.assign({'apikey':SUPA_KEY,'Authorization':'Bearer '+(AUTH.token||SUPA_KEY)}, extra||{});
+}
+async function storageUpload(bucket, path, content, contentType){
+  const r = await fetch(SUPA_STORAGE_URL+'/object/'+bucket+'/'+encodeURIComponent(path),{
+    method:'POST',
+    headers:storageHeaders({'Content-Type':contentType,'x-upsert':'true'}),
+    body:content
+  });
+  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  return r.json();
+}
+async function storageList(bucket, prefix){
+  const r = await fetch(SUPA_STORAGE_URL+'/object/list/'+bucket,{
+    method:'POST',
+    headers:storageHeaders({'Content-Type':'application/json'}),
+    body:JSON.stringify({prefix:prefix||'',limit:200,sortBy:{column:'created_at',order:'desc'}})
+  });
+  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  return r.json();
+}
+async function storageDownloadText(bucket, path){
+  const r = await fetch(SUPA_STORAGE_URL+'/object/'+bucket+'/'+encodeURIComponent(path),{headers:storageHeaders()});
+  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  return r.text();
+}
+async function storageDelete(bucket, paths){
+  const r = await fetch(SUPA_STORAGE_URL+'/object/'+bucket,{
+    method:'DELETE',
+    headers:storageHeaders({'Content-Type':'application/json'}),
+    body:JSON.stringify({prefixes:paths})
+  });
+  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  return r.json();
+}
 
 function updateHeaderStats(){
   const instock = S.pigeons.filter(p=>p.instock).length;
@@ -1781,7 +1855,7 @@ function sortBy(col){ S.sortCol===col ? S.sortDir*=-1 : (S.sortCol=col,S.sortDir
 // 'reisen'  = alles rund um Flüge & Auswertungen (Reisen, Bestenliste, Züchter)
 const TAB_GROUP = {
   tauben:'tauben', stammbaum:'tauben', paarung:'tauben', nachkommen:'tauben',
-  neu:'add', scan:'add', import:'add',
+  neu:'add', scan:'add', import:'add', backup:'add',
   reisen:'reisen', bestenliste:'reisen', zuechter:'reisen'
 };
 function setActiveNav(tab){
@@ -1828,7 +1902,7 @@ function renderTaubenOverviewNav(active){
 function renderAddSubnav(active){
   const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="showTab('${key}')">${icon} ${label}</button>`;
   return `<div class="subnav">
-    ${btn('neu','Manuell','✏️')}${btn('scan','Scan','📷')}${btn('import','Import','📥')}
+    ${btn('neu','Manuell','✏️')}${btn('scan','Scan','📷')}${btn('import','Import','📥')}${btn('backup','Backup','📦')}
   </div>`;
 }
 
@@ -1847,6 +1921,7 @@ function render(){
   else if(S.tab==='neu')        m.innerHTML=renderAddSubnav('neu')+renderNeu();
   else if(S.tab==='scan')       m.innerHTML=renderAddSubnav('scan')+renderScan();
   else if(S.tab==='import')     m.innerHTML=renderAddSubnav('import')+renderImport();
+  else if(S.tab==='backup')     m.innerHTML=renderAddSubnav('backup')+renderBackup();
   else if(S.tab==='reisen')     m.innerHTML=renderReisenSubnav('reisen')+renderReisen();
   else if(S.tab==='zuechter')   m.innerHTML=renderReisenSubnav('zuechter')+renderZuechter();
   else if(S.tab==='bestenliste') m.innerHTML=renderReisenSubnav('bestenliste')+renderBestenliste();
@@ -5053,6 +5128,15 @@ let RT = {
   imp:{ step:'upload', rows:[], breeders:[], vereinId:null, stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0} }
 };
 
+// ── Datensicherung (Backup) ──────────────────────────────────────
+const BACKUP_BUCKET = 'backups';
+let BK = {
+  busy:false, progress:null, error:null, lastResult:null,
+  serverList:null, serverListLoaded:false, serverListError:null,
+  restoreData:null, restoreSource:null, restoreMode:'merge',
+  restoring:false, restoreLog:[]
+};
+
 // ── Züchterprofil für die Kopfzeile im Abstammungsdruck ──────────
 // In Supabase gespeichert (Tabelle breederprofile, eine Zeile), damit die Angaben
 // geräteübergreifend verfügbar sind.
@@ -5831,6 +5915,269 @@ function renderPigeonTripsSection(p){
         <td style="font-size:12px;text-align:center">${t.distance!=null?t.distance.toFixed(1)+' km':'—'}</td>
       </tr>`).join('')}</tbody>
     </table></div>`:''}`;
+}
+
+// ── Datensicherung: Logik ─────────────────────────────────────────
+function backupFilename(){
+  const d=new Date(); const p=n=>String(n).padStart(2,'0');
+  return 'Datensicherung-'+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds())+'.json';
+}
+async function collectBackupData(onProgress){
+  const tables={};
+  onProgress&&onProgress('Tauben…');       tables.pigeons        = await apiGetAll('/pigeons?select=*');
+  onProgress&&onProgress('Reisen…');       tables.trips          = await apiGetAll('/trips?select=*');
+  onProgress&&onProgress('Flugergebnisse…');tables.pigeontrips    = await apiGetAll('/pigeontrips?select=*');
+  onProgress&&onProgress('Züchter…');      tables.breedersdata   = await apiGetAll('/breedersdata?select=*');
+  tables.breederprofile = await apiGetAll('/breederprofile?select=*');
+  onProgress&&onProgress('Referenzdaten…'); tables.pigeonstates   = await apiGetAll('/pigeonstates?select=*');
+  const counts={}; Object.entries(tables).forEach(([k,v])=>counts[k]=v.length);
+  return {
+    meta:{ app:'Columba-Kersting', created:new Date().toISOString(), version:1, counts },
+    tables,
+    settings:{
+      vereine: VEREINE,
+      taubenCols: JSON.parse(localStorage.getItem('taubenCols')||'null'),
+      bestenlisteCols: JSON.parse(localStorage.getItem('bestenlisteCols')||'null'),
+      lang: LANG
+    }
+  };
+}
+function downloadBackupFile(data, filename){
+  const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },1000);
+}
+function totalRows(counts){ return Object.values(counts||{}).reduce((a,b)=>a+b,0); }
+
+async function runLocalBackup(){
+  BK.busy=true; BK.error=null; BK.lastResult=null; BK.progress='Sammle Daten…'; render();
+  try{
+    const data = await collectBackupData(msg=>{ BK.progress=msg; render(); });
+    downloadBackupFile(data, backupFilename());
+    BK.lastResult = '💾 Backup heruntergeladen — '+totalRows(data.meta.counts).toLocaleString('de')+' Datensätze.';
+  }catch(e){ BK.error='Fehler beim Erstellen der Datensicherung: '+e.message; }
+  BK.busy=false; BK.progress=null; render();
+}
+async function runServerBackup(){
+  BK.busy=true; BK.error=null; BK.lastResult=null; BK.progress='Sammle Daten…'; render();
+  try{
+    const data = await collectBackupData(msg=>{ BK.progress=msg; render(); });
+    const filename = backupFilename();
+    BK.progress='Lade auf Server hoch…'; render();
+    await storageUpload(BACKUP_BUCKET, filename, JSON.stringify(data), 'application/json');
+    BK.lastResult = '☁️ Backup auf dem Server gespeichert: '+filename+' ('+totalRows(data.meta.counts).toLocaleString('de')+' Datensätze).';
+    BK.serverListLoaded=false;
+  }catch(e){
+    const notFound = /bucket not found/i.test(e.message);
+    BK.error = 'Fehler beim Server-Backup: '+e.message+(notFound?' — der Storage-Bucket "backups" muss einmalig angelegt werden (siehe Hinweis unten).':'');
+  }
+  BK.busy=false; BK.progress=null; render();
+}
+async function loadServerBackups(){
+  try{ BK.serverList = await storageList(BACKUP_BUCKET); BK.serverListError=null; }
+  catch(e){ BK.serverList=[]; BK.serverListError=e.message; }
+  BK.serverListLoaded=true; render();
+}
+async function downloadServerBackup(name){
+  try{
+    const text = await storageDownloadText(BACKUP_BUCKET, name);
+    const blob = new Blob([text],{type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=name;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },1000);
+  }catch(e){ alert('Fehler beim Download: '+e.message); }
+}
+async function deleteServerBackup(name){
+  if(!confirm('Backup "'+name+'" endgültig vom Server löschen?\n\nDas kann nicht rückgängig gemacht werden.')) return;
+  try{ await storageDelete(BACKUP_BUCKET,[name]); await loadServerBackups(); }
+  catch(e){ alert('Fehler beim Löschen: '+e.message); }
+}
+async function restoreFromServer(name){
+  try{
+    const text = await storageDownloadText(BACKUP_BUCKET, name);
+    startRestoreFlow(JSON.parse(text), 'Server: '+name);
+  }catch(e){ alert('Fehler beim Laden des Server-Backups: '+e.message); }
+}
+async function handleRestoreFile(file){
+  if(!file) return;
+  try{ startRestoreFlow(JSON.parse(await file.text()), 'Datei: '+file.name); }
+  catch(e){ alert('Datei konnte nicht gelesen werden — ist es eine gültige Datensicherung? ('+e.message+')'); }
+}
+function startRestoreFlow(data, sourceLabel){
+  if(!data || !data.tables){ alert('Diese Datei sieht nicht wie eine Columba-Kersting-Datensicherung aus.'); return; }
+  BK.restoreData=data; BK.restoreSource=sourceLabel; BK.restoreMode='merge'; render();
+}
+function cancelRestoreFlow(){ BK.restoreData=null; BK.restoreSource=null; BK.restoreLog=[]; render(); }
+
+// Reihenfolge wichtig: Eltern-Tabellen vor abhängigen Tabellen (Reisen vor
+// Flugergebnissen usw.). "pigeons" referenziert Vater/Mutter aber innerhalb
+// derselben Tabelle — dafür gibt es unten einen zweiten Versuch.
+function restorePlan(tables){
+  return [
+    ['breederprofile', tables.breederprofile, 'id'],
+    ['breedersdata',   tables.breedersdata,   'breederdataid'],
+    ['pigeons',        tables.pigeons,        'pigeonid'],
+    ['trips',          tables.trips,          'tripid'],
+    ['pigeontrips',    tables.pigeontrips,    'id'],
+  ];
+}
+async function runRestore(){
+  const data = BK.restoreData; if(!data||!data.tables) return;
+  const mode = BK.restoreMode;
+  if(mode==='replace'){
+    if(!confirm('ACHTUNG: Dies löscht ALLE aktuellen Daten (Tauben, Reisen, Ergebnisse, Züchter) unwiderruflich und ersetzt sie durch den Inhalt von "'+BK.restoreSource+'".\n\nWirklich fortfahren?')) return;
+    if(!confirm('Letzte Sicherheitsabfrage: Alle aktuellen Daten werden GELÖSCHT. Bist du sicher?')) return;
+  } else {
+    if(!confirm('Daten aus "'+BK.restoreSource+'" werden mit den aktuellen Daten zusammengeführt (Datensätze mit gleicher ID werden überschrieben, nichts wird gelöscht). Fortfahren?')) return;
+  }
+
+  BK.restoring=true; BK.restoreLog=[]; BK.error=null; render();
+  const log=(m)=>{ BK.restoreLog.push(m); render(); };
+
+  try{
+    if(mode==='replace'){
+      log('Lösche vorhandene Daten…');
+      const dels=[['pigeontrips','id'],['trips','tripid'],['pigeons','pigeonid'],['breedersdata','breederdataid'],['breederprofile','id']];
+      for(const [table,pk] of dels){
+        try{ await apiDeleteBy(table, pk+'=not.is.null'); }
+        catch(e){ log('⚠ '+table+' konnte nicht vollständig geleert werden: '+e.message); }
+      }
+    }
+    const plan = restorePlan(data.tables);
+    const allFailed=[];
+    for(const [table, rows, pk] of plan){
+      if(!rows||!rows.length) continue;
+      log('Importiere '+table+' ('+rows.length.toLocaleString('de')+')…');
+      const failed = await apiUpsertBatch(table, rows, pk);
+      if(failed.length) allFailed.push({table,pk,failed});
+    }
+    if(allFailed.length){
+      const n=allFailed.reduce((a,f)=>a+f.failed.length,0);
+      log('Zweiter Versuch für '+n+' zunächst fehlgeschlagene Batches (meist Reihenfolge bei Eltern-Referenzen)…');
+      for(const f of allFailed){
+        const rows2=f.failed.flatMap(x=>x.chunk);
+        const stillFailed=await apiUpsertBatch(f.table, rows2, f.pk);
+        if(stillFailed.length) log('❌ '+f.table+': '+stillFailed.length+' Batch(es) weiterhin fehlgeschlagen — Details: '+stillFailed[0].error.slice(0,200));
+      }
+    }
+    if(data.settings){
+      log('Übernehme Einstellungen (Vereine, Spalten)…');
+      try{
+        if(data.settings.vereine){ VEREINE=data.settings.vereine; saveVereine(); }
+        if(data.settings.taubenCols) localStorage.setItem('taubenCols', JSON.stringify(data.settings.taubenCols));
+        if(data.settings.bestenlisteCols) localStorage.setItem('bestenlisteCols', JSON.stringify(data.settings.bestenlisteCols));
+      }catch(e){ log('⚠ Einstellungen: '+e.message); }
+    }
+    log('✅ Wiederherstellung abgeschlossen. Lade Daten neu…');
+    BREEDER_PROFILE_LOADED=false; BREEDERSDATA_CACHE=null; ZT.loaded=false; RT.trips=[]; RT.collapsedSeasonsInited=false;
+    await loadData();
+    await loadTrips();
+    log('✅ Fertig.');
+  }catch(e){
+    log('❌ Fehler: '+e.message);
+  }
+  BK.restoring=false; render();
+}
+
+function humanFileSize(bytes){
+  if(bytes==null) return '—';
+  if(bytes<1024) return bytes+' B';
+  const units=['KB','MB','GB']; let i=-1;
+  do{ bytes/=1024; i++; }while(bytes>=1024 && i<units.length-1);
+  return bytes.toFixed(1)+' '+units[i];
+}
+
+function renderBackup(){
+  if(!BK.serverListLoaded && !BK.busy) loadServerBackups();
+
+  if(BK.restoreData){
+    const c = BK.restoreData.meta && BK.restoreData.meta.counts || {};
+    return `<div class="card">
+      <button class="back-btn" onclick="cancelRestoreFlow()">← Abbrechen</button>
+      <div class="card-title serif" style="font-size:18px">♻️ Wiederherstellung vorbereiten</div>
+      <p style="color:var(--text3);font-size:13px;margin:10px 0 14px">Quelle: <strong style="color:var(--text)">${escH(BK.restoreSource||'?')}</strong>${BK.restoreData.meta&&BK.restoreData.meta.created?' · gesichert am '+new Date(BK.restoreData.meta.created).toLocaleString('de'):''}</p>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px">
+        ${Object.entries(c).map(([k,v])=>`<span class="badge badge-u">${k}: ${Number(v).toLocaleString('de')}</span>`).join('')}
+      </div>
+      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px">
+        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;margin-bottom:10px">
+          <input type="radio" name="restoreMode" value="merge" ${BK.restoreMode==='merge'?'checked':''} onchange="BK.restoreMode='merge';render()" style="margin-top:3px">
+          <span><strong style="color:var(--text)">Zusammenführen (empfohlen)</strong><br><span style="font-size:12px;color:var(--text3)">Datensätze mit gleicher ID werden überschrieben, sonst bleibt alles Bestehende erhalten. Nichts wird gelöscht.</span></span>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
+          <input type="radio" name="restoreMode" value="replace" ${BK.restoreMode==='replace'?'checked':''} onchange="BK.restoreMode='replace';render()" style="margin-top:3px">
+          <span><strong style="color:#e0a030">Vollständig ersetzen</strong><br><span style="font-size:12px;color:var(--text3)">Löscht ALLE aktuellen Daten unwiderruflich und ersetzt sie 1:1 durch die Sicherung.</span></span>
+        </label>
+      </div>
+      ${BK.restoring?`<div style="background:var(--bg2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;font-family:monospace;max-height:200px;overflow-y:auto">${BK.restoreLog.map(l=>escH(l)).join('<br>')}</div>`:''}
+      <button class="btn" ${BK.restoring?'disabled':''} onclick="runRestore()">${BK.restoring?'⏳ Läuft…':'♻️ Wiederherstellung starten'}</button>
+    </div>`;
+  }
+
+  const serverRows = (BK.serverList||[]).filter(f=>f.name&&f.name.endsWith('.json')).map(f=>`
+    <tr>
+      <td>${escH(f.name)}</td>
+      <td style="white-space:nowrap">${f.created_at?new Date(f.created_at).toLocaleString('de'):'—'}</td>
+      <td style="text-align:right">${humanFileSize(f.metadata&&f.metadata.size)}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-outline btn-sm" onclick="downloadServerBackup(${jsAttr(f.name)})" title="Herunterladen">⬇️</button>
+        <button class="btn btn-outline btn-sm" onclick="restoreFromServer(${jsAttr(f.name)})" title="Wiederherstellen">♻️</button>
+        <button class="btn btn-outline btn-sm" style="color:#d9534f;border-color:#d9534f" onclick="deleteServerBackup(${jsAttr(f.name)})" title="Löschen">🗑</button>
+      </td>
+    </tr>`).join('');
+
+  return `<div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title serif" style="font-size:18px">📦 Datensicherung erstellen</div>
+      <p style="color:var(--text3);font-size:13px;margin:10px 0 16px">
+        Sichert Tauben, Reisen, Flugergebnisse, Züchter und Einstellungen als eine Datei. Bei ~9.500 Tauben kann das Sammeln der Daten einige Sekunden dauern.
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn" ${BK.busy?'disabled':''} onclick="runLocalBackup()">💾 ${BK.busy?'Läuft…':'Lokal herunterladen'}</button>
+        <button class="btn btn-outline" ${BK.busy?'disabled':''} onclick="runServerBackup()">☁️ ${BK.busy?'Läuft…':'Auf Server sichern'}</button>
+      </div>
+      ${BK.progress?`<div style="font-size:12px;color:var(--text3)">⏳ ${escH(BK.progress)}</div>`:''}
+      ${BK.lastResult?`<div style="font-size:13px;color:var(--green);margin-top:6px">${escH(BK.lastResult)}</div>`:''}
+      ${BK.error?`<div style="font-size:13px;color:#e07070;margin-top:6px">${escH(BK.error)}</div>`:''}
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="card-title serif" style="font-size:18px;margin:0">☁️ Server-Backups</div>
+        <button class="btn btn-outline btn-sm" onclick="BK.serverListLoaded=false;loadServerBackups()">🔄 Aktualisieren</button>
+      </div>
+      ${BK.serverListError?`
+        <div style="font-size:13px;color:#e07070;margin-bottom:10px">Server-Backups nicht verfügbar: ${escH(BK.serverListError)}</div>
+        <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;font-size:12px;color:var(--text3)">
+          <strong style="color:var(--text2)">Einmalige Einrichtung nötig:</strong> Im Supabase-Dashboard unter <em>Storage</em> einen privaten Bucket namens <strong>backups</strong> anlegen (oder per SQL-Editor):
+          <pre style="background:var(--bg2);padding:8px 10px;border-radius:6px;margin-top:8px;overflow-x:auto;font-size:11px">insert into storage.buckets (id, name, public) values ('backups','backups', false);
+
+create policy "backups_rw" on storage.objects
+  for all using (bucket_id = 'backups') with check (bucket_id = 'backups');</pre>
+        </div>`
+      : (BK.serverList&&BK.serverList.length
+          ? `<div class="table-wrap"><table><thead><tr><th>Datei</th><th>Erstellt</th><th style="text-align:right">Größe</th><th></th></tr></thead><tbody>${serverRows}</tbody></table></div>`
+          : `<div style="color:var(--text3);font-size:13px">Noch keine Server-Backups vorhanden.</div>`)
+      }
+    </div>
+
+    <div class="card">
+      <div class="card-title serif" style="font-size:18px">♻️ Wiederherstellen aus Datei</div>
+      <p style="color:var(--text3);font-size:13px;margin:10px 0 14px">Lade eine zuvor heruntergeladene Datensicherungs-Datei (.json) hoch.</p>
+      <div class="imp-drop"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="event.preventDefault();this.classList.remove('drag-over');handleRestoreFile(event.dataTransfer.files[0])">
+        <input type="file" accept=".json" onchange="handleRestoreFile(this.files[0])">
+        <div style="font-size:40px;margin-bottom:10px">📄</div>
+        <div style="font-size:15px;color:var(--text2);font-weight:500;margin-bottom:4px">Backup-Datei hochladen oder hierher ziehen</div>
+        <div style="font-size:12px;color:var(--text3)">.json (von diesem Backup-Werkzeug erstellt)</div>
+      </div>
+    </div>
+  </div>`;
 }
 
 function renderReisen(){
