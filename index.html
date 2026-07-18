@@ -5529,24 +5529,40 @@ function getTop10Placements(rows){
   return out.sort((a,b)=> a.platz-b.platz || String(b.tripdate).localeCompare(String(a.tripdate)));
 }
 
-// Wie getTop10Placements, aber ohne Dopplungen (max. 1 Eintrag pro Flug — die beste
-// Platzierung über RV/RegGr/Reg gewinnt) und mit konfigurierbarer Obergrenze. Für den
-// Abstammungsdruck (Top-20-Liste je Taube).
+// Wie getTop10Placements, aber max. 1 Haupteintrag pro Flug — dabei wird unter den
+// Top-10-Platzierungen dieses Flugs NICHT einfach die niedrigste Platznummer gewählt,
+// sondern die gegen die höchste Taubenzahl (eine Top-10-Platzierung gegen eine große
+// Regionalverbands-Liste zählt mehr als ein besserer Platz in einer kleinen Liste).
+// Qualifizieren sich für denselben Flug mehrere Kategorien (z.B. 1. RV UND 6. Reg),
+// wird das nicht verworfen, sondern als Dopplung an den Haupteintrag angehängt
+// (t.duplicates) und beim Druck mit ausgewiesen. Konfigurierbare Obergrenze für den
+// Gesamt-Pool (Abstammungsdruck: Top-Liste je Taube).
 function getTopPlacementsDeduped(rows, n){
   n = n||20;
-  const CATS=[['prize_rv','pigeonsset_rv'],['prize_reggr','pigeonsset_reggr'],['prize_reg','pigeonsset_reg']];
+  const CATS=[['prize_rv','pigeonsset_rv','RV'],['prize_reggr','pigeonsset_reggr','RegGr'],['prize_reg','pigeonsset_reg','Reg']];
   const out=[];
   rows.forEach(r=>{
-    let best=null;
-    CATS.forEach(([field,gesetztField])=>{
+    const candidates=[];
+    CATS.forEach(([field,gesetztField,label])=>{
       const platz=r[field];
-      if(platz!=null && platz>0 && (best===null || platz<best.platz)){
-        best={platz, gesetzt:r[gesetztField]!=null?r[gesetztField]:r.pigeonsset};
+      if(platz!=null && platz>0){
+        candidates.push({platz, kategorie:label, gesetzt:r[gesetztField]!=null?r[gesetztField]:r.pigeonsset});
       }
     });
-    if(best && best.platz<=n){
-      out.push({platz:best.platz, gesetzt:best.gesetzt, tripnumber:r.tripnumber,
-        location:r.location, tripdate:r.tripdate, vintage:r.vintage, distance:r.distance});
+    if(!candidates.length) return;
+    const top10=candidates.filter(c=>c.platz<=10);
+    // Innerhalb der Top10 gewinnt die höchste Taubenzahl (bei Gleichstand die
+    // niedrigere Platznummer); außerhalb der Top10 zählt weiterhin schlicht der
+    // beste (niedrigste) Platz.
+    const best = top10.length
+      ? top10.slice().sort((a,b)=> (b.gesetzt||0)-(a.gesetzt||0) || a.platz-b.platz)[0]
+      : candidates.slice().sort((a,b)=>a.platz-b.platz)[0];
+    const duplicates = top10.filter(c=>c!==best).sort((a,b)=>a.platz-b.platz)
+      .map(c=>({platz:c.platz, kategorie:c.kategorie}));
+    if(best.platz<=n){
+      out.push({platz:best.platz, kategorie:best.kategorie, gesetzt:best.gesetzt, tripnumber:r.tripnumber,
+        location:r.location, tripdate:r.tripdate, vintage:r.vintage, distance:r.distance,
+        duplicates:duplicates.length?duplicates:null});
     }
   });
   return out.sort((a,b)=> a.platz-b.platz || String(b.tripdate).localeCompare(String(a.tripdate))).slice(0,n);
@@ -5576,14 +5592,17 @@ function selectPrintPlacements(list){
   return top5.concat(bonus).slice(0,10);
 }
 
-// Kompakte Top-Platzierungszeilen für die Stammbaum-Box (ohne Dopplungen), z.B.
-// "1. von 2356 Tauben · 420 km" — eine Zeile pro Platzierung.
+// Kompakte Top-Platzierungszeilen für die Stammbaum-Box (max. 1 Zeile pro Flug), z.B.
+// "1. von 1830 Tauben (Reg) · 386.0 km · zugl. 6. RegGr" — Kategorie und ggf. eine
+// Dopplung (Platzierung in einer weiteren Liste desselben Flugs) werden mit ausgewiesen.
 function pigeonTopPlacementsCompactLines(pigeonid){
   const rows = PT_CACHE[pigeonid];
   if(!rows || !rows.length) return [];
   const full = getTopPlacementsDeduped(rows, 50);  // großzügiger Pool für die Auswahl
   return selectPrintPlacements(full).map(t=>
-    `${t.platz}. von ${t.gesetzt??'—'} Tauben${t.distance!=null?' · '+t.distance.toFixed(1)+' km':''}`
+    `${t.platz}. von ${t.gesetzt??'—'} Tauben${t.kategorie?' ('+t.kategorie+')':''}`+
+    `${t.distance!=null?' · '+t.distance.toFixed(1)+' km':''}`+
+    `${t.duplicates?' · zugl. '+t.duplicates.map(d=>d.platz+'. '+d.kategorie).join(', '):''}`
   );
 }
 
