@@ -1192,7 +1192,14 @@ async function apiDelete(table, id){
 async function apiDeleteBy(table, filter){
   const r = await fetch(SUPA_URL+'/'+table+'?'+filter,{method:'DELETE',headers:H()});
   if(!r.ok){ const t=await r.text(); throw new Error(t); }
-  return true;
+  // H() setzt "Prefer: return=representation" — Supabase liefert dann die
+  // tatsächlich gelöschten Zeilen zurück. Wichtig: ohne diese Prüfung meldet
+  // apiDeleteBy fälschlich "Erfolg", auch wenn RLS den Zugriff auf die Zeilen
+  // verweigert hat und in Wahrheit NICHTS gelöscht wurde (Supabase antwortet
+  // in diesem Fall trotzdem mit 200/204 und leerem Body).
+  let deleted = [];
+  try{ const text = await r.text(); deleted = text ? JSON.parse(text) : []; }catch(e){ /* kein JSON-Body */ }
+  return Array.isArray(deleted) ? deleted : [];
 }
 // Holt eine komplette Tabelle seitenweise (PostgREST liefert sonst nur eine
 // begrenzte Anzahl Zeilen pro Aufruf) — wichtig bei ~9.500 Tauben.
@@ -7333,6 +7340,37 @@ async function assignVereinToBreeder(key){
     render();
   }catch(e){ alert('Fehler beim Zuordnen: '+e.message); }
 }
+async function renameZuechter(key){
+  const b = zuechterAgg().find(x=>x.key===key);
+  if(!b) return;
+  const newName = prompt('Neuer Name für "'+b.name+'":', b.name);
+  if(newName==null) return;
+  const trimmed = newName.trim();
+  if(!trimmed || trimmed===b.name) return;
+  try{
+    // Über die Züchternummer aktualisieren (falls vorhanden) statt über den
+    // alten Namen — erwischt so auch Datensätze mit abweichender
+    // Namens-Schreibweise derselben Züchternummer mit.
+    const updated = b.number
+      ? await apiPatchBy('pigeontrips', 'breedernumber=eq.'+encodeURIComponent(b.number), {breedername:trimmed})
+      : await apiPatchBy('pigeontrips', 'breedername=eq.'+encodeURIComponent(b.name), {breedername:trimmed});
+    if(Array.isArray(updated) && updated.length===0){
+      alert('Es wurden 0 Datensätze umbenannt, obwohl '+b.total+' erwartet wurden.\n\nVermutlich verhindert eine Datenbank-Berechtigung (Row Level Security) das Ändern in der Tabelle "pigeontrips". Bitte prüfe die RLS-Policy für UPDATE auf dieser Tabelle in Supabase, oder wende dich an den Admin des Projekts.');
+      return;
+    }
+    if(b.number) nameByNumberCacheClear(b.number, trimmed);
+    ZT.loaded=false; ZT.selected=null;
+    render();
+  }catch(e){ alert('Umbenennen fehlgeschlagen: '+e.message); }
+}
+// Verhindert, dass ein zukünftiger Import den alten Namen wiederherstellt:
+// die Import-Session merkt sich kanonische Namen je Züchternummer (siehe
+// handleTripsFiles) — die muss nach einer manuellen Umbenennung nachziehen.
+function nameByNumberCacheClear(number, newName){
+  if(RT.imp && RT.imp.breederNameByNumber && RT.imp.breederNameByNumber[number]!==undefined){
+    RT.imp.breederNameByNumber[number] = newName;
+  }
+}
 async function deleteZuechterData(key){
   const b = zuechterAgg().find(x=>x.key===key);
   if(!b) return;
@@ -7342,8 +7380,18 @@ async function deleteZuechterData(key){
     // Über die Züchternummer löschen (falls vorhanden) statt über den Namen —
     // erwischt so auch ältere Datensätze mit abweichender Namens-Schreibweise
     // derselben Züchternummer zuverlässig mit.
-    if(b.number) await apiDeleteBy('pigeontrips', 'breedernumber=eq.'+encodeURIComponent(b.number));
-    else await apiDeleteBy('pigeontrips', 'breedername=eq.'+encodeURIComponent(b.name));
+    const deleted = b.number
+      ? await apiDeleteBy('pigeontrips', 'breedernumber=eq.'+encodeURIComponent(b.number))
+      : await apiDeleteBy('pigeontrips', 'breedername=eq.'+encodeURIComponent(b.name));
+    if(deleted.length===0){
+      // Löschen "erfolgreich" laut HTTP-Status, aber 0 betroffene Zeilen —
+      // typischerweise eine RLS-Policy, die DELETE auf pigeontrips verweigert.
+      alert('Es wurden 0 Datensätze gelöscht, obwohl '+b.total+' erwartet wurden.\n\nVermutlich verhindert eine Datenbank-Berechtigung (Row Level Security) das Löschen in der Tabelle "pigeontrips". Bitte prüfe die RLS-Policy für DELETE auf dieser Tabelle in Supabase, oder wende dich an den Admin des Projekts.');
+      return;
+    }
+    if(deleted.length<b.total){
+      alert(deleted.length+' von '+b.total+' Datensätzen gelöscht. Die restlichen '+(b.total-deleted.length)+' konnten nicht gelöscht werden (evtl. abweichende Schreibweise/Nummer oder RLS) — bitte Zuchtstatistik prüfen.');
+    }
     // Lokale Caches, die Flugdaten enthalten könnten, sind jetzt veraltet.
     Object.keys(PT_CACHE).forEach(id=>delete PT_CACHE[id]);
     ZT.loaded=false; ZT.selected=null;
@@ -7397,6 +7445,7 @@ function renderZuechterDetail(key){
         ${agg.number?`<div style="font-family:monospace;font-size:12px;color:var(--text3)" title="${escH(zuechterNumberBreakdown(agg.number))}">${escH(zuechterFullNumber(agg.number))}</div>`:''}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="renameZuechter(${jsAttr(key)})" title="Züchternamen umbenennen">✏️ Umbenennen</button>
         ${(agg.number && !rvForNumber(agg.number) && RVEN.length) ? `<button class="btn btn-outline btn-sm" onclick="assignVereinToBreeder(${jsAttr(key)})" title="Diese (noch nicht zugeordnete) Züchternummer nachträglich einer RV zuordnen">🏛️ RV zuordnen</button>` : ''}
         <button class="btn btn-outline btn-sm" style="color:#d9534f;border-color:#d9534f" onclick="deleteZuechterData(${jsAttr(key)})" title="Alle Flugdaten dieses Züchters löschen">🗑 Flugdaten löschen</button>
       </div>
