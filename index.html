@@ -6365,6 +6365,9 @@ function renderTripDetail(){
   const rvCount=sorted.filter(r=>r.prize_rv!=null).length;
   const reggrCount=sorted.filter(r=>r.prize_reggr!=null).length;
   const regCount=sorted.filter(r=>r.prize_reg!=null).length;
+  // Gesetzte Taubenzahl je Liste = vereinsweiter Wert der ganzen Reise
+  // (pigeonsset_xx), unabhängig vom Züchter-Filter.
+  const rvSet=trip.pigeonsset_rv, reggrSet=trip.pigeonsset_reggr, regSet=trip.pigeonsset_reg;
 
   return '<div><button class="back-btn" onclick="RT.step=\'list\';RT.breederFilter=null;render()">← '+t('all_trips')+'</button>'
     +'<div class="card"><div style="margin-bottom:14px">'
@@ -6372,9 +6375,9 @@ function renderTripDetail(){
     +'<div style="color:var(--text3);font-size:13px;margin-top:4px">'+(trip.tripdate||'')+' · '+t('season')+' '+(trip.vintage||'')+(RT.breederFilter?' · '+t('filtered_on')+' 🧑‍🌾 '+escH(RT.breederFilter):'')+'</div>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">'
     +'<span class="badge badge-u">'+sorted.length+' '+t('pigeons_set')+'</span>'
-    +(rvCount?'<span class="badge badge-u">RV: '+rvCount+'</span>':'')
-    +(reggrCount?'<span class="badge badge-u">RegGr: '+reggrCount+'</span>':'')
-    +(regCount?'<span class="badge badge-u">Reg: '+regCount+'</span>':'')
+    +(rvCount?'<span class="badge badge-u" title="Preise / gesamte gesetzte Taubenzahl der Reise in dieser Liste">RV: '+rvCount+(rvSet>0?' / '+rvSet+' ges.':'')+'</span>':'')
+    +(reggrCount?'<span class="badge badge-u" title="Preise / gesamte gesetzte Taubenzahl der Reise in dieser Liste">RegGr: '+reggrCount+(reggrSet>0?' / '+reggrSet+' ges.':'')+'</span>':'')
+    +(regCount?'<span class="badge badge-u" title="Preise / gesamte gesetzte Taubenzahl der Reise in dieser Liste">Reg: '+regCount+(regSet>0?' / '+regSet+' ges.':'')+'</span>':'')
     +(trip.averagedistance3?'<span class="badge badge-u">⌀ '+Number(trip.averagedistance3).toFixed(1)+' km</span>':'')
     +'</div>'
     +chips
@@ -7420,19 +7423,24 @@ function renderZuechterDetail(key){
     .sort((a,b)=>(a.trip.tripdate||'').localeCompare(b.trip.tripdate||''))
     .map(t=>{
       // "—" bedeutet: für diese Reise wurde die betreffende Liste gar nicht ausgewertet
-      // (nicht mit 0 Preisen gleichzusetzen!)
-      const rvCell    = t.trip.pigeonsset_rv>0    ? t.rv+' ('+(t.rv/t.total*100).toFixed(0)+'%)'       : '—';
-      const reggrCell = t.trip.pigeonsset_reggr>0 ? t.reggr+' ('+(t.reggr/t.total*100).toFixed(0)+'%)' : '—';
-      const regCell   = t.trip.pigeonsset_reg>0   ? t.reg+' ('+(t.reg/t.total*100).toFixed(0)+'%)'     : '—';
+      // (nicht mit 0 Preisen gleichzusetzen!). Zahl vor dem "/" = Preise dieses
+      // Züchters, Zahl danach = gesamte gesetzte Taubenzahl der Reise in dieser
+      // Liste (vereinsweit, aus pigeonsset_xx) — Prozentangabe als Tooltip.
+      const rvCell    = t.trip.pigeonsset_rv>0    ? t.rv+' / '+t.trip.pigeonsset_rv       : '—';
+      const reggrCell = t.trip.pigeonsset_reggr>0 ? t.reggr+' / '+t.trip.pigeonsset_reggr : '—';
+      const regCell   = t.trip.pigeonsset_reg>0   ? t.reg+' / '+t.trip.pigeonsset_reg     : '—';
+      const rvTitle    = t.trip.pigeonsset_rv>0    ? (t.rv/t.total*100).toFixed(0)+'% Preisquote (eigene Tauben)'    : '';
+      const reggrTitle = t.trip.pigeonsset_reggr>0 ? (t.reggr/t.total*100).toFixed(0)+'% Preisquote (eigene Tauben)' : '';
+      const regTitle   = t.trip.pigeonsset_reg>0   ? (t.reg/t.total*100).toFixed(0)+'% Preisquote (eigene Tauben)'   : '';
       const kmCell = t.trip.averagedistance3!=null ? Number(t.trip.averagedistance3).toFixed(1)+' km' : '—';
       return `
       <tr data-tripid="${t.tripid}" onclick="openTripFromZuechter(this.dataset.tripid,${jsAttr(name)})" style="cursor:pointer">
         <td>${t.trip.number}</td><td>${escH(t.trip.location||'')}</td><td>${t.trip.tripdate||'—'}</td>
         <td style="text-align:center">${kmCell}</td>
         <td style="text-align:center">${t.total}</td>
-        <td style="text-align:center">${rvCell}</td>
-        <td style="text-align:center">${reggrCell}</td>
-        <td style="text-align:center">${regCell}</td>
+        <td style="text-align:center" title="${rvTitle}">${rvCell}</td>
+        <td style="text-align:center" title="${reggrTitle}">${reggrCell}</td>
+        <td style="text-align:center" title="${regTitle}">${regCell}</td>
         <td style="text-align:center;font-weight:600;color:var(--green)">${t.bestAS?t.bestAS.toFixed(2):'—'}</td>
         <td style="text-align:center;font-weight:600">${t.bestSpeed!=null?t.bestSpeed.toFixed(3):'—'}</td>
       </tr>`;}).join('');
@@ -7458,7 +7466,7 @@ function renderZuechterDetail(key){
     </div>
     <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr><th>${t('trip_word')}</th><th>${t('col_location')}</th><th>${t('col_date')}</th><th style="text-align:center">${t('col_distance')}</th><th style="text-align:center">${t('nav_pigeons')}</th>
-        <th style="text-align:center">RV</th><th style="text-align:center">RegGr</th><th style="text-align:center">Reg</th>
+        <th style="text-align:center" title="Preise dieses Züchters / gesamte gesetzte Taubenzahl der Reise in dieser Liste">RV (Preise/ges.)</th><th style="text-align:center" title="Preise dieses Züchters / gesamte gesetzte Taubenzahl der Reise in dieser Liste">RegGr (Preise/ges.)</th><th style="text-align:center" title="Preise dieses Züchters / gesamte gesetzte Taubenzahl der Reise in dieser Liste">Reg (Preise/ges.)</th>
         <th style="text-align:center">${t('col_best_as')}</th><th style="text-align:center">${t('col_speed_mmin')}</th></tr></thead>
       <tbody>${tripRows}</tbody></table></div>
     </div></div>`;
