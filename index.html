@@ -6015,13 +6015,27 @@ function cancelRestoreFlow(){ BK.restoreData=null; BK.restoreSource=null; BK.res
 // Reihenfolge wichtig: Eltern-Tabellen vor abhängigen Tabellen (Reisen vor
 // Flugergebnissen usw.). "pigeons" referenziert Vater/Mutter aber innerhalb
 // derselben Tabelle — dafür gibt es unten einen zweiten Versuch.
+// Spalten, die beim Wiederherstellen NICHT mitgeschickt werden dürfen: sie
+// haben serverseitige Defaults (z.B. createdby = auth.uid()), die von RLS-
+// Policies durchgesetzt werden. Der ursprüngliche Wert aus der Sicherung
+// kann von der aktuell eingeloggten Nutzer-ID abweichen (z.B. bei Zeilen,
+// die vor Einführung des Logins angelegt wurden) und würde sonst die
+// gesamte Charge mit "new row violates row-level security policy" scheitern
+// lassen. Ohne die Spalte greift beim Insert der DB-Default (= aktueller
+// Nutzer), beim Update bleibt der bestehende Wert einfach unangetastet.
+const RESTORE_STRIP_COLUMNS = { breedersdata:['createdby'] };
+function stripRestoreRows(table, rows){
+  const cols = RESTORE_STRIP_COLUMNS[table];
+  if(!cols || !rows) return rows;
+  return rows.map(row=>{ const copy=Object.assign({},row); cols.forEach(c=>delete copy[c]); return copy; });
+}
 function restorePlan(tables){
   return [
-    ['breederprofile', tables.breederprofile, 'id'],
-    ['breedersdata',   tables.breedersdata,   'breederdataid'],
-    ['pigeons',        tables.pigeons,        'pigeonid'],
-    ['trips',          tables.trips,          'tripid'],
-    ['pigeontrips',    tables.pigeontrips,    'id'],
+    ['breederprofile', stripRestoreRows('breederprofile', tables.breederprofile), 'id'],
+    ['breedersdata',   stripRestoreRows('breedersdata',   tables.breedersdata),   'breederdataid'],
+    ['pigeons',        stripRestoreRows('pigeons',        tables.pigeons),        'pigeonid'],
+    ['trips',          stripRestoreRows('trips',          tables.trips),          'tripid'],
+    ['pigeontrips',    stripRestoreRows('pigeontrips',    tables.pigeontrips),    'id'],
   ];
 }
 async function runRestore(){
