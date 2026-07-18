@@ -6242,15 +6242,21 @@ function renderTripsList(){
       const breeders=ZT.loaded?tripBreederRows(tr.tripid):[];
       const breedersOpen=RT.expandedTripBreeders.has(tr.tripid);
       const km=tr.averagedistance3!=null?Math.round(Number(tr.averagedistance3))+' km':'—';
+      const rvN=tr.pigeonsset_rv>0?tr.pigeonsset_rv:null;
+      const reggrN=tr.pigeonsset_reggr>0?tr.pigeonsset_reggr:null;
+      const regN=tr.pigeonsset_reg>0?tr.pigeonsset_reg:null;
       return `
         <tr onclick="openTrip('${tr.tripid}')">
           <td style="font-family:'Playfair Display',serif;font-weight:600">${tr.number}</td>
           <td>${shortTripDate(tr.tripdate)}</td>
           <td>${escH(tr.location||'?')}</td>
           <td style="text-align:right">${km}</td>
+          <td style="text-align:right;color:var(--text3)">${rvN!=null?rvN+' Tb.':'—'}</td>
+          <td style="text-align:right;color:var(--text3)">${reggrN!=null?reggrN+' Tb.':'—'}</td>
+          <td style="text-align:right;color:var(--text3)">${regN!=null?regN+' Tb.':'—'}</td>
           <td style="text-align:center;white-space:nowrap">${breeders.length>1?`<span onclick="event.stopPropagation();toggleTripBreeders('${tr.tripid}')" style="cursor:pointer;color:var(--text3)" title="${breeders.length} Züchter anzeigen">🧑‍🌾 ${breeders.length} ${breedersOpen?'▴':'▾'}</span>`:''}</td>
         </tr>
-        ${breedersOpen&&breeders.length>1?`<tr onclick="event.stopPropagation()" style="cursor:default"><td colspan="5" style="background:var(--bg2);padding:8px 12px">
+        ${breedersOpen&&breeders.length>1?`<tr onclick="event.stopPropagation()" style="cursor:default"><td colspan="8" style="background:var(--bg2);padding:8px 12px">
           <div style="display:flex;flex-direction:column;gap:5px">
             ${breeders.map(b=>`
               <div onclick="openTrip('${tr.tripid}',${jsAttr(b.name)})" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;background:var(--bg3);border-radius:8px;padding:5px 9px" title="Nur Tauben von ${escH(b.name)} anzeigen (Ankunftsreihenfolge)">
@@ -6272,7 +6278,7 @@ function renderTripsList(){
         <span style="font-size:11px;color:var(--text3)">(${grouped[yr].length})</span>
       </div>
       ${seasonCollapsed?'':`<div class="table-wrap"><table>
-        <thead><tr><th>${t('trip_word')}-Nr.</th><th>Datum</th><th>Auflassort</th><th style="text-align:right">KM</th><th></th></tr></thead>
+        <thead><tr><th>${t('trip_word')}-Nr.</th><th>Datum</th><th>Auflassort</th><th style="text-align:right">KM</th><th style="text-align:right">RV</th><th style="text-align:right">RegGr</th><th style="text-align:right">Reg</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>`}
     </div>`;
