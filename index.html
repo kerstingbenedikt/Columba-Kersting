@@ -6449,8 +6449,10 @@ async function handleTripsFiles(fileList){
   render();
 
   let combined = RT.imp.rows && RT.imp.rows.length ? RT.imp.rows : [];
-  // RV, die der Nutzer für diesen Import ausgewählt hat (optional).
-  const rv = RT.imp.vereinId ? getRV(RT.imp.vereinId) : null;
+  // RV, die der Nutzer für diesen Import manuell erzwungen hat (Dropdown).
+  // Ohne Auswahl wird pro Datei automatisch aus dem Dateinamen erkannt
+  // (siehe autoDetectRV) — z.B. "L4050515.009" = Reg 405, RV 05, Verein 15.
+  const forcedRV = RT.imp.vereinId ? getRV(RT.imp.vereinId) : null;
   // Nummer -> kanonischer Name (erster gesehener Name für diese Züchternummer
   // in diesem Import-Vorgang). Verhindert, dass leicht unterschiedliche
   // Schreibweisen derselben Züchternummer (z.B. "Kersting-tauben.de" vs. einer
@@ -6467,11 +6469,13 @@ async function handleTripsFiles(fileList){
       const parsed = m ? await parseKrausRows(file, m[1]) : await parseXlsxRows(file);
       if(parsed.breedername){
         const lfd = m ? m[1] : null;
-        // Vereins-/Züchternummer = [RV-Code (falls gewählt)] + [Vereinsringnummer
-        // aus der Datei, automatisch] + [laufende Nummer]. Die vrnr sorgt dafür,
-        // dass zwei Vereine derselben RV mit gleicher laufender Nummer nicht
-        // kollidieren — ganz ohne dass der Nutzer einzelne Vereine verwaltet.
-        const num = lfd!=null ? ((rv?rv.code:'') + (parsed.vrnr||'') + lfd) : null;
+        const rv = forcedRV || autoDetectRV(file.name);
+        // Vereins-/Züchternummer = [RV-Code (erkannt/gewählt)] + [Verein+
+        // Züchter-Block aus dem Dateiinhalt, konstant & zuverlässig — siehe
+        // parseKrausRows]. Fällt bei Excel-Importen (kein vz) auf die
+        // laufende Nummer aus dem Dateinamen zurück.
+        const vz = parsed.vz || lfd;
+        const num = vz!=null ? ((rv?rv.code:'') + vz) : null;
         let canonicalName = parsed.breedername;
         if(num){
           if(nameByNumber[num]) canonicalName = nameByNumber[num];
@@ -6555,23 +6559,43 @@ function mergeTripRows(existing, incoming){
 // weiterhin automatisch die in der Datei enthaltene Vereinsringnummer (vrnr)
 // mit eingerechnet — der Nutzer sieht/verwaltet das aber nicht, es passiert
 // unsichtbar beim Import (siehe handleTripsFiles). Gespeicherte Nummer =
-// RV-Code + vrnr + laufende Nummer.
+// RV-Code + Vereins-/Züchternummer-Block aus dem Dateiinhalt.
 let RVEN = (function(){
   try{
     const saved = JSON.parse(localStorage.getItem('pigeonRVen')||'null');
     if(Array.isArray(saved)) return saved;
   }catch(e){}
-  // Migration von der Vorversion (Einzelverein-Verwaltung) — automatisch
-  // erkannte Vereine wurden dort schon separat geführt; als grobe RVen
-  // übernehmen, der Nutzer kann sie danach zusammenlegen/umbenennen.
+  // Migration von einer Vorversion (Einzelverein-Verwaltung, per Taubenring
+  // automatisch erkannt) — nur manuell angelegte Einträge übernehmen, die
+  // damals automatisch erkannten (unzuverlässig, je nach Zukaufs-Herkunft
+  // der einzelnen Taube) bewusst NICHT, um kein neues Chaos zu importieren.
   try{
     const old = JSON.parse(localStorage.getItem('pigeonVereine')||'null');
-    if(Array.isArray(old) && old.length) return old.map(v=>({id:v.id, label:v.label, code:v.prefix||v.code}));
+    if(Array.isArray(old) && old.length) return old.filter(v=>!v.auto).map(v=>({id:v.id, label:v.label, code:v.prefix||v.code}));
   }catch(e){}
   return [];
 })();
 function saveRVen(){ try{ localStorage.setItem('pigeonRVen', JSON.stringify(RVEN)); }catch(e){} }
 function getRV(id){ return RVEN.find(v=>v.id===id) || null; }
+// Erkennt RV automatisch aus dem EDV-Kraus-Dateinamen (Format "L" + Reg(3) +
+// RV(2) + Verein(2), z.B. "L4050515...009" = Reg 405, RV 05, Verein 15).
+// Reg+RV zusammen ergeben den internen Code (5-stellig) — so bleiben RVen
+// mit gleicher Nummer aus unterschiedlichen Regionalverbänden trotzdem
+// eindeutig, auch wenn nur "RV 05" angezeigt wird. Legt beim ersten
+// Auftreten automatisch einen (umbenennbaren) RV-Eintrag an.
+function autoDetectRV(fileName){
+  const m = /^L(\d{3})(\d{2})(\d{2})/i.exec(fileName||'');
+  if(!m) return null;
+  const [, reg, rvNr] = m;
+  const code = reg+rvNr;
+  let v = RVEN.find(x=>x.code===code);
+  if(!v){
+    v = {id:'auto-'+code, label:'RV '+rvNr+' (Reg '+reg+')', code, auto:true};
+    RVEN.push(v);
+    saveRVen();
+  }
+  return v;
+}
 // Ordnet eine (ggf. bereits RV-qualifizierte) Züchternummer, falls möglich, einer RV zu.
 function rvForNumber(breedernumber){
   if(!breedernumber) return null;
@@ -6618,7 +6642,7 @@ function showVereinManager(){
 function closeVereinManager(){ const el=document.querySelector('.verein-manager-overlay'); if(el) el.remove(); }
 function renderVereinManagerInto(panel){
   const rows = RVEN.map(v=>'<tr>'
-    +'<td>'+escH(v.label)+'</td>'
+    +'<td>'+escH(v.label)+(v.auto?' <span style="color:var(--text3);font-size:11px">· automatisch erkannt</span>':'')+'</td>'
     +'<td style="font-family:monospace;font-size:12px">'+escH(v.code)+'</td>'
     +'<td style="text-align:right;white-space:nowrap">'
       +'<span onclick="editVereinLabel('+jsAttr(v.id)+')" style="cursor:pointer;color:var(--text2);font-size:12px;margin-right:10px">✏️ Umbenennen</span>'
@@ -6630,17 +6654,27 @@ function renderVereinManagerInto(panel){
       +'<div class="card-title" style="margin:0">🏛️ RVen (Reisevereinigungen)</div>'
       +'<span onclick="closeVereinManager()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>'
     +'</div>'
-    +'<div style="font-size:12px;color:var(--text3);margin:6px 0 14px">Nur RV-Ebene nötig — Vereins- und Züchternummer werden automatisch im Hintergrund eindeutig gehalten, ohne dass du einzelne Vereine anlegen musst. Beim Import wählst du (einmal, wird gemerkt) die passende RV aus dieser Liste.</div>'
-    +(RVEN.length ? '<div class="table-wrap" style="margin-bottom:16px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Bezeichnung</th><th>RV-Code</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
-      : '<div style="color:var(--text3);font-size:13px;margin-bottom:16px">Noch keine RV angelegt.</div>')
+    +'<div style="font-size:12px;color:var(--text3);margin:6px 0 14px">Wird automatisch aus dem Dateinamen erkannt (Format "L" + Regionalverband + RV + Verein, z.B. "L4050515...009" = Reg 405, RV 05). Vereins- und Züchternummer werden dabei automatisch im Hintergrund eindeutig gehalten, ohne dass du einzelne Vereine anlegen musst. Beim Import kannst du das bei Bedarf per Dropdown überschreiben.</div>'
+    +(RVEN.length ? '<div class="table-wrap" style="margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Bezeichnung</th><th>RV-Code</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+      +'<div style="text-align:right;margin-bottom:16px"><span onclick="resetAllVereine()" style="cursor:pointer;color:#d9534f;font-size:11px">🗑️ Alle RVen zurücksetzen</span></div>'
+      : '<div style="color:var(--text3);font-size:13px;margin-bottom:16px">Noch keine RV angelegt — wird beim nächsten Import automatisch erkannt, oder hier manuell.</div>')
     +'<div style="border-top:1px solid var(--border);padding-top:14px">'
-      +'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">RV anlegen</div>'
+      +'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">RV manuell anlegen</div>'
       +'<div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:8px">'
         +'<input id="vm-label" placeholder="Bezeichnung (z.B. RV 05)" style="padding:7px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">'
-        +'<input id="vm-prefix" placeholder="RV-Code (z.B. 05)" style="padding:7px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">'
+        +'<input id="vm-prefix" placeholder="RV-Code (z.B. 40505)" style="padding:7px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">'
       +'</div>'
       +'<button class="btn btn-sm" onclick="addVereinFromForm()">+ RV hinzufügen</button>'
     +'</div>';
+}
+function resetAllVereine(){
+  if(!confirm('Wirklich ALLE RVen aus der Liste entfernen?\n\nBereits importierte Flugdaten bleiben unverändert — nur die lokale RV-Liste wird geleert. Neue Importe erkennen RVen wieder automatisch aus dem Dateinamen.')) return;
+  RVEN = [];
+  saveRVen();
+  RT.imp.vereinId = null;
+  const panel=document.getElementById('verein-manager-panel');
+  if(panel) renderVereinManagerInto(panel);
+  render();
 }
 function addVereinFromForm(){
   const label=document.getElementById('vm-label').value.trim();
@@ -6689,10 +6723,15 @@ async function parseKrausRows(file, breedernumber){
 
   const reiseMap={}, zuechterMap={};
   let breedername=null;
-  // Häufigkeit der Vereinsringnummer (vrnr, siehe unten) je Datei — dient als
-  // automatisches Erkennungsmerkmal für den Verein, ohne dass der Nutzer ihn
-  // manuell auswählen muss (fast alle Ringe eines Züchters tragen dieselbe vrnr).
-  const vrnrCount={};
+  // Häufigkeit des Vereins-/Züchternummer-Blocks (5-stellig: 2-stellige
+  // Vereinsnummer + 3-stellige laufende Züchternummer, z.B. "15009" =
+  // Verein 15, Züchter 009) — steht in JEDER 2xx-Zeile an fester Position
+  // direkt nach dem Zeilen-Präfix und ist über die ganze Datei konstant.
+  // Zuverlässiger als die Vereinsringnummer aus der Taubenringnummer (vrnr):
+  // die kann von Taube zu Taube abweichen, wenn Tauben von anderen
+  // Züchtern/Vereinen zugekauft wurden — genau das führte vorher zu
+  // fälschlich aufgesplitteten Züchtern.
+  const vzCount={};
 
   lines.forEach(line=>{
     if(line.length<18) return;
@@ -6760,7 +6799,10 @@ async function parseKrausRows(file, breedernumber){
       const pNat=parseInt(line.substring(56,61).trim())||0;
       const pRv =parseInt(line.substring(61,66).trim())||0;
       if(!vrnr||!endnr||!yr) return;
-      vrnrCount[vrnr]=(vrnrCount[vrnr]||0)+1;
+      // Vereins-/Züchternummer-Block direkt nach dem Zeilen-Präfix (5 Stellen,
+      // z.B. "15009" = Verein 15 + Züchter 009) — konstant für die ganze Datei.
+      const vz = line.substring(3,8).trim();
+      if(vz) vzCount[vz]=(vzCount[vz]||0)+1;
       const ring=`DE-${vrnr.padStart(5,'0')}-${yr.padStart(2,'0')}-${endnr}`;
       // p_rv=Platz RV (kleine Liste) | p_rgg=Platz RegGr (G-Liste, mittel) |
       // p_reg=Platz Reg/RegV (A-Liste, große Liste)
@@ -6827,9 +6869,10 @@ async function parseKrausRows(file, breedernumber){
         results
       };
     });
-  // Häufigste vrnr in dieser Datei = automatisch erkanntes Verein-Merkmal.
-  const vrnr = Object.keys(vrnrCount).sort((a,b)=>vrnrCount[b]-vrnrCount[a])[0] || null;
-  return {rows, breedername, vrnr};
+  // Häufigster (praktisch immer einziger) Vereins-/Züchternummer-Block dieser
+  // Datei = zuverlässiges automatisches Erkennungsmerkmal.
+  const vz = Object.keys(vzCount).sort((a,b)=>vzCount[b]-vzCount[a])[0] || null;
+  return {rows, breedername, vz};
 }
 
 async function parseXlsxRows(file){
