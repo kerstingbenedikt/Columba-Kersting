@@ -5935,7 +5935,7 @@ async function collectBackupData(onProgress){
     meta:{ app:'Columba-Kersting', created:new Date().toISOString(), version:1, counts },
     tables,
     settings:{
-      vereine: VEREINE,
+      rven: RVEN,
       taubenCols: JSON.parse(localStorage.getItem('taubenCols')||'null'),
       bestenlisteCols: JSON.parse(localStorage.getItem('bestenlisteCols')||'null'),
       lang: LANG
@@ -6078,9 +6078,15 @@ async function runRestore(){
       }
     }
     if(data.settings){
-      log('Übernehme Einstellungen (Vereine, Spalten)…');
+      log('Übernehme Einstellungen (RVen, Spalten)…');
       try{
-        if(data.settings.vereine){ VEREINE=data.settings.vereine; saveVereine(); }
+        if(data.settings.rven){ RVEN=data.settings.rven; saveRVen(); }
+        else if(data.settings.vereine){
+          // Backup aus einer älteren Version (Einzelverein-Verwaltung) —
+          // als grobe RVen übernehmen (prefix/regv+rv+verein -> code).
+          RVEN = data.settings.vereine.map(v=>({id:v.id, label:v.label, code:v.prefix||v.code||((v.regv||'')+(v.rv||'')+(v.verein||''))}));
+          saveRVen();
+        }
         if(data.settings.taubenCols) localStorage.setItem('taubenCols', JSON.stringify(data.settings.taubenCols));
         if(data.settings.bestenlisteCols) localStorage.setItem('bestenlisteCols', JSON.stringify(data.settings.bestenlisteCols));
       }catch(e){ log('⚠ Einstellungen: '+e.message); }
@@ -6386,7 +6392,7 @@ function renderTripsImport(){
 }
 
 function renderTripsUpload(){
-  const vereinOptions = VEREINE.map(v=>'<option value="'+escH(v.id)+'"'+(RT.imp.vereinId===v.id?' selected':'')+'>'+escH(v.label)+'</option>').join('');
+  const rvOptions = RVEN.map(v=>'<option value="'+escH(v.id)+'"'+(RT.imp.vereinId===v.id?' selected':'')+'>'+escH(v.label)+'</option>').join('');
   return `<div class="card">
     <button class="back-btn" onclick="RT.step='list';render()">← Zurück</button>
     <div class="card-title serif" style="font-size:18px">📥 Leistungsdaten importieren</div>
@@ -6397,13 +6403,13 @@ function renderTripsUpload(){
     </p>
     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
       <div style="flex:1;min-width:220px">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Verein (optional) <span title="Wird normalerweise automatisch anhand der Ringnummern in der Datei erkannt. Nur auswählen, wenn du einen bestimmten Verein erzwingen möchtest.">ⓘ</span></div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">RV dieser Dateien (optional) <span title="Nur nötig, wenn du aus mehreren Reisevereinigungen importierst und später danach filtern willst. Vereins-/Züchternummer bleiben davon unabhängig automatisch eindeutig.">ⓘ</span></div>
         <select onchange="setImportVerein(this.value)" style="width:100%;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">
-          <option value="">🔍 Automatisch erkennen (empfohlen)</option>
-          ${vereinOptions}
+          <option value="">— keine RV ausgewählt —</option>
+          ${rvOptions}
         </select>
       </div>
-      <button class="btn btn-outline btn-sm" onclick="showVereinManager()">🏛️ Vereine verwalten</button>
+      <button class="btn btn-outline btn-sm" onclick="showVereinManager()">🏛️ RVen verwalten</button>
     </div>
     <div class="imp-drop"
       ondragover="event.preventDefault();this.classList.add('drag-over')"
@@ -6443,10 +6449,8 @@ async function handleTripsFiles(fileList){
   render();
 
   let combined = RT.imp.rows && RT.imp.rows.length ? RT.imp.rows : [];
-  // Manuell erzwungener Verein (falls im Dropdown ausgewählt) hat Vorrang;
-  // ohne Auswahl wird pro Datei automatisch anhand der enthaltenen
-  // Ringnummer(n) erkannt (siehe autoDetectVerein/parseKrausRows-vrnr).
-  const forcedVerein = RT.imp.vereinId ? getVerein(RT.imp.vereinId) : null;
+  // RV, die der Nutzer für diesen Import ausgewählt hat (optional).
+  const rv = RT.imp.vereinId ? getRV(RT.imp.vereinId) : null;
   // Nummer -> kanonischer Name (erster gesehener Name für diese Züchternummer
   // in diesem Import-Vorgang). Verhindert, dass leicht unterschiedliche
   // Schreibweisen derselben Züchternummer (z.B. "Kersting-tauben.de" vs. einer
@@ -6463,11 +6467,11 @@ async function handleTripsFiles(fileList){
       const parsed = m ? await parseKrausRows(file, m[1]) : await parseXlsxRows(file);
       if(parsed.breedername){
         const lfd = m ? m[1] : null;
-        const verein = forcedVerein || (parsed.vrnr ? autoDetectVerein(parsed.vrnr) : null);
-        // Mit erkanntem/ausgewähltem Verein: vollständige, vereinsübergreifend
-        // eindeutige Nummer (Präfix+lfd.) speichern. Ohne Verein (z.B. Excel-
-        // Import ohne Ringnummer-Info): wie bisher nur die laufende Nummer.
-        const num = lfd!=null ? (verein ? vereinFullNumber(verein, lfd) : lfd) : null;
+        // Vereins-/Züchternummer = [RV-Code (falls gewählt)] + [Vereinsringnummer
+        // aus der Datei, automatisch] + [laufende Nummer]. Die vrnr sorgt dafür,
+        // dass zwei Vereine derselben RV mit gleicher laufender Nummer nicht
+        // kollidieren — ganz ohne dass der Nutzer einzelne Vereine verwaltet.
+        const num = lfd!=null ? ((rv?rv.code:'') + (parsed.vrnr||'') + lfd) : null;
         let canonicalName = parsed.breedername;
         if(num){
           if(nameByNumber[num]) canonicalName = nameByNumber[num];
@@ -6540,51 +6544,49 @@ function mergeTripRows(existing, incoming){
   return list.sort((a,b)=>a.trip.number-b.trip.number);
 }
 
-// ── Vereine / Regionalverbände ────────────────────────────────────────────
-// Die EDV-Kraus-Dateiendung (z.B. ".009") liefert nur die laufende
-// Züchternummer INNERHALB eines Vereins — die ist zwischen zwei
-// verschiedenen Vereinen NICHT eindeutig (beide können eine "009" haben).
-// Da teils aus unterschiedlichen Regionalverbänden/Vereinen importiert wird,
-// braucht jeder Verein ein eindeutiges Präfix, das der laufenden Nummer
-// vorangestellt wird. Bewusst EIN freies Textfeld statt einzelner RegV/RV/
-// Verein-Felder mit fest angenommener Ziffernbreite — die genaue Aufteilung
-// (wie viele Stellen RegV/RV/Verein haben und in welcher Reihenfolge) ist
-// von Verband zu Verband unterschiedlich; der Nutzer kennt sein eigenes
-// Präfix am besten und tippt es einfach so ein, wie es ihm vorliegt.
+// ── RVen (Reisevereinigungen) ─────────────────────────────────────────────
+// Bewusst NUR eine RV-Ebene, keine Einzelverein-Verwaltung: der Nutzer will
+// höchstens zwischen wenigen RVen unterscheiden (z.B. RV 05, RV 02) und
+// Vereins-/Züchternummer als einen zusammengehörigen Block betrachten, ohne
+// pro Verein etwas pflegen zu müssen.
 //
-// Automatische Erkennung: In jeder EDV-Kraus-Datei steckt pro Taube eine
-// "Vereinsringnummer" (vrnr, Teil der Ringnummer) — die ist für fast alle
-// Ringe eines Züchters identisch und damit ein zuverlässiges automatisches
-// Unterscheidungsmerkmal zwischen Vereinen, OHNE dass man vorher manuell
-// einen Verein anlegen/auswählen muss. Beim Import wird beim ersten
-// Auftreten einer neuen vrnr automatisch ein (namenloser) Verein-Eintrag
-// mit dieser vrnr als Präfix angelegt; ein sprechender Name lässt sich
-// jederzeit später über "Vereine verwalten" nachtragen (siehe editVereinLabel).
-let VEREINE = (function(){
+// Damit zwei Züchter mit derselben laufenden Nummer aus unterschiedlichen
+// Vereinen INNERHALB derselben RV trotzdem nicht kollidieren, wird intern
+// weiterhin automatisch die in der Datei enthaltene Vereinsringnummer (vrnr)
+// mit eingerechnet — der Nutzer sieht/verwaltet das aber nicht, es passiert
+// unsichtbar beim Import (siehe handleTripsFiles). Gespeicherte Nummer =
+// RV-Code + vrnr + laufende Nummer.
+let RVEN = (function(){
   try{
-    const saved = JSON.parse(localStorage.getItem('pigeonVereine')||'null');
+    const saved = JSON.parse(localStorage.getItem('pigeonRVen')||'null');
     if(Array.isArray(saved)) return saved;
+  }catch(e){}
+  // Migration von der Vorversion (Einzelverein-Verwaltung) — automatisch
+  // erkannte Vereine wurden dort schon separat geführt; als grobe RVen
+  // übernehmen, der Nutzer kann sie danach zusammenlegen/umbenennen.
+  try{
+    const old = JSON.parse(localStorage.getItem('pigeonVereine')||'null');
+    if(Array.isArray(old) && old.length) return old.map(v=>({id:v.id, label:v.label, code:v.prefix||v.code}));
   }catch(e){}
   return [];
 })();
-function saveVereine(){ try{ localStorage.setItem('pigeonVereine', JSON.stringify(VEREINE)); }catch(e){} }
-function getVerein(id){ return VEREINE.find(v=>v.id===id) || null; }
-function vereinByPrefix(prefix){ return VEREINE.find(v=>v.prefix===prefix) || null; }
-function vereinFullNumber(v, lfd){ return (v && v.prefix!=null && lfd!=null && lfd!=='') ? String(v.prefix)+String(lfd).padStart(3,'0') : null; }
-// Ordnet eine (ggf. bereits Verein-qualifizierte) Züchternummer, falls möglich,
-// einem der konfigurierten Vereine zu (Präfix-Match, laufende Nummer = letzte 3 Stellen).
-function vereinForNumber(breedernumber){
+function saveRVen(){ try{ localStorage.setItem('pigeonRVen', JSON.stringify(RVEN)); }catch(e){} }
+function getRV(id){ return RVEN.find(v=>v.id===id) || null; }
+// Ordnet eine (ggf. bereits RV-qualifizierte) Züchternummer, falls möglich, einer RV zu.
+function rvForNumber(breedernumber){
   if(!breedernumber) return null;
   const s=String(breedernumber);
-  return VEREINE.find(v=>v.prefix && s.length===String(v.prefix).length+3 && s.indexOf(v.prefix)===0) || null;
+  return RVEN.find(v=>v.code && s.indexOf(v.code)===0) || null;
 }
 function zuechterFullNumber(breedernumber){ return breedernumber!=null && breedernumber!=='' ? String(breedernumber) : null; }
 function zuechterNumberBreakdown(breedernumber){
   if(breedernumber==null || breedernumber==='') return null;
   const s=String(breedernumber);
-  const v=vereinForNumber(s);
-  if(v) return v.label+' · Vereins-Präfix '+v.prefix+' · lfd. Züchternummer '+s.slice(-3)+(v.auto?' (automatisch erkannt)':'');
-  return 'Züchternummer '+s+' (keinem Verein zugeordnet)';
+  const v=rvForNumber(s);
+  // Vereins-/Züchternummer bewusst nicht weiter aufgeschlüsselt (nur intern
+  // zur Kollisionsvermeidung genutzt) — der Nutzer will nur die RV sehen.
+  if(v) return v.label+' · Vereins-/Züchternummer '+s.slice(v.code.length);
+  return 'Nummer '+s+' (keiner RV zugeordnet)';
 }
 // Kanonischer Gruppierungs-Schlüssel für einen pigeontrips-Datensatz: die
 // Züchternummer ist eindeutig, der Freitext-Züchtername aus der Import-Datei
@@ -6592,28 +6594,13 @@ function zuechterNumberBreakdown(breedernumber){
 // Bindestrich oder Domain-Zusatz) und würde beim reinen Namensabgleich
 // fälschlich als mehrere verschiedene Züchter auftauchen. Gruppierung
 // erfolgt daher bevorzugt über breedernumber, nur ohne Nummer wird auf den
-// Namen zurückgefallen. WICHTIG: nur Verein-qualifizierte Nummern (aus
-// Importen mit erkanntem/ausgewähltem Verein) sind über mehrere Vereine
-// hinweg wirklich eindeutig — nicht zugeordnete alte Kurz-Nummern können bei
-// gleicher laufender Nummer aus unterschiedlichen Vereinen kollidieren.
+// Namen zurückgefallen.
 function zuechterKey(r){
   return (r.breedernumber!=null && r.breedernumber!=='') ? 'nr:'+r.breedernumber : 'name:'+(r.breedername||'Unbekannt');
 }
 function zuechterLabel(name, breedernumber){
   const full = zuechterFullNumber(breedernumber);
   return full ? (name||'Unbekannt')+' · '+full : (name||'Unbekannt');
-}
-// Verein automatisch anhand der in der Datei gefundenen vrnr auflösen bzw.
-// beim ersten Auftreten neu (namenlos) anlegen.
-function autoDetectVerein(vrnr){
-  if(!vrnr) return null;
-  let v = vereinByPrefix(vrnr);
-  if(!v){
-    v = {id:'auto-'+vrnr, label:'Verein (automatisch erkannt, Ringnr.-Präfix '+vrnr+')', prefix:vrnr, auto:true};
-    VEREINE.push(v);
-    saveVereine();
-  }
-  return v;
 }
 function showVereinManager(){
   const overlay=document.createElement('div');
@@ -6622,7 +6609,7 @@ function showVereinManager(){
   overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
   const panel=document.createElement('div');
   panel.id='verein-manager-panel';
-  panel.style.cssText='background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:540px;width:92vw;max-height:86vh;overflow-y:auto;padding:20px;cursor:default';
+  panel.style.cssText='background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:520px;width:92vw;max-height:86vh;overflow-y:auto;padding:20px;cursor:default';
   panel.onclick=function(e){ e.stopPropagation(); };
   renderVereinManagerInto(panel);
   overlay.appendChild(panel);
@@ -6630,9 +6617,9 @@ function showVereinManager(){
 }
 function closeVereinManager(){ const el=document.querySelector('.verein-manager-overlay'); if(el) el.remove(); }
 function renderVereinManagerInto(panel){
-  const rows = VEREINE.map(v=>'<tr>'
-    +'<td>'+escH(v.label)+(v.auto?' <span style="color:var(--text3);font-size:11px">· automatisch</span>':'')+'</td>'
-    +'<td style="font-family:monospace;font-size:12px">'+escH(v.prefix)+'</td>'
+  const rows = RVEN.map(v=>'<tr>'
+    +'<td>'+escH(v.label)+'</td>'
+    +'<td style="font-family:monospace;font-size:12px">'+escH(v.code)+'</td>'
     +'<td style="text-align:right;white-space:nowrap">'
       +'<span onclick="editVereinLabel('+jsAttr(v.id)+')" style="cursor:pointer;color:var(--text2);font-size:12px;margin-right:10px">✏️ Umbenennen</span>'
       +'<span onclick="deleteVerein('+jsAttr(v.id)+')" style="cursor:pointer;color:#d9534f;font-size:12px">Entfernen</span>'
@@ -6640,47 +6627,47 @@ function renderVereinManagerInto(panel){
     +'</tr>').join('');
   panel.innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
-      +'<div class="card-title" style="margin:0">🏛️ Vereine / Regionalverbände</div>'
+      +'<div class="card-title" style="margin:0">🏛️ RVen (Reisevereinigungen)</div>'
       +'<span onclick="closeVereinManager()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>'
     +'</div>'
-    +'<div style="font-size:12px;color:var(--text3);margin:6px 0 14px">Ein eindeutiges Präfix je Verein macht die Züchternummer über verschiedene Regionalverbände/Vereine hinweg vergleichbar — wichtig, wenn zwei Vereine dieselbe laufende Züchternummer vergeben (z.B. beide eine "009"). Neue Vereine werden beim Import <strong style="color:var(--text)">automatisch anhand der Ringnummer erkannt und angelegt</strong> — hier musst du nur bei Bedarf einen sprechenden Namen nachtragen.</div>'
-    +(VEREINE.length ? '<div class="table-wrap" style="margin-bottom:16px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Bezeichnung</th><th>Präfix</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
-      : '<div style="color:var(--text3);font-size:13px;margin-bottom:16px">Noch kein Verein vorhanden — wird beim nächsten Import automatisch angelegt, oder hier manuell.</div>')
+    +'<div style="font-size:12px;color:var(--text3);margin:6px 0 14px">Nur RV-Ebene nötig — Vereins- und Züchternummer werden automatisch im Hintergrund eindeutig gehalten, ohne dass du einzelne Vereine anlegen musst. Beim Import wählst du (einmal, wird gemerkt) die passende RV aus dieser Liste.</div>'
+    +(RVEN.length ? '<div class="table-wrap" style="margin-bottom:16px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Bezeichnung</th><th>RV-Code</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+      : '<div style="color:var(--text3);font-size:13px;margin-bottom:16px">Noch keine RV angelegt.</div>')
     +'<div style="border-top:1px solid var(--border);padding-top:14px">'
-      +'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Verein manuell anlegen</div>'
+      +'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">RV anlegen</div>'
       +'<div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:8px">'
-        +'<input id="vm-label" placeholder="Bezeichnung (z.B. RV Musterstadt)" style="padding:7px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">'
-        +'<input id="vm-prefix" placeholder="Präfix (z.B. 40501505)" style="padding:7px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">'
+        +'<input id="vm-label" placeholder="Bezeichnung (z.B. RV 05)" style="padding:7px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">'
+        +'<input id="vm-prefix" placeholder="RV-Code (z.B. 05)" style="padding:7px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">'
       +'</div>'
-      +'<button class="btn btn-sm" onclick="addVereinFromForm()">+ Verein hinzufügen</button>'
+      +'<button class="btn btn-sm" onclick="addVereinFromForm()">+ RV hinzufügen</button>'
     +'</div>';
 }
 function addVereinFromForm(){
   const label=document.getElementById('vm-label').value.trim();
-  const prefix=document.getElementById('vm-prefix').value.trim();
-  if(!prefix){ alert('Bitte ein Präfix eingeben.'); return; }
-  if(vereinByPrefix(prefix)){ alert('Es gibt bereits einen Verein mit diesem Präfix.'); return; }
+  const code=document.getElementById('vm-prefix').value.trim();
+  if(!code){ alert('Bitte einen RV-Code eingeben.'); return; }
+  if(RVEN.some(v=>v.code===code)){ alert('Es gibt bereits eine RV mit diesem Code.'); return; }
   const id='v'+Date.now();
-  VEREINE.push({id, label:label||('Verein '+prefix), prefix});
-  saveVereine();
+  RVEN.push({id, label:label||('RV '+code), code});
+  saveRVen();
   const panel=document.getElementById('verein-manager-panel');
   if(panel) renderVereinManagerInto(panel);
   render();
 }
 function editVereinLabel(id){
-  const v=getVerein(id); if(!v) return;
-  const newLabel=prompt('Neue Bezeichnung für diesen Verein (Präfix '+v.prefix+'):', v.label);
+  const v=getRV(id); if(!v) return;
+  const newLabel=prompt('Neue Bezeichnung für diese RV (Code '+v.code+'):', v.label);
   if(newLabel==null || !newLabel.trim()) return;
   v.label=newLabel.trim();
-  saveVereine();
+  saveRVen();
   const panel=document.getElementById('verein-manager-panel');
   if(panel) renderVereinManagerInto(panel);
   render();
 }
 function deleteVerein(id){
-  if(!confirm('Verein aus der Liste entfernen?\n\nBereits importierte Flugdaten bleiben unverändert (nur die Zuordnung neuer Importe zu diesem Verein entfällt — bei automatischer Erkennung wird er ggf. beim nächsten Import mit derselben Ringnummer neu angelegt).')) return;
-  VEREINE = VEREINE.filter(v=>v.id!==id);
-  saveVereine();
+  if(!confirm('RV aus der Liste entfernen?\n\nBereits importierte Flugdaten bleiben unverändert (nur die Zuordnung neuer Importe zu dieser RV entfällt).')) return;
+  RVEN = RVEN.filter(v=>v.id!==id);
+  saveRVen();
   if(RT.imp && RT.imp.vereinId===id) RT.imp.vereinId=null;
   const panel=document.getElementById('verein-manager-panel');
   if(panel) renderVereinManagerInto(panel);
@@ -6691,11 +6678,8 @@ function setImportVerein(id){
   try{ localStorage.setItem('pigeonVereinLastUsed', id||''); }catch(e){}
   render();
 }
-// Standard = automatische Erkennung (kein manuell vorausgewählter Verein
-// nötig). Nur wenn zuletzt bewusst ein bestimmter Verein erzwungen wurde,
-// wird das für die nächste Import-Sitzung vorausgewählt.
 function defaultVereinId(){
-  try{ const last=localStorage.getItem('pigeonVereinLastUsed'); if(last && getVerein(last)) return last; }catch(e){}
+  try{ const last=localStorage.getItem('pigeonVereinLastUsed'); if(last && getRV(last)) return last; }catch(e){}
   return null;
 }
 async function parseKrausRows(file, breedernumber){
@@ -7251,18 +7235,18 @@ function renderZuechter(){
   if(!ZT.loaded){ loadZuechterData().then(render); return '<div class="loading"><div class="spinner"></div>'+t('zt_loading')+'</div>'; }
   if(ZT.selected) return renderZuechterDetail(ZT.selected);
   let list=zuechterAgg();
-  // Filter nach Verein/Regionalverband — sinnvoll, sobald aus mehreren
-  // Vereinen importiert wurde, damit die Bestenliste vergleichbar bleibt.
+  // Filter nach RV — sinnvoll, sobald aus mehreren Reisevereinigungen
+  // importiert wurde, damit die Liste vergleichbar bleibt.
   if(ZT.vereinFilter==='__none__'){
-    list = list.filter(b=>!vereinForNumber(b.number));
+    list = list.filter(b=>!rvForNumber(b.number));
   } else if(ZT.vereinFilter){
-    const v=getVerein(ZT.vereinFilter), pre=v?v.prefix:null;
-    list = list.filter(b=>pre && b.number && String(b.number).indexOf(pre)===0);
+    const v=getRV(ZT.vereinFilter), code=v?v.code:null;
+    list = list.filter(b=>code && b.number && String(b.number).indexOf(code)===0);
   }
-  const filterBar = VEREINE.length ? `<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
-      <span style="font-size:11px;color:var(--text3)">Verein:</span>
+  const filterBar = RVEN.length ? `<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <span style="font-size:11px;color:var(--text3)">RV:</span>
       <span class="tag clickable" style="${!ZT.vereinFilter?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.vereinFilter=null;render()">Alle</span>
-      ${VEREINE.map(v=>`<span class="tag clickable" style="${ZT.vereinFilter===v.id?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.vereinFilter=${jsAttr(v.id)};render()">${escH(v.label)}</span>`).join('')}
+      ${RVEN.map(v=>`<span class="tag clickable" style="${ZT.vereinFilter===v.id?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.vereinFilter=${jsAttr(v.id)};render()">${escH(v.label)}</span>`).join('')}
       <span class="tag clickable" style="${ZT.vereinFilter==='__none__'?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.vereinFilter='__none__';render()">Nicht zugeordnet</span>
     </div>` : '';
   if(list.length===0) return `<div>${filterBar}<div class="card" style="text-align:center;padding:48px;color:var(--text3)">${t('zt_empty1')}<br>${t('zt_empty2').replace('{tab}',t('nav_racing'))}</div></div>`;
@@ -7279,7 +7263,7 @@ function renderZuechter(){
     </tr>`).join('');
   return `<div><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
       <div class="serif" style="font-size:20px">🧑‍🌾 ${list.length} ${t('breeders_word')}</div>
-      <button class="btn btn-outline btn-sm" onclick="showVereinManager()">🏛️ Vereine verwalten</button>
+      <button class="btn btn-outline btn-sm" onclick="showVereinManager()">🏛️ RVen verwalten</button>
     </div>
     ${filterBar}
     <div class="card"><div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -7292,13 +7276,13 @@ function renderZuechter(){
 async function assignVereinToBreeder(key){
   const b = zuechterAgg().find(x=>x.key===key);
   if(!b || !b.number) return;
-  if(!VEREINE.length){ alert('Bitte zuerst unter "Vereine verwalten" einen Verein anlegen.'); return; }
-  const options = VEREINE.map((v,i)=>(i+1)+') '+v.label+' (Präfix '+v.prefix+')').join('\n');
-  const choice = prompt('Diesem Züchter (bisherige Nummer: '+b.number+') nachträglich einen Verein zuordnen — macht die Züchternummer über Vereine hinweg eindeutig.\n\n'+options+'\n\nNummer eingeben:');
+  if(!RVEN.length){ alert('Bitte zuerst unter "RVen verwalten" eine RV anlegen.'); return; }
+  const options = RVEN.map((v,i)=>(i+1)+') '+v.label+' (Code '+v.code+')').join('\n');
+  const choice = prompt('Diesem Züchter (bisherige Nummer: '+b.number+') nachträglich eine RV zuordnen — macht die Nummer über RVen hinweg eindeutig.\n\n'+options+'\n\nNummer eingeben:');
   if(!choice) return;
-  const v = VEREINE[parseInt(choice,10)-1];
+  const v = RVEN[parseInt(choice,10)-1];
   if(!v){ alert('Ungültige Auswahl.'); return; }
-  const full = vereinFullNumber(v, b.number);
+  const full = v.code + b.number;
   if(!confirm('Züchternummer für "'+b.name+'" von "'+b.number+'" auf "'+full+'" ('+v.label+') setzen?\n\nBetrifft '+b.total+' Datensätze.')) return;
   try{
     await apiPatchBy('pigeontrips', 'breedernumber=eq.'+encodeURIComponent(b.number)+'&breedername=eq.'+encodeURIComponent(b.name), {breedernumber:full});
@@ -7370,7 +7354,7 @@ function renderZuechterDetail(key){
         ${agg.number?`<div style="font-family:monospace;font-size:12px;color:var(--text3)" title="${escH(zuechterNumberBreakdown(agg.number))}">${escH(zuechterFullNumber(agg.number))}</div>`:''}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${(agg.number && !vereinForNumber(agg.number) && VEREINE.length) ? `<button class="btn btn-outline btn-sm" onclick="assignVereinToBreeder(${jsAttr(key)})" title="Diese (noch nicht zugeordnete) Züchternummer nachträglich einem Verein zuordnen">🏛️ Verein zuordnen</button>` : ''}
+        ${(agg.number && !rvForNumber(agg.number) && RVEN.length) ? `<button class="btn btn-outline btn-sm" onclick="assignVereinToBreeder(${jsAttr(key)})" title="Diese (noch nicht zugeordnete) Züchternummer nachträglich einer RV zuordnen">🏛️ RV zuordnen</button>` : ''}
         <button class="btn btn-outline btn-sm" style="color:#d9534f;border-color:#d9534f" onclick="deleteZuechterData(${jsAttr(key)})" title="Alle Flugdaten dieses Züchters löschen">🗑 Flugdaten löschen</button>
       </div>
     </div>
@@ -7399,7 +7383,7 @@ function renderZuechterDetail(key){
 // zeigt zusätzlich auch Tauben mit unbekanntem Geschlecht; deren Jahrgang wird bei
 // fehlender DB-Zuordnung direkt aus der Ringnummer abgeleitet (mittleres Segment,
 // z.B. DE 6559-23-3535 → Jahrgang 2023).
-let BL = { breeder:'ALL', cat:'gesamt', ass:'all', expanded:new Set(), collapsedSeasons:new Set() };
+let BL = { breeder:'ALL', rv:null, cat:'gesamt', ass:'all', expanded:new Set(), collapsedSeasons:new Set() };
 
 const BL_COLUMN_DEFS = [
   { key:'ring',     label:'Ringnummer' },
@@ -7480,12 +7464,14 @@ window.addEventListener('resize', ()=>{
   if(m && btn && m.style.display==='block') positionColumnMenu(btn, m);
 });
 
-function bestenliste(breederFilter){
+function bestenliste(breederFilter, rvFilter){
   const tripById={}; RT.trips.forEach(t=>tripById[t.tripid]=t);
   // Schlüssel je Saison+Taube (Tauben ohne DB-Zuordnung werden über die Ringnummer gruppiert)
   const byKey={};
   ZT.rows.forEach(r=>{
     if(breederFilter && breederFilter!=='ALL' && (r.breedername||'Unbekannt')!==breederFilter) return;
+    if(rvFilter==='__none__'){ if(rvForNumber(r.breedernumber)) return; }
+    else if(rvFilter){ const v=getRV(rvFilter); if(!v || !r.breedernumber || String(r.breedernumber).indexOf(v.code)!==0) return; }
     const trip=tripById[r.tripid];
     const yr=trip?trip.vintage:null;
     if(!yr) return; // ohne bekannte Reise/Saison keine Zuordnung möglich
@@ -7560,7 +7546,7 @@ function renderBestenliste(){
   if(!ZT.loaded){ loadZuechterData().then(render); return '<div class="loading"><div class="spinner"></div>'+t('bl_loading_perf')+'</div>'; }
   if(!RT.trips.length){ loadTrips().then(render); return '<div class="loading"><div class="spinner"></div>'+t('bl_loading_trips')+'</div>'; }
   const breeders=[...new Set(ZT.rows.map(r=>r.breedername).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  const data=bestenliste(BL.breeder);
+  const data=bestenliste(BL.breeder, BL.rv);
 
   const tabs=[
     ['gesamt',t('bl_tab_all')],
@@ -7667,6 +7653,14 @@ function renderBestenliste(){
           ${breeders.map(b=>`<option value="${escH(b)}" ${BL.breeder===b?'selected':''}>${escH(b)}</option>`).join('')}
         </select>
       </label>
+      ${RVEN.length ? `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text3)">
+        RV:
+        <select onchange="BL.rv=this.value||null;render()">
+          <option value="" ${!BL.rv?'selected':''}>Alle</option>
+          ${RVEN.map(v=>`<option value="${escH(v.id)}" ${BL.rv===v.id?'selected':''}>${escH(v.label)}</option>`).join('')}
+          <option value="__none__" ${BL.rv==='__none__'?'selected':''}>Nicht zugeordnet</option>
+        </select>
+      </label>` : ''}
       <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text3)">
         Ass-Kategorie
         <select onchange="BL.ass=this.value;render()" title="Nur Tauben mit dieser Ass-Kennzeichnung anzeigen">
