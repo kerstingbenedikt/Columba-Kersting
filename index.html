@@ -722,6 +722,7 @@ async function startApp(){
       <button class="btn btn-outline btn-sm" onclick="signOut()">Abmelden</button>`;
   }
   loadData();
+  loadRVenFromServer();
 }
 
 const DEFAULT_COLUMNS = ['ringnumber','endnumber','name','year','gender','color','strain','status','pigeontype','instock','standort','father','mother','breeder','owner','reiseleistung','top10'];
@@ -6106,12 +6107,13 @@ async function runRestore(){
     if(data.settings){
       log('Übernehme Einstellungen (RVen, Spalten)…');
       try{
-        if(data.settings.rven){ RVEN=data.settings.rven; saveRVen(); }
+        if(data.settings.rven){ RVEN=data.settings.rven; saveRVen(); RVEN.forEach(v=>syncRVToServer(v)); }
         else if(data.settings.vereine){
           // Backup aus einer älteren Version (Einzelverein-Verwaltung) —
           // als grobe RVen übernehmen (prefix/regv+rv+verein -> code).
           RVEN = data.settings.vereine.map(v=>({id:v.id, label:v.label, code:v.prefix||v.code||((v.regv||'')+(v.rv||'')+(v.verein||''))}));
           saveRVen();
+          RVEN.forEach(v=>syncRVToServer(v));
         }
         if(data.settings.taubenCols) localStorage.setItem('taubenCols', JSON.stringify(data.settings.taubenCols));
         if(data.settings.bestenlisteCols) localStorage.setItem('bestenlisteCols', JSON.stringify(data.settings.bestenlisteCols));
@@ -6610,7 +6612,32 @@ let RVEN = (function(){
   }catch(e){}
   return [];
 })();
+// RVen liegen jetzt zusätzlich serverseitig in der Supabase-Tabelle "rven" (Migration
+// erforderlich, siehe Hinweis in der Doku/Chat) — damit die RV-Verwaltung auf allen
+// Geräten sichtbar ist, statt nur im localStorage des jeweiligen Browsers zu stecken.
+// localStorage bleibt als Sofort-Anzeige-Cache erhalten (kein Warten auf den Server
+// beim App-Start), wird aber beim Laden vom Server überschrieben.
+async function loadRVenFromServer(){
+  try{
+    const rows = await apiGetAll('/rven?select=*&order=label.asc');
+    RVEN = rows.map(r=>({id:r.id, label:r.label, code:r.code, auto:!!r.auto}));
+    saveRVen();
+    render();
+  }catch(e){
+    console.warn('RVen konnten nicht vom Server geladen werden, nutze lokalen Stand:', e.message);
+  }
+}
 function saveRVen(){ try{ localStorage.setItem('pigeonRVen', JSON.stringify(RVEN)); }catch(e){} }
+// Persistiert eine einzelne RV serverseitig (Insert/Update per Upsert). Läuft im
+// Hintergrund, ohne dass die UI auf die Serverantwort warten muss.
+async function syncRVToServer(v){
+  try{ await apiUpsertBatch('rven', [{id:v.id, label:v.label, code:v.code, auto:!!v.auto}], 'id'); }
+  catch(e){ console.warn('RV konnte nicht auf dem Server gespeichert werden:', e.message); }
+}
+async function deleteRVFromServer(id){
+  try{ await apiDeleteBy('rven', 'id=eq.'+encodeURIComponent(id)); }
+  catch(e){ console.warn('RV konnte nicht auf dem Server gelöscht werden:', e.message); }
+}
 function getRV(id){ return RVEN.find(v=>v.id===id) || null; }
 // Erkennt RV automatisch aus dem EDV-Kraus-Dateinamen (Format "L" + Reg(3) +
 // RV(2) + Verein(2), z.B. "L4050515...009" = Reg 405, RV 05, Verein 15).
@@ -6628,6 +6655,7 @@ function autoDetectRV(fileName){
     v = {id:'auto-'+code, label:'RV '+rvNr+' (Reg '+reg+')', code, auto:true};
     RVEN.push(v);
     saveRVen();
+    syncRVToServer(v);
   }
   return v;
 }
@@ -6689,7 +6717,7 @@ function renderVereinManagerInto(panel){
       +'<div class="card-title" style="margin:0">🏛️ RVen (Reisevereinigungen)</div>'
       +'<span onclick="closeVereinManager()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>'
     +'</div>'
-    +'<div style="font-size:12px;color:var(--text3);margin:6px 0 14px">Wird automatisch aus dem Dateinamen erkannt (Format "L" + Regionalverband + RV + Verein, z.B. "L4050515...009" = Reg 405, RV 05). Vereins- und Züchternummer werden dabei automatisch im Hintergrund eindeutig gehalten, ohne dass du einzelne Vereine anlegen musst. Beim Import kannst du das bei Bedarf per Dropdown überschreiben.</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin:6px 0 14px">Wird automatisch aus dem Dateinamen erkannt (Format "L" + Regionalverband + RV + Verein, z.B. "L4050515...009" = Reg 405, RV 05). Vereins- und Züchternummer werden dabei automatisch im Hintergrund eindeutig gehalten, ohne dass du einzelne Vereine anlegen musst. Beim Import kannst du das bei Bedarf per Dropdown überschreiben. Die Liste wird serverseitig gespeichert und ist damit auf allen Geräten sichtbar.</div>'
     +(RVEN.length ? '<div class="table-wrap" style="margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Bezeichnung</th><th>RV-Code</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
       +'<div style="text-align:right;margin-bottom:16px"><span onclick="resetAllVereine()" style="cursor:pointer;color:#d9534f;font-size:11px">🗑️ Alle RVen zurücksetzen</span></div>'
       : '<div style="color:var(--text3);font-size:13px;margin-bottom:16px">Noch keine RV angelegt — wird beim nächsten Import automatisch erkannt, oder hier manuell.</div>')
@@ -6703,9 +6731,11 @@ function renderVereinManagerInto(panel){
     +'</div>';
 }
 function resetAllVereine(){
-  if(!confirm('Wirklich ALLE RVen aus der Liste entfernen?\n\nBereits importierte Flugdaten bleiben unverändert — nur die lokale RV-Liste wird geleert. Neue Importe erkennen RVen wieder automatisch aus dem Dateinamen.')) return;
+  if(!confirm('Wirklich ALLE RVen aus der Liste entfernen?\n\nBereits importierte Flugdaten bleiben unverändert — nur die RV-Liste (auf allen Geräten) wird geleert. Neue Importe erkennen RVen wieder automatisch aus dem Dateinamen.')) return;
+  const ids = RVEN.map(v=>v.id);
   RVEN = [];
   saveRVen();
+  ids.forEach(id=>deleteRVFromServer(id));
   RT.imp.vereinId = null;
   const panel=document.getElementById('verein-manager-panel');
   if(panel) renderVereinManagerInto(panel);
@@ -6717,8 +6747,10 @@ function addVereinFromForm(){
   if(!code){ alert('Bitte einen RV-Code eingeben.'); return; }
   if(RVEN.some(v=>v.code===code)){ alert('Es gibt bereits eine RV mit diesem Code.'); return; }
   const id='v'+Date.now();
-  RVEN.push({id, label:label||('RV '+code), code});
+  const v={id, label:label||('RV '+code), code};
+  RVEN.push(v);
   saveRVen();
+  syncRVToServer(v);
   const panel=document.getElementById('verein-manager-panel');
   if(panel) renderVereinManagerInto(panel);
   render();
@@ -6729,6 +6761,7 @@ function editVereinLabel(id){
   if(newLabel==null || !newLabel.trim()) return;
   v.label=newLabel.trim();
   saveRVen();
+  syncRVToServer(v);
   const panel=document.getElementById('verein-manager-panel');
   if(panel) renderVereinManagerInto(panel);
   render();
@@ -6737,6 +6770,7 @@ function deleteVerein(id){
   if(!confirm('RV aus der Liste entfernen?\n\nBereits importierte Flugdaten bleiben unverändert (nur die Zuordnung neuer Importe zu dieser RV entfällt).')) return;
   RVEN = RVEN.filter(v=>v.id!==id);
   saveRVen();
+  deleteRVFromServer(id);
   if(RT.imp && RT.imp.vereinId===id) RT.imp.vereinId=null;
   const panel=document.getElementById('verein-manager-panel');
   if(panel) renderVereinManagerInto(panel);
