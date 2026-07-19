@@ -5407,6 +5407,12 @@ async function loadTripResults(tripid){
 
 // ── Reiseleistung je Taube (Detailseite) ─────────────────────────
 const PT_CACHE={}; // pigeonid -> array of pigeontrips rows (enriched with vintage/tripnumber/location)
+// PT_CACHE hält pro Taube die geladenen Reise-Ergebnisse im Speicher (für die Dauer
+// der Sitzung), damit nicht jede Ansicht neu vom Server lädt. Nach Änderungen, die
+// diese Daten betreffen (RV-Zuordnung eines Züchters, RV-Ranglisten neu berechnen),
+// MUSS der Cache geleert werden — sonst zeigen Stammbaumdruck & Reiseleistung einer
+// bereits geöffneten Taube weiterhin die alten (falschen) Werte an.
+function clearPTCache(){ Object.keys(PT_CACHE).forEach(k=>delete PT_CACHE[k]); }
 async function loadPigeonTrips(pigeonid){
   if(PT_CACHE[pigeonid]) return PT_CACHE[pigeonid];
   try{
@@ -6771,24 +6777,25 @@ function computeRVFallback(trip, results){
 // Läuft im Hintergrund; Fehler (z.B. Spalten fehlen noch) werden nur geloggt.
 async function backfillRVFallback(tripid){
   const trip = RT.trips.find(t=>t.tripid===tripid);
-  if(!trip || trip.pigeonsset_rv) return;
+  if(!trip || trip.pigeonsset_rv) return {status:'skip'};
   try{
     const results = await apiGetAll('/pigeontrips?tripid=eq.'+tripid);
     const map = computeRVFallback(trip, results);
-    if(!map || !map.size) return;
+    if(!map || !map.size) return {status:'keine_rv_erkannt'};
     const upsertRows=[];
     const rvIdsSeen=new Set();
     let gesetzt=null;
     map.forEach((f,r)=>{ upsertRows.push({id:r.id, prize_rv_calc:f.rang, as_rv_calc:f.as}); rvIdsSeen.add(f.rvId); gesetzt=f.gesetzt; });
     const failed = await apiUpsertBatch('pigeontrips', upsertRows, 'id');
-    if(failed.length){ console.warn('RV-Fallback: '+failed.length+' Chunk(s) fehlgeschlagen (fehlen evtl. die Spalten prize_rv_calc/as_rv_calc?)', failed[0].error); return; }
+    if(failed.length){ console.warn('RV-Fallback: '+failed.length+' Chunk(s) fehlgeschlagen (fehlen evtl. die Spalten prize_rv_calc/as_rv_calc?)', failed[0].error); return {status:'fehler', error:failed[0].error}; }
     // trips.pigeonsset_rv_calc ist EIN Skalarfeld für die ganze Reise — bei einem
     // Flug mit mehreren RVs (gemeinsamer Auflass) wäre ein einzelner Wert
     // irreführend (siehe Bug-Report), deshalb nur schreiben, wenn eindeutig genau
     // eine RV beteiligt ist. Bei mehreren RVs bleibt das Feld leer; die korrekte,
     // RV-spezifische Zahl liefert weiterhin computeRVFallback() live pro Filter.
     await apiPatchBy('trips', 'tripid=eq.'+encodeURIComponent(tripid), {pigeonsset_rv_calc: rvIdsSeen.size===1 ? gesetzt : null});
-  }catch(e){ console.warn('RV-Fallback konnte nicht gespeichert werden (fehlen evtl. die Spalten in Supabase?):', e.message); }
+    return rvIdsSeen.size===1 ? {status:'ok', gesetzt} : {status:'mehrdeutig', rvCount:rvIdsSeen.size};
+  }catch(e){ console.warn('RV-Fallback konnte nicht gespeichert werden (fehlen evtl. die Spalten in Supabase?):', e.message); return {status:'fehler', error:e.message}; }
 }
 // Für alle bereits importierten Flüge ohne eigene RV-Liste einmalig nachrechnen
 // (z.B. nach dem Anlegen der _calc-Spalten, für Altbestand). Für neu importierte
@@ -6796,16 +6803,29 @@ async function backfillRVFallback(tripid){
 async function backfillRVFallbackAll(){
   if(!RT.trips.length) await loadTrips();
   const candidates = RT.trips.filter(t=>!t.pigeonsset_rv);
-  let done=0;
-  for(const t of candidates){ await backfillRVFallback(t.tripid); done++; }
-  return {geprueft:candidates.length, verarbeitet:done};
+  const stats={geprueft:candidates.length, ok:0, mehrdeutig:0, keine_rv_erkannt:0, fehler:0};
+  let firstError=null;
+  for(const t of candidates){
+    const r = await backfillRVFallback(t.tripid);
+    if(stats[r.status]!=null) stats[r.status]++;
+    if(r.status==='fehler' && !firstError) firstError=r.error;
+  }
+  stats.firstError=firstError;
+  return stats;
 }
 async function runBackfillRVFallbackAll(ev){
   const btn = ev && ev.target;
   if(btn){ btn.disabled=true; btn.textContent='⏳ Berechne …'; }
   try{
     const r = await backfillRVFallbackAll();
-    alert('RV-Ranglisten nachgerechnet: '+r.geprueft+' Flüge ohne eigene RV-Liste geprüft.\n\nHinweis: Das klappt nur, wenn die Spalten prize_rv_calc/as_rv_calc (pigeontrips) und pigeonsset_rv_calc (trips) in Supabase bereits angelegt sind (siehe SQL im Chat).');
+    let msg='RV-Ranglisten nachgerechnet — '+r.geprueft+' Flüge ohne eigene RV-Liste geprüft:\n'
+      +'• '+r.ok+' erfolgreich berechnet (eindeutig eine RV)\n'
+      +'• '+r.mehrdeutig+' mit mehreren RVs (dort nur im Flug-Detail über den RV-Filter sichtbar)\n'
+      +'• '+r.keine_rv_erkannt+' ohne erkennbare RV-Zuordnung (Züchternummer passt zu keiner RV-Liste — siehe RV-Verwaltung)\n'
+      +'• '+r.fehler+' Fehler beim Speichern';
+    if(r.fehler>0) msg+='\n\nErste Fehlermeldung: '+r.firstError+'\n(Vermutlich fehlen die Spalten prize_rv_calc/as_rv_calc/pigeonsset_rv_calc noch in Supabase — siehe SQL im Chat.)';
+    clearPTCache();
+    alert(msg);
   }catch(e){ alert('Fehler: '+e.message); }
   finally{ if(btn){ btn.disabled=false; btn.textContent='🧮 RV-Ranglisten nachrechnen'; } render(); }
 }
@@ -7431,6 +7451,7 @@ async function runTripsImport(){
     const tr = RT.trips.find(x=>x.tripid===tid);
     if(tr && !tr.pigeonsset_rv){ try{ await backfillRVFallback(tid); }catch(e){} }
   }
+  clearPTCache();
   RT.imp.step='done'; render();
 }
 
@@ -7557,6 +7578,7 @@ async function assignVereinToBreeder(key){
   try{
     await apiPatchBy('pigeontrips', 'breedernumber=eq.'+encodeURIComponent(b.number)+'&breedername=eq.'+encodeURIComponent(b.name), {breedernumber:full});
     ZT.loaded=false; ZT.selected=null;
+    clearPTCache();
     render();
   }catch(e){ alert('Fehler beim Zuordnen: '+e.message); }
 }
