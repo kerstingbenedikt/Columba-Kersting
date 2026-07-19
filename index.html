@@ -6339,7 +6339,7 @@ function tripBreederRows(tripid){
 
 async function openTrip(tripid,breederName){
   RT.selected=RT.trips.find(t=>t.tripid===tripid);
-  RT.step='detail'; RT.results=[]; RT.breederFilter=breederName||null; render();
+  RT.step='detail'; RT.results=[]; RT.breederFilter=breederName||null; RT.rvFilter=null; render();
   await loadTripResults(tripid); render();
 }
 
@@ -6358,10 +6358,14 @@ function tripDetailRows(){
     list.sort((a,b)=>(Number(b.speed)||-Infinity)-(Number(a.speed)||-Infinity));
     list.forEach((r,i)=>{ r._breederRank=i+1; });
   });
-  const base=RT.breederFilter?RT.results.filter(r=>(r.breedername||'Unbekannt')===RT.breederFilter):RT.results;
+  let base=RT.results;
+  if(RT.breederFilter) base=base.filter(r=>(r.breedername||'Unbekannt')===RT.breederFilter);
+  if(RT.rvFilter==='__none__') base=base.filter(r=>!rvForNumber(r.breedernumber));
+  else if(RT.rvFilter) base=base.filter(r=>{ const rv=rvForNumber(r.breedernumber); return rv && rv.id===RT.rvFilter; });
   return base.slice().sort((a,b)=>(Number(b.speed)||-Infinity)-(Number(a.speed)||-Infinity));
 }
 function setTripBreederFilter(name){ RT.breederFilter=name||null; render(); }
+function setTripRVFilter(id){ RT.rvFilter=id||null; render(); }
 
 // Zellendarstellung für Vorbenennungs-Flags: mit Platz (1.-3.) farblich
 // hervorgehoben, ohne Platz nur ein dezentes Häkchen, sonst leer.
@@ -6411,30 +6415,57 @@ function renderTripDetail(){
     +breederNames.map(n=>'<span class="badge'+(RT.breederFilter===n?' badge-u':'')+'" style="cursor:pointer'+(RT.breederFilter===n?'':';opacity:.6')+'" onclick="setTripBreederFilter('+jsAttr(n)+')">🧑‍🌾 '+escH(n)+'</span>').join('')
     +'</div>':'';
 
-  // Summe passend zum aktuell gewählten Züchter-Filter (oder über alle
-  // Züchter, wenn kein Filter aktiv ist) — reagiert auf die Züchter-Chips.
+  // RV-Filter-Chips: nur RVen anzeigen, die unter den Züchtern dieser Reise
+  // tatsächlich vorkommen (über rvForNumber ermittelt) — plus "Alle RV" und,
+  // falls vorhanden, "Nicht zugeordnet" für Züchter ohne erkannte RV.
+  const rvIdsInTrip=new Set();
+  let hasUnmapped=false;
+  RT.results.forEach(r=>{ const rv=rvForNumber(r.breedernumber); if(rv) rvIdsInTrip.add(rv.id); else hasUnmapped=true; });
+  const rvOptions=RVEN.filter(v=>rvIdsInTrip.has(v.id));
+  const rvChips=(rvOptions.length>1||(rvOptions.length===1&&hasUnmapped))?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'
+    +'<span class="badge'+(!RT.rvFilter?' badge-u':'')+'" style="cursor:pointer'+(!RT.rvFilter?'':';opacity:.6')+'" onclick="setTripRVFilter(null)">Alle RV</span>'
+    +rvOptions.map(v=>'<span class="badge'+(RT.rvFilter===v.id?' badge-u':'')+'" style="cursor:pointer'+(RT.rvFilter===v.id?'':';opacity:.6')+'" onclick="setTripRVFilter('+jsAttr(v.id)+')">🏳️ '+escH(v.label)+'</span>').join('')
+    +(hasUnmapped?'<span class="badge'+(RT.rvFilter==='__none__'?' badge-u':'')+'" style="cursor:pointer'+(RT.rvFilter==='__none__'?'':';opacity:.6')+'" onclick="setTripRVFilter(\'__none__\')">Nicht zugeordnet</span>':'')
+    +'</div>':'';
+
+  // Summe passend zum aktuell gewählten Züchter-/RV-Filter (oder über alle
+  // Züchter, wenn kein Filter aktiv ist) — reagiert auf die Chips.
   const rvCount=sorted.filter(r=>r.prize_rv!=null || r.prize_rv_calc!=null || (rvFallback && rvFallback.has(r))).length;
   const reggrCount=sorted.filter(r=>r.prize_reggr!=null).length;
   const regCount=sorted.filter(r=>r.prize_reg!=null).length;
   // Gesetzte Taubenzahl je Liste = vereinsweiter Wert der ganzen Reise
-  // (pigeonsset_xx), unabhängig vom Züchter-Filter. Für RV: falls die echte
-  // Liste im Import fehlt, aber berechnet werden konnte, wird die berechnete
-  // Taubenzahl stattdessen angezeigt (deutlich als "berechnet" markiert).
+  // (pigeonsset_xx), unabhängig vom Züchter-Filter. Für RegGr/Reg gilt das
+  // unverändert. Für RV: falls die echte Liste im Import fehlt, wird die
+  // berechnete Taubenzahl verwendet — aber NUR für die gerade über den
+  // RV-Filter ausgewählte (oder, falls eindeutig, die einzige vorkommende)
+  // RV, NIE eine über mehrere RVs hinweg vermischte Zahl (siehe Bug-Report:
+  // "242 gesetzt" zeigte fälschlich alle importierten Züchter zusammen an).
   const rvSet=trip.pigeonsset_rv, reggrSet=trip.pigeonsset_reggr, regSet=trip.pigeonsset_reg;
-  const rvFallbackTotal = trip.pigeonsset_rv_calc!=null ? trip.pigeonsset_rv_calc : (rvFallback ? [...rvFallback.values()][0]?.gesetzt : null);
+  let rvFallbackTotal=null, rvFallbackAmbiguous=false;
+  if(rvFallback){
+    if(RT.rvFilter && RT.rvFilter!=='__none__'){
+      const entry=[...rvFallback.values()].find(f=>f.rvId===RT.rvFilter);
+      rvFallbackTotal = entry ? entry.gesetzt : null;
+    } else if(rvIdsInTrip.size===1){
+      rvFallbackTotal = [...rvFallback.values()][0].gesetzt;
+    } else {
+      rvFallbackAmbiguous = true; // mehrere RVs in dieser Reise — ohne Filter keine einzelne Zahl anzeigen
+    }
+  }
 
-  return '<div><button class="back-btn" onclick="RT.step=\'list\';RT.breederFilter=null;render()">← '+t('all_trips')+'</button>'
+  return '<div><button class="back-btn" onclick="RT.step=\'list\';RT.breederFilter=null;RT.rvFilter=null;render()">← '+t('all_trips')+'</button>'
     +'<div class="card"><div style="margin-bottom:14px">'
     +'<div class="serif" style="font-size:22px;cursor:pointer" onclick="setTripBreederFilter(null)" title="'+t('show_all_breeders')+'">'+I18N[LANG].trip_word+' '+trip.number+' — '+escH(trip.location||'')+'</div>'
     +'<div style="color:var(--text3);font-size:13px;margin-top:4px">'+(trip.tripdate||'')+' · '+t('season')+' '+(trip.vintage||'')+(RT.breederFilter?' · '+t('filtered_on')+' 🧑‍🌾 '+escH(RT.breederFilter):'')+'</div>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">'
     +'<span class="badge badge-u">'+sorted.length+' '+t('pigeons_set')+'</span>'
-    +(rvCount?'<span class="badge badge-u" title="'+(rvSet>0?'Preise / gesamte gesetzte Taubenzahl der Reise in dieser Liste':'Keine eigene RV-Liste im Import — Rang/AS-Punkte hier selbst berechnet (Rang nach Geschwindigkeit unter allen Tauben dieser RV, AS-Punkte wie üblich über calcAS)')+'">RV: '+rvCount+(rvSet>0?' / '+rvSet+' ges.':(rvFallbackTotal?' / '+rvFallbackTotal+' ges. (berechnet) *':''))+'</span>':'')
+    +(rvCount?'<span class="badge badge-u" title="'+(rvSet>0?'Preise / gesamte gesetzte Taubenzahl der Reise in dieser Liste':(rvFallbackAmbiguous?'Mehrere RVs bei diesem Flug (gemeinsamer Auflass) — bitte oben eine RV auswählen, um die gesetzte Taubenzahl dieser RV zu sehen.':'Keine eigene RV-Liste im Import — Rang/AS-Punkte hier selbst berechnet (Rang nach Geschwindigkeit unter allen Tauben dieser RV, AS-Punkte wie üblich über calcAS)'))+'">RV: '+rvCount+(rvSet>0?' / '+rvSet+' ges.':(rvFallbackTotal?' / '+rvFallbackTotal+' ges. (berechnet) *':(rvFallbackAmbiguous?' · RV wählen für Taubenzahl':'')))+'</span>':'')
     +(reggrCount?'<span class="badge badge-u" title="Preise / gesamte gesetzte Taubenzahl der Reise in dieser Liste">RegGr: '+reggrCount+(reggrSet>0?' / '+reggrSet+' ges.':'')+'</span>':'')
     +(regCount?'<span class="badge badge-u" title="Preise / gesamte gesetzte Taubenzahl der Reise in dieser Liste">Reg: '+regCount+(regSet>0?' / '+regSet+' ges.':'')+'</span>':'')
     +(trip.averagedistance3?'<span class="badge badge-u">⌀ '+Number(trip.averagedistance3).toFixed(1)+' km</span>':'')
     +'</div>'
     +chips
+    +rvChips
     +(rvFallback?'<div style="font-size:11px;color:var(--text3);margin-top:8px">* RV-Rang/AS-Punkte für diesen Flug selbst berechnet, da hierfür keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene) — Rang nach Geschwindigkeit unter allen Tauben dieser RV.</div>':'')
     +'</div>'
     +(RT.results.length===0
@@ -6710,11 +6741,11 @@ function computeRVFallback(trip, results){
   const groups={};
   (results||[]).forEach(r=>{
     const rv=rvForNumber(r.breedernumber);
-    const key=rv?rv.id:'__ohne_rv__';
-    (groups[key]=groups[key]||[]).push(r);
+    if(!rv) return; // Züchter ohne bekannte RV-Zuordnung NIE zu einer Pseudo-Gruppe zusammenfassen
+    (groups[rv.id]=groups[rv.id]||[]).push(r);
   });
   const map=new Map();
-  Object.values(groups).forEach(list=>{
+  Object.entries(groups).forEach(([rvId,list])=>{
     const gesetzt=list.length;
     list.slice().sort((a,b)=>(Number(b.speed)||-Infinity)-(Number(a.speed)||-Infinity))
       .forEach((r,i)=>{
@@ -6722,7 +6753,7 @@ function computeRVFallback(trip, results){
         // Wie bei den echten Importlisten bekommt nur die vorderste Preiszone
         // (oberstes Drittel, siehe calcAS) einen ausgewiesenen Rang — der Rest
         // bleibt ohne Platzierung (kein "hasPreis").
-        if(as!=null) map.set(r, {rang, gesetzt, as});
+        if(as!=null) map.set(r, {rang, gesetzt, as, rvId});
       });
   });
   return map.size ? map : null;
@@ -6741,11 +6772,17 @@ async function backfillRVFallback(tripid){
     const map = computeRVFallback(trip, results);
     if(!map || !map.size) return;
     const upsertRows=[];
+    const rvIdsSeen=new Set();
     let gesetzt=null;
-    map.forEach((f,r)=>{ upsertRows.push({id:r.id, prize_rv_calc:f.rang, as_rv_calc:f.as}); gesetzt=f.gesetzt; });
+    map.forEach((f,r)=>{ upsertRows.push({id:r.id, prize_rv_calc:f.rang, as_rv_calc:f.as}); rvIdsSeen.add(f.rvId); gesetzt=f.gesetzt; });
     const failed = await apiUpsertBatch('pigeontrips', upsertRows, 'id');
     if(failed.length){ console.warn('RV-Fallback: '+failed.length+' Chunk(s) fehlgeschlagen (fehlen evtl. die Spalten prize_rv_calc/as_rv_calc?)', failed[0].error); return; }
-    if(gesetzt) await apiPatchBy('trips', 'tripid=eq.'+encodeURIComponent(tripid), {pigeonsset_rv_calc:gesetzt});
+    // trips.pigeonsset_rv_calc ist EIN Skalarfeld für die ganze Reise — bei einem
+    // Flug mit mehreren RVs (gemeinsamer Auflass) wäre ein einzelner Wert
+    // irreführend (siehe Bug-Report), deshalb nur schreiben, wenn eindeutig genau
+    // eine RV beteiligt ist. Bei mehreren RVs bleibt das Feld leer; die korrekte,
+    // RV-spezifische Zahl liefert weiterhin computeRVFallback() live pro Filter.
+    await apiPatchBy('trips', 'tripid=eq.'+encodeURIComponent(tripid), {pigeonsset_rv_calc: rvIdsSeen.size===1 ? gesetzt : null});
   }catch(e){ console.warn('RV-Fallback konnte nicht gespeichert werden (fehlen evtl. die Spalten in Supabase?):', e.message); }
 }
 // Für alle bereits importierten Flüge ohne eigene RV-Liste einmalig nachrechnen
@@ -7454,7 +7491,7 @@ function selectZuechter(key){ ZT.selected=key; render(); window.scrollTo(0,0); }
 
 async function openTripFromZuechter(tripid,breederName){
   const t=RT.trips.find(x=>x.tripid===tripid); if(!t) return;
-  RT.selected=t; RT.step='detail'; RT.results=[]; RT.breederFilter=breederName||null;
+  RT.selected=t; RT.step='detail'; RT.results=[]; RT.breederFilter=breederName||null; RT.rvFilter=null;
   S.tab='reisen'; setActiveNav('reisen'); render();
   await loadTripResults(tripid); render();
 }
