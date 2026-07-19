@@ -5482,9 +5482,9 @@ function pigeonReiseSummary(pigeonid){
   let gesetzt=0,preise=0,asSum=0;
   rows.forEach(r=>{
     gesetzt++;
-    const hasPreis=r.prize_rv!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
+    const hasPreis=rvField(r,'prize_rv')!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
     if(hasPreis) preise++;
-    const asVals=[r.as_rv,r.as_reg,r.as_nat].filter(v=>v!=null && v!=='');
+    const asVals=[rvField(r,'as_rv'),r.as_reg,r.as_nat].filter(v=>v!=null && v!=='');
     if(asVals.length) asSum+=Math.max(...asVals.map(Number));
   });
   return {gesetzt, preise, asSum, top10:getTop10Placements(rows).length};
@@ -5496,18 +5496,29 @@ function groupPigeonTripsByYear(rows){
     const yr=r.vintage||'—';
     if(!byYear[yr]) byYear[yr]={gesetzt:0,preise:0,asSum:0,top10:[]};
     byYear[yr].gesetzt++;
-    const hasPreis = r.prize_rv!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
+    const hasPreis = rvField(r,'prize_rv')!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
     if(hasPreis) byYear[yr].preise++;
-    const asVals=[r.as_rv,r.as_reg,r.as_nat].filter(v=>v!=null && v!=='');
+    const asVals=[rvField(r,'as_rv'),r.as_reg,r.as_nat].filter(v=>v!=null && v!=='');
     if(asVals.length) byYear[yr].asSum += Math.max(...asVals.map(Number));
     // Top10 je Flug nur einmal zählen (bester Platz der 3 Kategorien)
-    const platzVals=[r.prize_rv,r.prize_reggr,r.prize_reg].filter(v=>v!=null && v>0 && v<=10);
+    const platzVals=[rvField(r,'prize_rv'),r.prize_reggr,r.prize_reg].filter(v=>v!=null && v>0 && v<=10);
     if(platzVals.length) byYear[yr].top10.push(Math.min(...platzVals));
   });
   return Object.keys(byYear).sort((a,b)=>b-a).map(yr=>({yr, ...byYear[yr],
     top10Str: byYear[yr].top10.length ? byYear[yr].top10.sort((a,b)=>a-b).join(', ') : ''}));
 }
 
+// Liest ein RV-Feld (prize_rv / as_rv / pigeonsset_rv) mit Fallback auf die
+// selbst berechnete Variante (_calc-Spalte, siehe computeRVFallback/backfillRVFallback),
+// falls das Feld aus dem echten Import leer ist. Für alle anderen Felder (RegGr/Reg)
+// entspricht das einfach r[field] — dort gibt es keine berechnete Alternative, weil
+// diese Listen nie fehlen.
+function rvField(r, field){
+  if(!r) return null;
+  const calcField = field==='prize_rv'?'prize_rv_calc' : field==='as_rv'?'as_rv_calc' : field==='pigeonsset_rv'?'pigeonsset_rv_calc' : null;
+  if(!calcField) return r[field];
+  return r[field]!=null ? r[field] : r[calcField];
+}
 // Top10-Platzierungen (RV/RegGr/Reg) über alle Kategorien, sortiert nach Platz
 function getTop10Placements(rows){
   const CATS=[
@@ -5518,11 +5529,11 @@ function getTop10Placements(rows){
   const out=[];
   rows.forEach(r=>{
     CATS.forEach(([field,label,gesetztField])=>{
-      const platz=r[field];
+      const platz=rvField(r,field);
       if(platz!=null && platz>0 && platz<=10){
-        out.push({platz, kategorie:label, tripnumber:r.tripnumber, location:r.location,
+        out.push({platz, kategorie:label+(field==='prize_rv'&&r.prize_rv==null?' (berechnet)':''), tripnumber:r.tripnumber, location:r.location,
           tripdate:r.tripdate, vintage:r.vintage,
-          gesetzt:r[gesetztField]!=null?r[gesetztField]:r.pigeonsset,
+          gesetzt:rvField(r,gesetztField)!=null?rvField(r,gesetztField):r.pigeonsset,
           distance:r.distance});
       }
     });
@@ -5545,9 +5556,10 @@ function getTopPlacementsDeduped(rows, n){
   rows.forEach(r=>{
     const candidates=[];
     CATS.forEach(([field,gesetztField,label])=>{
-      const platz=r[field];
+      const platz=rvField(r,field);
       if(platz!=null && platz>0){
-        candidates.push({platz, kategorie:label, gesetzt:r[gesetztField]!=null?r[gesetztField]:r.pigeonsset});
+        const kategorie = (field==='prize_rv' && r.prize_rv==null) ? label+' (berechnet)' : label;
+        candidates.push({platz, kategorie, gesetzt:rvField(r,gesetztField)!=null?rvField(r,gesetztField):r.pigeonsset});
       }
     });
     if(!candidates.length) return;
@@ -6305,7 +6317,7 @@ function renderTripsList(){
     </div>`;
   }).join('');
 
-  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div>'+(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
+  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" title="Für alle bereits importierten Flüge ohne eigene RV-Liste (zu wenig Tauben) die RV-Rangliste selbst berechnen und speichern — einmalig nötig für Altbestand, neue Importe machen das automatisch." onclick="runBackfillRVFallbackAll(event)">🧮 RV-Ranglisten nachrechnen</button><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div></div>'+(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
 }
 function toggleTripSeason(yr){ const k=String(yr); if(RT.collapsedSeasons.has(k)) RT.collapsedSeasons.delete(k); else RT.collapsedSeasons.add(k); render(); }
 function toggleTripBreeders(tripid){ if(RT.expandedTripBreeders.has(tripid)) RT.expandedTripBreeders.delete(tripid); else RT.expandedTripBreeders.add(tripid); render(); }
@@ -6366,9 +6378,14 @@ function renderTripDetail(){
   const rvFallback = computeRVFallback(trip, RT.results);
   const rvCellFor = r => {
     if(r.prize_rv!=null) return String(r.prize_rv);
-    const f = rvFallback && rvFallback.get(r);
-    if(!f) return '—';
-    return '<span style="font-style:italic;color:var(--text2)" title="Berechnet: für diesen Flug liegt keine eigene RV-Liste aus dem Import vor (zu wenig Tauben). Rang '+f.rang+' von '+f.gesetzt+' Tauben dieser RV, AS '+(f.as!=null?f.as.toFixed(2):'—')+'">'+f.rang+' *</span>';
+    // Bevorzugt die bereits dauerhaft gespeicherte Berechnung (prize_rv_calc/as_rv_calc,
+    // siehe backfillRVFallback) — nur direkt nach einem Import, bevor die Hintergrund-
+    // Berechnung durchgelaufen ist, wird live nachgerechnet (rvFallback).
+    const rang = r.prize_rv_calc!=null ? r.prize_rv_calc : (rvFallback && rvFallback.get(r)?.rang);
+    const as   = r.as_rv_calc!=null ? r.as_rv_calc : (rvFallback && rvFallback.get(r)?.as);
+    if(rang==null) return '—';
+    const gesetzt = trip.pigeonsset_rv_calc!=null?trip.pigeonsset_rv_calc:(rvFallback && rvFallback.get(r)?.gesetzt);
+    return '<span style="font-style:italic;color:var(--text2)" title="Berechnet: für diesen Flug liegt keine eigene RV-Liste aus dem Import vor (zu wenig Tauben). Rang '+rang+(gesetzt?' von '+gesetzt+' Tauben dieser RV':'')+', AS '+(as!=null?Number(as).toFixed(2):'—')+'">'+rang+' *</span>';
   };
   const rows=sorted.map(r=>{
     const p=S.pigeons.find(x=>x.pigeonid===r.pigeonid||(r.ringnumber&&x.ringnumber===r.ringnumber));
@@ -6396,7 +6413,7 @@ function renderTripDetail(){
 
   // Summe passend zum aktuell gewählten Züchter-Filter (oder über alle
   // Züchter, wenn kein Filter aktiv ist) — reagiert auf die Züchter-Chips.
-  const rvCount=sorted.filter(r=>r.prize_rv!=null || (rvFallback && rvFallback.has(r))).length;
+  const rvCount=sorted.filter(r=>r.prize_rv!=null || r.prize_rv_calc!=null || (rvFallback && rvFallback.has(r))).length;
   const reggrCount=sorted.filter(r=>r.prize_reggr!=null).length;
   const regCount=sorted.filter(r=>r.prize_reg!=null).length;
   // Gesetzte Taubenzahl je Liste = vereinsweiter Wert der ganzen Reise
@@ -6404,7 +6421,7 @@ function renderTripDetail(){
   // Liste im Import fehlt, aber berechnet werden konnte, wird die berechnete
   // Taubenzahl stattdessen angezeigt (deutlich als "berechnet" markiert).
   const rvSet=trip.pigeonsset_rv, reggrSet=trip.pigeonsset_reggr, regSet=trip.pigeonsset_reg;
-  const rvFallbackTotal = rvFallback ? [...rvFallback.values()][0]?.gesetzt : null;
+  const rvFallbackTotal = trip.pigeonsset_rv_calc!=null ? trip.pigeonsset_rv_calc : (rvFallback ? [...rvFallback.values()][0]?.gesetzt : null);
 
   return '<div><button class="back-btn" onclick="RT.step=\'list\';RT.breederFilter=null;render()">← '+t('all_trips')+'</button>'
     +'<div class="card"><div style="margin-bottom:14px">'
@@ -6700,9 +6717,55 @@ function computeRVFallback(trip, results){
   Object.values(groups).forEach(list=>{
     const gesetzt=list.length;
     list.slice().sort((a,b)=>(Number(b.speed)||-Infinity)-(Number(a.speed)||-Infinity))
-      .forEach((r,i)=>{ map.set(r, {rang:i+1, gesetzt, as:calcAS(i+1, gesetzt)}); });
+      .forEach((r,i)=>{
+        const rang=i+1, as=calcAS(rang, gesetzt);
+        // Wie bei den echten Importlisten bekommt nur die vorderste Preiszone
+        // (oberstes Drittel, siehe calcAS) einen ausgewiesenen Rang — der Rest
+        // bleibt ohne Platzierung (kein "hasPreis").
+        if(as!=null) map.set(r, {rang, gesetzt, as});
+      });
   });
   return map.size ? map : null;
+}
+// Schreibt die berechnete RV-Rangliste dauerhaft in prize_rv_calc/as_rv_calc
+// (pigeontrips) sowie pigeonsset_rv_calc (trips), damit sie NICHT nur in der
+// Flug-Detailansicht, sondern überall dort wirkt, wo prize_rv/as_rv gelesen
+// werden (Bestenliste, Stammbaum-Top10, Reiseleistung je Taube — siehe rvField()).
+// Voraussetzung: die Spalten müssen einmalig per SQL angelegt werden (siehe Chat).
+// Läuft im Hintergrund; Fehler (z.B. Spalten fehlen noch) werden nur geloggt.
+async function backfillRVFallback(tripid){
+  const trip = RT.trips.find(t=>t.tripid===tripid);
+  if(!trip || trip.pigeonsset_rv) return;
+  try{
+    const results = await apiGetAll('/pigeontrips?tripid=eq.'+tripid);
+    const map = computeRVFallback(trip, results);
+    if(!map || !map.size) return;
+    const upsertRows=[];
+    let gesetzt=null;
+    map.forEach((f,r)=>{ upsertRows.push({id:r.id, prize_rv_calc:f.rang, as_rv_calc:f.as}); gesetzt=f.gesetzt; });
+    const failed = await apiUpsertBatch('pigeontrips', upsertRows, 'id');
+    if(failed.length){ console.warn('RV-Fallback: '+failed.length+' Chunk(s) fehlgeschlagen (fehlen evtl. die Spalten prize_rv_calc/as_rv_calc?)', failed[0].error); return; }
+    if(gesetzt) await apiPatchBy('trips', 'tripid=eq.'+encodeURIComponent(tripid), {pigeonsset_rv_calc:gesetzt});
+  }catch(e){ console.warn('RV-Fallback konnte nicht gespeichert werden (fehlen evtl. die Spalten in Supabase?):', e.message); }
+}
+// Für alle bereits importierten Flüge ohne eigene RV-Liste einmalig nachrechnen
+// (z.B. nach dem Anlegen der _calc-Spalten, für Altbestand). Für neu importierte
+// Flüge geschieht das automatisch direkt nach dem Import.
+async function backfillRVFallbackAll(){
+  if(!RT.trips.length) await loadTrips();
+  const candidates = RT.trips.filter(t=>!t.pigeonsset_rv);
+  let done=0;
+  for(const t of candidates){ await backfillRVFallback(t.tripid); done++; }
+  return {geprueft:candidates.length, verarbeitet:done};
+}
+async function runBackfillRVFallbackAll(ev){
+  const btn = ev && ev.target;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Berechne …'; }
+  try{
+    const r = await backfillRVFallbackAll();
+    alert('RV-Ranglisten nachgerechnet: '+r.geprueft+' Flüge ohne eigene RV-Liste geprüft.\n\nHinweis: Das klappt nur, wenn die Spalten prize_rv_calc/as_rv_calc (pigeontrips) und pigeonsset_rv_calc (trips) in Supabase bereits angelegt sind (siehe SQL im Chat).');
+  }catch(e){ alert('Fehler: '+e.message); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='🧮 RV-Ranglisten nachrechnen'; } render(); }
 }
 function zuechterFullNumber(breedernumber){ return breedernumber!=null && breedernumber!=='' ? String(breedernumber) : null; }
 function zuechterNumberBreakdown(breedernumber){
@@ -7146,6 +7209,7 @@ async function runTripsImport(){
 
   // Sammle alle tripids dieser Session für Duplikat-Check
   const sessionTrips=[...RT.trips];
+  const touchedTripIds=new Set();
   // Ass-Kategorie-Flags (A/B/C/D) werden nur EINMAL pro Jahr auf einem Flug
   // gesetzt. Sie werden am Flug-Ergebnis (pigeontrips) gespeichert, damit
   // sie auch für Tauben ohne Zuordnung zur eigenen DB verfügbar sind.
@@ -7215,6 +7279,7 @@ async function runTripsImport(){
 
     // Vorhandene Ergebnisse dieser Reise laden, um Doppel-Einträge zu vermeiden
     // (Abgleich über Ringnummer + ggf. Züchtername, falls mehrere Züchter dieselbe Reise melden)
+    touchedTripIds.add(tripid);
     let existingResults=[];
     try{
       existingResults = await apiGet('/pigeontrips?tripid=eq.'+tripid+'&select=id,ringnumber,breedername') || [];
@@ -7316,6 +7381,14 @@ async function runTripsImport(){
   updP();
   await loadTrips();
   ZT.loaded=false;
+  // Für alle in diesem Import berührten Flüge OHNE eigene RV-Liste (zu wenig
+  // Tauben) jetzt die RV-Rangliste selbst berechnen und dauerhaft speichern
+  // (siehe computeRVFallback/backfillRVFallback) — wirkt dann automatisch in
+  // Bestenliste, Stammbaum-Top10 und Flug-Detail.
+  for(const tid of touchedTripIds){
+    const tr = RT.trips.find(x=>x.tripid===tid);
+    if(tr && !tr.pigeonsset_rv){ try{ await backfillRVFallback(tid); }catch(e){} }
+  }
   RT.imp.step='done'; render();
 }
 
@@ -7685,7 +7758,7 @@ function bestenliste(breederFilter, rvFilter){
     if(r.ass_b) b.ass.b=true;
     if(r.ass_c) b.ass.c=true;
     if(r.ass_d) b.ass.d=true;
-    const hasPreis = r.prize_rv!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
+    const hasPreis = rvField(r,'prize_rv')!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
     if(hasPreis) b.prizes++;
     // Kilometer-Summe: nur Flüge zählen, bei denen die Taube einen Preis
     // erzielt hat (gleiche Preis-Definition wie oben — irgendeine Liste
@@ -7695,7 +7768,7 @@ function bestenliste(breederFilter, rvFilter){
     if(hasPreis && trip.averagedistance3!=null) b.kmSum += Number(trip.averagedistance3);
     // Je Liste (RV/RegGr/Reg) ein Kandidatenpaar aus Platz+AS; das beste (höchste AS) gilt für den Flug
     const candidates=[
-      {platz:r.prize_rv,    as:r.as_rv},
+      {platz:rvField(r,'prize_rv'), as:rvField(r,'as_rv')},
       {platz:r.prize_reggr, as:r.as_nat},
       {platz:r.prize_reg,   as:r.as_reg}
     ].filter(c=>c.as!=null && c.as!=='');
