@@ -2493,6 +2493,10 @@ function renderPedigree(pid, opts){
   const embedded = opts.embedded===true;
   const root=findById(pid);
   if(!root) return '<div style="padding:20px;color:var(--text3)">'+t('pedigree_not_found')+'</div>';
+  // Für die "gesetzt"-Zahl bei Flügen mit mehreren beteiligten RVs (siehe rvGesetzt())
+  // wird der Züchter-Cache (ZT.rows) benötigt — beim ersten Öffnen eines Stammbaums
+  // ggf. im Hintergrund nachladen, ohne den Druck selbst zu blockieren.
+  if(!ZT.loaded){ loadZuechterData().then(render); }
   try{
   return renderPedigreeInner(root, opts, embedded);
   } catch(e){
@@ -5525,6 +5529,21 @@ function rvField(r, field){
   if(!calcField) return r[field];
   return r[field]!=null ? r[field] : r[calcField];
 }
+// Ermittelt die "gesetzt"-Zahl für die RV-Kategorie einer Ergebniszeile: echter
+// Import (pigeonsset_rv) > eindeutig berechnet (pigeonsset_rv_calc) > bei einem
+// Flug mit mehreren beteiligten RVs (gemeinsamer Auflass, siehe backfillRVFallback)
+// die Zahl der als Standard markierten RV (siehe standardRVGesetztForTrip) > als
+// letzter Rückfall die Gesamt-Teilnehmerzahl des Flugs in unserer DB (r.pigeonsset)
+// — dieser letzte Fall ist nur eine grobe Notlösung und sollte dank Standard-RV
+// kaum noch vorkommen.
+function rvGesetzt(r){
+  if(!r) return null;
+  const v=rvField(r,'pigeonsset_rv');
+  if(v!=null) return v;
+  const std=standardRVGesetztForTrip(r.tripid);
+  if(std!=null) return std;
+  return r.pigeonsset;
+}
 // Top10-Platzierungen (RV/RegGr/Reg) über alle Kategorien, sortiert nach Platz
 function getTop10Placements(rows){
   const CATS=[
@@ -5539,7 +5558,7 @@ function getTop10Placements(rows){
       if(platz!=null && platz>0 && platz<=10){
         out.push({platz, kategorie:label+(field==='prize_rv'&&r.prize_rv==null?' (berechnet)':''), tripnumber:r.tripnumber, location:r.location,
           tripdate:r.tripdate, vintage:r.vintage,
-          gesetzt:rvField(r,gesetztField)!=null?rvField(r,gesetztField):r.pigeonsset,
+          gesetzt: field==='prize_rv' ? rvGesetzt(r) : (rvField(r,gesetztField)!=null?rvField(r,gesetztField):r.pigeonsset),
           distance:r.distance});
       }
     });
@@ -5565,7 +5584,7 @@ function getTopPlacementsDeduped(rows, n){
       const platz=rvField(r,field);
       if(platz!=null && platz>0){
         const kategorie = (field==='prize_rv' && r.prize_rv==null) ? label+' (berechnet)' : label;
-        candidates.push({platz, kategorie, gesetzt:rvField(r,gesetztField)!=null?rvField(r,gesetztField):r.pigeonsset});
+        candidates.push({platz, kategorie, gesetzt: field==='prize_rv' ? rvGesetzt(r) : (rvField(r,gesetztField)!=null?rvField(r,gesetztField):r.pigeonsset)});
       }
     });
     if(!candidates.length) return;
