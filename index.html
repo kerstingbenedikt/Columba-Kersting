@@ -6363,6 +6363,13 @@ function tripFlagCell(r, key, label){
 function renderTripDetail(){
   const trip=RT.selected; if(!trip) return renderTripsList();
   const sorted=tripDetailRows();
+  const rvFallback = computeRVFallback(trip, RT.results);
+  const rvCellFor = r => {
+    if(r.prize_rv!=null) return String(r.prize_rv);
+    const f = rvFallback && rvFallback.get(r);
+    if(!f) return '—';
+    return '<span style="font-style:italic;color:var(--text2)" title="Berechnet: für diesen Flug liegt keine eigene RV-Liste aus dem Import vor (zu wenig Tauben). Rang '+f.rang+' von '+f.gesetzt+' Tauben dieser RV, AS '+(f.as!=null?f.as.toFixed(2):'—')+'">'+f.rang+' *</span>';
+  };
   const rows=sorted.map(r=>{
     const p=S.pigeons.find(x=>x.pigeonid===r.pigeonid||(r.ringnumber&&x.ringnumber===r.ringnumber));
     return '<tr onclick="'+(p?'selectPigeon(\''+p.pigeonid+'\')':'')+'" style="'+(p?'cursor:pointer':'')+'">'
@@ -6372,7 +6379,7 @@ function renderTripDetail(){
       +'<td>'+(p?escH(p.name||'—'):'<span style="color:var(--text3)">—</span>')+'</td>'
       +(RT.breederFilter?'':'<td style="color:var(--text2)">'+escH(r.breedername||'—')+'</td>')
       +'<td>'+(r.speed?Number(r.speed).toFixed(3):'—')+'</td>'
-      +'<td>'+(r.prize_rv||'—')+'</td><td>'+(r.prize_fg||'—')+'</td>'
+      +'<td>'+rvCellFor(r)+'</td><td>'+(r.prize_fg||'—')+'</td>'
       +'<td>'+(r.prize_reggr||'—')+'</td><td>'+(r.prize_reg||'—')+'</td>'
       +'<td>'+(r.as_reg>0?Number(r.as_reg).toFixed(2):'—')+'</td>'
       +'<td style="text-align:center">'+tripFlagCell(r,'v','V')+'</td>'
@@ -6389,12 +6396,15 @@ function renderTripDetail(){
 
   // Summe passend zum aktuell gewählten Züchter-Filter (oder über alle
   // Züchter, wenn kein Filter aktiv ist) — reagiert auf die Züchter-Chips.
-  const rvCount=sorted.filter(r=>r.prize_rv!=null).length;
+  const rvCount=sorted.filter(r=>r.prize_rv!=null || (rvFallback && rvFallback.has(r))).length;
   const reggrCount=sorted.filter(r=>r.prize_reggr!=null).length;
   const regCount=sorted.filter(r=>r.prize_reg!=null).length;
   // Gesetzte Taubenzahl je Liste = vereinsweiter Wert der ganzen Reise
-  // (pigeonsset_xx), unabhängig vom Züchter-Filter.
+  // (pigeonsset_xx), unabhängig vom Züchter-Filter. Für RV: falls die echte
+  // Liste im Import fehlt, aber berechnet werden konnte, wird die berechnete
+  // Taubenzahl stattdessen angezeigt (deutlich als "berechnet" markiert).
   const rvSet=trip.pigeonsset_rv, reggrSet=trip.pigeonsset_reggr, regSet=trip.pigeonsset_reg;
+  const rvFallbackTotal = rvFallback ? [...rvFallback.values()][0]?.gesetzt : null;
 
   return '<div><button class="back-btn" onclick="RT.step=\'list\';RT.breederFilter=null;render()">← '+t('all_trips')+'</button>'
     +'<div class="card"><div style="margin-bottom:14px">'
@@ -6402,12 +6412,13 @@ function renderTripDetail(){
     +'<div style="color:var(--text3);font-size:13px;margin-top:4px">'+(trip.tripdate||'')+' · '+t('season')+' '+(trip.vintage||'')+(RT.breederFilter?' · '+t('filtered_on')+' 🧑‍🌾 '+escH(RT.breederFilter):'')+'</div>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">'
     +'<span class="badge badge-u">'+sorted.length+' '+t('pigeons_set')+'</span>'
-    +(rvCount?'<span class="badge badge-u" title="Preise / gesamte gesetzte Taubenzahl der Reise in dieser Liste">RV: '+rvCount+(rvSet>0?' / '+rvSet+' ges.':'')+'</span>':'')
+    +(rvCount?'<span class="badge badge-u" title="'+(rvSet>0?'Preise / gesamte gesetzte Taubenzahl der Reise in dieser Liste':'Keine eigene RV-Liste im Import — Rang/AS-Punkte hier selbst berechnet (Rang nach Geschwindigkeit unter allen Tauben dieser RV, AS-Punkte wie üblich über calcAS)')+'">RV: '+rvCount+(rvSet>0?' / '+rvSet+' ges.':(rvFallbackTotal?' / '+rvFallbackTotal+' ges. (berechnet) *':''))+'</span>':'')
     +(reggrCount?'<span class="badge badge-u" title="Preise / gesamte gesetzte Taubenzahl der Reise in dieser Liste">RegGr: '+reggrCount+(reggrSet>0?' / '+reggrSet+' ges.':'')+'</span>':'')
     +(regCount?'<span class="badge badge-u" title="Preise / gesamte gesetzte Taubenzahl der Reise in dieser Liste">Reg: '+regCount+(regSet>0?' / '+regSet+' ges.':'')+'</span>':'')
     +(trip.averagedistance3?'<span class="badge badge-u">⌀ '+Number(trip.averagedistance3).toFixed(1)+' km</span>':'')
     +'</div>'
     +chips
+    +(rvFallback?'<div style="font-size:11px;color:var(--text3);margin-top:8px">* RV-Rang/AS-Punkte für diesen Flug selbst berechnet, da hierfür keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene) — Rang nach Geschwindigkeit unter allen Tauben dieser RV.</div>':'')
     +'</div>'
     +(RT.results.length===0
       ?'<div style="text-align:center;padding:24px;color:var(--text3)">'+t('loading_results')+'</div>'
@@ -6664,6 +6675,34 @@ function rvForNumber(breedernumber){
   if(!breedernumber) return null;
   const s=String(breedernumber);
   return RVEN.find(v=>v.code && s.indexOf(v.code)===0) || null;
+}
+
+// Manche Flüge (z.B. weil die Taubenzahl auf RV-Ebene zu gering war) haben in den
+// Importdateien gar keine eigene RV-Liste — trip.pigeonsset_rv ist dann null, und
+// alle Ergebniszeilen haben prize_rv=null. Der Verband führt in diesem Fall aber
+// oft trotzdem eine eigene RV-Rangliste (siehe Beispiel Flug 11 Parsberg): alle
+// Tauben ALLER Züchter derselben RV werden nach Geschwindigkeit geordnet, Rang und
+// AS-Punkte ergeben sich exakt wie überall sonst über calcAS(Rang, gesetzt) — mit
+// "gesetzt" = Anzahl der (in unserer DB vorliegenden) Ergebniszeilen dieser RV für
+// genau diesen Flug. Rechnet NUR nach, wenn trip.pigeonsset_rv fehlt — eine echte
+// RV-Liste aus dem Import hat immer Vorrang und wird nie überschrieben.
+// Rückgabe: Map von Ergebniszeile -> {rang, gesetzt, as}, oder null wenn die
+// echte Liste bereits vorhanden ist (dann ist keine Berechnung nötig/erlaubt).
+function computeRVFallback(trip, results){
+  if(!trip || trip.pigeonsset_rv) return null;
+  const groups={};
+  (results||[]).forEach(r=>{
+    const rv=rvForNumber(r.breedernumber);
+    const key=rv?rv.id:'__ohne_rv__';
+    (groups[key]=groups[key]||[]).push(r);
+  });
+  const map=new Map();
+  Object.values(groups).forEach(list=>{
+    const gesetzt=list.length;
+    list.slice().sort((a,b)=>(Number(b.speed)||-Infinity)-(Number(a.speed)||-Infinity))
+      .forEach((r,i)=>{ map.set(r, {rang:i+1, gesetzt, as:calcAS(i+1, gesetzt)}); });
+  });
+  return map.size ? map : null;
 }
 function zuechterFullNumber(breedernumber){ return breedernumber!=null && breedernumber!=='' ? String(breedernumber) : null; }
 function zuechterNumberBreakdown(breedernumber){
