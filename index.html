@@ -5417,7 +5417,7 @@ async function loadPigeonTrips(pigeonid){
       const t=tripById[r.tripid]||{};
       return {...r, vintage:t.vintage||null, tripnumber:t.number||null, location:t.location||null,
         tripdate:t.tripdate||null, pigeonsset:t.pigeonsset||null,
-        pigeonsset_rv:t.pigeonsset_rv||null, pigeonsset_reggr:t.pigeonsset_reggr||null, pigeonsset_reg:t.pigeonsset_reg||null,
+        pigeonsset_rv:t.pigeonsset_rv||null, pigeonsset_rv_calc:t.pigeonsset_rv_calc||null, pigeonsset_reggr:t.pigeonsset_reggr||null, pigeonsset_reg:t.pigeonsset_reg||null,
         distance:t.averagedistance3!=null?Number(t.averagedistance3):null};
     });
     PT_CACHE[pigeonid]=enriched;
@@ -5440,7 +5440,7 @@ async function loadPigeonTripsBatch(pigeonids){
       const t=tripById[r.tripid]||{};
       const enriched={...r, vintage:t.vintage||null, tripnumber:t.number||null, location:t.location||null,
         tripdate:t.tripdate||null, pigeonsset:t.pigeonsset||null,
-        pigeonsset_rv:t.pigeonsset_rv||null, pigeonsset_reggr:t.pigeonsset_reggr||null, pigeonsset_reg:t.pigeonsset_reg||null,
+        pigeonsset_rv:t.pigeonsset_rv||null, pigeonsset_rv_calc:t.pigeonsset_rv_calc||null, pigeonsset_reggr:t.pigeonsset_reggr||null, pigeonsset_reg:t.pigeonsset_reg||null,
         distance:t.averagedistance3!=null?Number(t.averagedistance3):null};
       if(!byPigeon[r.pigeonid]) byPigeon[r.pigeonid]=[];
       byPigeon[r.pigeonid].push(enriched);
@@ -6267,6 +6267,7 @@ function renderTripsList(){
     RT.collapsedSeasonsInited=true;
   }
   if(!RT.expandedTripBreeders) RT.expandedTripBreeders=new Set();
+  const anyComputedRV = RT.trips.some(t=>!t.pigeonsset_rv && t.pigeonsset_rv_calc>0);
   const grouped={};
   RT.trips.forEach(t=>{ const yr=t.vintage||'?'; if(!grouped[yr]) grouped[yr]=[]; grouped[yr].push(t); });
   const cards=Object.keys(grouped).sort((a,b)=>b-a).map(yr=>{
@@ -6275,7 +6276,9 @@ function renderTripsList(){
       const breeders=ZT.loaded?tripBreederRows(tr.tripid):[];
       const breedersOpen=RT.expandedTripBreeders.has(tr.tripid);
       const km=tr.averagedistance3!=null?Math.round(Number(tr.averagedistance3))+' km':'—';
-      const rvN=tr.pigeonsset_rv>0?tr.pigeonsset_rv:null;
+      const rvReal=tr.pigeonsset_rv>0?tr.pigeonsset_rv:null;
+      const rvCalc=tr.pigeonsset_rv_calc>0?tr.pigeonsset_rv_calc:null;
+      const rvN=rvReal!=null?rvReal:rvCalc;
       const reggrN=tr.pigeonsset_reggr>0?tr.pigeonsset_reggr:null;
       const regN=tr.pigeonsset_reg>0?tr.pigeonsset_reg:null;
       return `
@@ -6284,7 +6287,7 @@ function renderTripsList(){
           <td>${shortTripDate(tr.tripdate)}</td>
           <td>${escH(tr.location||'?')}</td>
           <td style="text-align:right">${km}</td>
-          <td style="text-align:right;color:var(--text3)">${rvN!=null?rvN+' Tb.':'—'}</td>
+          <td style="text-align:right;color:var(--text3)" title="${rvN==null?'':(rvReal!=null?'Aus dem Import':'Berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene)')}">${rvN!=null?rvN+' Tb.'+(rvReal==null?' *':''):'—'}</td>
           <td style="text-align:right;color:var(--text3)">${reggrN!=null?reggrN+' Tb.':'—'}</td>
           <td style="text-align:right;color:var(--text3)">${regN!=null?regN+' Tb.':'—'}</td>
           <td style="text-align:center;white-space:nowrap">${breeders.length>1?`<span onclick="event.stopPropagation();toggleTripBreeders('${tr.tripid}')" style="cursor:pointer;color:var(--text3)" title="${breeders.length} Züchter anzeigen">🧑‍🌾 ${breeders.length} ${breedersOpen?'▴':'▾'}</span>`:''}</td>
@@ -6317,7 +6320,9 @@ function renderTripsList(){
     </div>`;
   }).join('');
 
-  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" title="Für alle bereits importierten Flüge ohne eigene RV-Liste (zu wenig Tauben) die RV-Rangliste selbst berechnen und speichern — einmalig nötig für Altbestand, neue Importe machen das automatisch." onclick="runBackfillRVFallbackAll(event)">🧮 RV-Ranglisten nachrechnen</button><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div></div>'+(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
+  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" title="Für alle bereits importierten Flüge ohne eigene RV-Liste (zu wenig Tauben) die RV-Rangliste selbst berechnen und speichern — einmalig nötig für Altbestand, neue Importe machen das automatisch." onclick="runBackfillRVFallbackAll(event)">🧮 RV-Ranglisten nachrechnen</button><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div></div>'
+    +(anyComputedRV?'<div style="font-size:11px;color:var(--text3);margin:-8px 0 12px">* RV-Taubenzahl selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene).</div>':'')
+    +(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
 }
 function toggleTripSeason(yr){ const k=String(yr); if(RT.collapsedSeasons.has(k)) RT.collapsedSeasons.delete(k); else RT.collapsedSeasons.add(k); render(); }
 function toggleTripBreeders(tripid){ if(RT.expandedTripBreeders.has(tripid)) RT.expandedTripBreeders.delete(tripid); else RT.expandedTripBreeders.add(tripid); render(); }
