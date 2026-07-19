@@ -6284,7 +6284,8 @@ function renderTripsList(){
       const km=tr.averagedistance3!=null?Math.round(Number(tr.averagedistance3))+' km':'—';
       const rvReal=tr.pigeonsset_rv>0?tr.pigeonsset_rv:null;
       const rvCalc=tr.pigeonsset_rv_calc>0?tr.pigeonsset_rv_calc:null;
-      const rvN=rvReal!=null?rvReal:rvCalc;
+      const rvStd=(rvReal==null && rvCalc==null)?standardRVGesetztForTrip(tr.tripid):null;
+      const rvN=rvReal!=null?rvReal:(rvCalc!=null?rvCalc:rvStd);
       const reggrN=tr.pigeonsset_reggr>0?tr.pigeonsset_reggr:null;
       const regN=tr.pigeonsset_reg>0?tr.pigeonsset_reg:null;
       return `
@@ -6293,7 +6294,7 @@ function renderTripsList(){
           <td>${shortTripDate(tr.tripdate)}</td>
           <td>${escH(tr.location||'?')}</td>
           <td style="text-align:right">${km}</td>
-          <td style="text-align:right;color:var(--text3)" title="${rvN==null?'':(rvReal!=null?'Aus dem Import':'Berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene)')}">${rvN!=null?rvN+' Tb.'+(rvReal==null?' *':''):'—'}</td>
+          <td style="text-align:right;color:var(--text3)" title="${rvN==null?'':(rvReal!=null?'Aus dem Import':(rvCalc!=null?'Berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene)':'Gemeinsamer Auflass mehrerer RVs — gezeigt wird die Taubenzahl deiner markierten Standard-RV, siehe RV-Verwaltung'))}">${rvN!=null?rvN+' Tb.'+(rvReal==null?' *':''):'—'}</td>
           <td style="text-align:right;color:var(--text3)">${reggrN!=null?reggrN+' Tb.':'—'}</td>
           <td style="text-align:right;color:var(--text3)">${regN!=null?regN+' Tb.':'—'}</td>
           <td style="text-align:center;white-space:nowrap">${breeders.length>1?`<span onclick="event.stopPropagation();toggleTripBreeders('${tr.tripid}')" style="cursor:pointer;color:var(--text3)" title="${breeders.length} Züchter anzeigen">🧑‍🌾 ${breeders.length} ${breedersOpen?'▴':'▾'}</span>`:''}</td>
@@ -6709,6 +6710,20 @@ async function deleteRVFromServer(id){
   catch(e){ console.warn('RV konnte nicht auf dem Server gelöscht werden:', e.message); }
 }
 function getRV(id){ return RVEN.find(v=>v.id===id) || null; }
+// Die vom Nutzer als "seine eigene"/Standard-RV markierte RV (rein lokale
+// Anzeige-Einstellung, kein Server-Feld nötig) — wird in der Flugliste genutzt,
+// um bei Flügen mit gemeinsamem Auflass mehrerer RVs trotzdem eine sinnvolle
+// Taubenzahl statt "—" anzuzeigen (siehe standardRVGesetztForTrip()).
+function getStandardRVId(){
+  try{ const id=localStorage.getItem('pigeonStandardRVId'); return (id && getRV(id)) ? id : null; }catch(e){ return null; }
+}
+function setStandardRV(id){
+  const current=getStandardRVId();
+  try{ localStorage.setItem('pigeonStandardRVId', current===id ? '' : (id||'')); }catch(e){}
+  const panel=document.getElementById('verein-manager-panel');
+  if(panel) renderVereinManagerInto(panel);
+  render();
+}
 // Erkennt RV automatisch aus dem EDV-Kraus-Dateinamen (Format "L" + Reg(3) +
 // RV(2) + Verein(2), z.B. "L4050515...009" = Reg 405, RV 05, Verein 15).
 // Reg+RV zusammen ergeben den internen Code (5-stellig) — so bleiben RVen
@@ -6734,6 +6749,19 @@ function rvForNumber(breedernumber){
   if(!breedernumber) return null;
   const s=String(breedernumber);
   return RVEN.find(v=>v.code && s.indexOf(v.code)===0) || null;
+}
+// Liefert die Anzahl gesetzter Tauben der als Standard markierten RV für einen
+// Flug mit mehreren beteiligten RVs (gemeinsamer Auflass) — für genau diese
+// Flüge kann trips.pigeonsset_rv_calc nicht eindeutig gefüllt werden (siehe
+// backfillRVFallback), daher hier live aus dem bereits geladenen ZT.rows-Cache
+// berechnet (keine zusätzliche Serveranfrage nötig). Gibt null zurück, wenn
+// keine Standard-RV markiert ist, die Daten noch nicht geladen sind oder diese
+// RV bei diesem Flug gar nicht vertreten ist.
+function standardRVGesetztForTrip(tripid){
+  const stdId = getStandardRVId();
+  if(!stdId || !ZT.loaded) return null;
+  const count = ZT.rows.filter(r=>r.tripid===tripid && (rvForNumber(r.breedernumber)||{}).id===stdId).length;
+  return count || null;
 }
 
 // Manche Flüge (z.B. weil die Taubenzahl auf RV-Ebene zu gering war) haben in den
@@ -6868,21 +6896,27 @@ function showVereinManager(){
 }
 function closeVereinManager(){ const el=document.querySelector('.verein-manager-overlay'); if(el) el.remove(); }
 function renderVereinManagerInto(panel){
-  const rows = RVEN.map(v=>'<tr>'
+  const stdId = getStandardRVId();
+  const rows = RVEN.map(v=>{
+    const isStd = stdId===v.id;
+    return '<tr>'
+    +'<td style="text-align:center;cursor:pointer;font-size:15px" onclick="setStandardRV('+jsAttr(v.id)+')" title="'+(isStd?'Als Standard-RV entfernen':'Als deine Standard-RV markieren')+'">'+(isStd?'⭐':'☆')+'</td>'
     +'<td>'+escH(v.label)+(v.auto?' <span style="color:var(--text3);font-size:11px">· automatisch erkannt</span>':'')+'</td>'
     +'<td style="font-family:monospace;font-size:12px">'+escH(v.code)+'</td>'
     +'<td style="text-align:right;white-space:nowrap">'
       +'<span onclick="editVereinLabel('+jsAttr(v.id)+')" style="cursor:pointer;color:var(--text2);font-size:12px;margin-right:10px">✏️ Umbenennen</span>'
       +'<span onclick="deleteVerein('+jsAttr(v.id)+')" style="cursor:pointer;color:#d9534f;font-size:12px">Entfernen</span>'
     +'</td>'
-    +'</tr>').join('');
+    +'</tr>';
+  }).join('');
   panel.innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
       +'<div class="card-title" style="margin:0">🏛️ RVen (Reisevereinigungen)</div>'
       +'<span onclick="closeVereinManager()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>'
     +'</div>'
     +'<div style="font-size:12px;color:var(--text3);margin:6px 0 14px">Wird automatisch aus dem Dateinamen erkannt (Format "L" + Regionalverband + RV + Verein, z.B. "L4050515...009" = Reg 405, RV 05). Vereins- und Züchternummer werden dabei automatisch im Hintergrund eindeutig gehalten, ohne dass du einzelne Vereine anlegen musst. Beim Import kannst du das bei Bedarf per Dropdown überschreiben. Die Liste wird serverseitig gespeichert und ist damit auf allen Geräten sichtbar.</div>'
-    +(RVEN.length ? '<div class="table-wrap" style="margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Bezeichnung</th><th>RV-Code</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +(RVEN.length ? '<div class="table-wrap" style="margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th></th><th>Bezeichnung</th><th>RV-Code</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+      +'<div style="font-size:11px;color:var(--text3);margin:-6px 0 12px">⭐ = deine Standard-RV. Bei Flügen mit gemeinsamem Auflass mehrerer RVs zeigt die Flugliste dann die Taubenzahl dieser RV statt "—".</div>'
       +'<div style="text-align:right;margin-bottom:16px"><span onclick="resetAllVereine()" style="cursor:pointer;color:#d9534f;font-size:11px">🗑️ Alle RVen zurücksetzen</span></div>'
       : '<div style="color:var(--text3);font-size:13px;margin-bottom:16px">Noch keine RV angelegt — wird beim nächsten Import automatisch erkannt, oder hier manuell.</div>')
     +'<div style="border-top:1px solid var(--border);padding-top:14px">'
