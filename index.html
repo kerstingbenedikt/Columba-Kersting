@@ -5631,15 +5631,14 @@ function selectPrintPlacements(list){
 }
 
 // Kompakte Top-Platzierungszeilen für die Stammbaum-Box (max. 1 Zeile pro Flug), z.B.
-// "1. von 1830 Tauben (Reg) · 386.0 km · zugl. 6. RegGr" — Kategorie und ggf. eine
-// Dopplung (Platzierung in einer weiteren Liste desselben Flugs) werden mit ausgewiesen.
+// "1. 450km 2356Tb. (Reg) · zugl. 6. RegGr" — Kategorie und ggf. eine Dopplung
+// (Platzierung in einer weiteren Liste desselben Flugs) werden mit ausgewiesen.
 function pigeonTopPlacementsCompactLines(pigeonid){
   const rows = PT_CACHE[pigeonid];
   if(!rows || !rows.length) return [];
   const full = getTopPlacementsDeduped(rows, 50);  // großzügiger Pool für die Auswahl
   return selectPrintPlacements(full).map(t=>
-    `${t.platz}. von ${t.gesetzt??'—'} Tauben${t.kategorie?' ('+t.kategorie+')':''}`+
-    `${t.distance!=null?' · '+t.distance.toFixed(1)+' km':''}`+
+    `${t.platz}. ${t.distance!=null?Math.round(t.distance)+'km ':''}${t.gesetzt!=null?t.gesetzt+'Tb. ':''}${t.kategorie?'('+t.kategorie+')':''}`.trim()+
     `${t.duplicates?' · zugl. '+t.duplicates.map(d=>d.platz+'. '+d.kategorie).join(', '):''}`
   );
 }
