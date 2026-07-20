@@ -6602,7 +6602,11 @@ async function handleTripsFiles(fileList){
         // parseKrausRows]. Fällt bei Excel-Importen (kein vz) auf die
         // laufende Nummer aus dem Dateinamen zurück.
         const vz = parsed.vz || lfd;
-        const num = vz!=null ? ((rv?rv.code:'') + vz) : null;
+        const rawNum = vz!=null ? ((rv?rv.code:'') + vz) : null;
+        // Direkt beim Import vereinheitlichen (siehe canonicalizeZuechternummer) —
+        // verhindert, dass künftige Importe erneut uneinheitlich formatierte
+        // Vereins-/Züchternummern (z.B. 3-stelliger statt 2-stelliger Verein) anlegen.
+        const num = rawNum!=null ? canonicalizeZuechternummer(rawNum) : null;
         let canonicalName = parsed.breedername;
         if(num){
           if(nameByNumber[num]) canonicalName = nameByNumber[num];
@@ -6876,10 +6880,39 @@ async function runBackfillRVFallbackAll(ev){
   }catch(e){ alert('Fehler: '+e.message); }
   finally{ if(btn){ btn.disabled=false; btn.textContent='🧮 RV-Ranglisten nachrechnen'; } render(); }
 }
-function zuechterFullNumber(breedernumber){ return breedernumber!=null && breedernumber!=='' ? String(breedernumber) : null; }
+// Vereinheitlicht eine Züchternummer auf das feste Schema
+// RV-Code(5=Reg 3+RV 2) + Verein(2-stellig) + Züchternummer(3-stellig),
+// z.B. "40505"+"15"+"009" = "4050515009". Ältere Importe legen den
+// Vereins-/Züchter-Block teils uneinheitlich ab (Verein 3-stellig mit
+// führender 0 statt 2-stellig, z.B. "015" statt "15", oder Züchternummer
+// nur 2-stellig statt 3-stellig) — dadurch landet ein und derselbe Züchter
+// unter mehreren verschiedenen Nummern in der DB (siehe Züchterübersicht:
+// "KERSTING-Tauben.de" mehrfach mit 10- bzw. 11-stelligen Varianten).
+// Wird sowohl live bei Anzeige/Gruppierung als auch beim Bereinigen
+// (siehe cleanupZuechterNumbers) genutzt, damit beides konsistent bleibt.
+function canonicalizeZuechternummer(breedernumber){
+  if(breedernumber==null || breedernumber==='') return breedernumber;
+  const s=String(breedernumber).trim();
+  const rv=rvForNumber(s);
+  if(!rv) return s; // keine bekannte RV (Reg+RV-Code) — nicht sicher zerlegbar, unverändert lassen
+  const rest=s.slice(rv.code.length);
+  if(/^\d{5}$/.test(rest)) return s; // bereits korrekt: 2(Verein)+3(Züchter)
+  if(/^\d{6}$/.test(rest)){
+    // Verein 3-stellig mit führender 0 (z.B. "015") + Züchter 3-stellig — die
+    // führende 0 des Vereins-Blocks entfernen, Züchternummer bleibt 3-stellig.
+    const verein=rest.slice(0,3).replace(/^0/,'').padStart(2,'0');
+    return rv.code+verein+rest.slice(3);
+  }
+  if(/^\d{4}$/.test(rest)){
+    // Verein 2-stellig + Züchter nur 2-stellig -> auf 3 Stellen auffüllen
+    return rv.code+rest.slice(0,2)+rest.slice(2).padStart(3,'0');
+  }
+  return s; // unbekanntes Format — lieber unverändert lassen als falsch umbauen
+}
+function zuechterFullNumber(breedernumber){ return breedernumber!=null && breedernumber!=='' ? canonicalizeZuechternummer(breedernumber) : null; }
 function zuechterNumberBreakdown(breedernumber){
   if(breedernumber==null || breedernumber==='') return null;
-  const s=String(breedernumber);
+  const s=canonicalizeZuechternummer(breedernumber);
   const v=rvForNumber(s);
   // Vereins-/Züchternummer bewusst nicht weiter aufgeschlüsselt (nur intern
   // zur Kollisionsvermeidung genutzt) — der Nutzer will nur die RV sehen.
@@ -6891,10 +6924,13 @@ function zuechterNumberBreakdown(breedernumber){
 // kann je nach Export leicht unterschiedlich geschrieben sein (z.B. mit/ohne
 // Bindestrich oder Domain-Zusatz) und würde beim reinen Namensabgleich
 // fälschlich als mehrere verschiedene Züchter auftauchen. Gruppierung
-// erfolgt daher bevorzugt über breedernumber, nur ohne Nummer wird auf den
-// Namen zurückgefallen.
+// erfolgt daher bevorzugt über die vereinheitlichte (canonicalizeZuechternummer)
+// Züchternummer, damit uneinheitlich abgelegte Varianten (siehe dort) in der
+// Übersicht als EIN Züchter erscheinen; nur ohne Nummer wird auf den Namen
+// zurückgefallen.
 function zuechterKey(r){
-  return (r.breedernumber!=null && r.breedernumber!=='') ? 'nr:'+r.breedernumber : 'name:'+(r.breedername||'Unbekannt');
+  const num=canonicalizeZuechternummer(r.breedernumber);
+  return (num!=null && num!=='') ? 'nr:'+num : 'name:'+(r.breedername||'Unbekannt');
 }
 function zuechterLabel(name, breedernumber){
   const full = zuechterFullNumber(breedernumber);
@@ -7513,7 +7549,7 @@ async function runTripsImport(){
 // unabhängig von den (Reise-bezogenen) prices1-4-Feldern auf trips —
 // die stammen nur vom jeweils ERSTEN importierten Züchter einer Reise
 // und sind daher bei mehreren Züchtern pro Reise nicht aussagekräftig.
-let ZT = { rows:[], loaded:false, selected:null, vereinFilter:undefined };
+let ZT = { rows:[], loaded:false, selected:null, vereinFilter:undefined, yearFilter:null };
 
 async function loadZuechterData(){
   const FULL='breedername,breedernumber,tripid,pigeonid,ringnumber,sex,speed,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat,ass_a,ass_b,ass_c,ass_d';
@@ -7535,21 +7571,32 @@ async function loadZuechterData(){
   ZT.loaded = true;
 }
 
-function zuechterAgg(){
+// yearFilter (optional): nur Ergebniszeilen aus Reisen mit diesem Jahrgang
+// (trip.vintage) einbeziehen — genutzt vom Jahr-Filter in der Züchterübersicht.
+// Ohne Angabe (Default) über alle Jahre, wie bisher — so bleibt das Verhalten
+// für Admin-Aktionen (Umbenennen/Löschen/RV-Zuordnen), die immer auf dem
+// GESAMTEN Datenbestand eines Züchters arbeiten müssen, unverändert.
+function zuechterAgg(yearFilter){
   const tripById={}; RT.trips.forEach(t=>tripById[t.tripid]=t);
   const g={};
   ZT.rows.forEach(r=>{
+    const trip=tripById[r.tripid];
+    if(yearFilter!=null && String((trip||{}).vintage)!==String(yearFilter)) return;
     const key=zuechterKey(r);
-    if(!g[key]) g[key]={key, name:r.breedername||'Unbekannt', number:r.breedernumber||null, total:0, rvSet:0,rvWon:0, reggrSet:0,reggrWon:0, regSet:0,regWon:0, trips:new Set(), bestAS:0};
+    if(!g[key]) g[key]={key, name:r.breedername||'Unbekannt', number:r.breedernumber||null, rawNumbers:new Set(), total:0, rvSet:0,rvWon:0, reggrSet:0,reggrWon:0, regSet:0,regWon:0, trips:new Set(), bestAS:0};
     const b=g[key];
     // Falls für dieselbe Züchternummer mehrere Schreibweisen in der DB stehen
     // (ältere Importe vor dieser Normalisierung), den längsten/vollständigsten
     // Namen als Anzeige-Namen verwenden.
     if(r.breedername && r.breedername.length>b.name.length) b.name=r.breedername;
     if(!b.number && r.breedernumber) b.number=r.breedernumber;
+    // Alle tatsächlich in der DB vorkommenden Rohvarianten dieser Züchternummer
+    // merken (z.B. "4050515009" UND "40505015009") — nötig, damit Umbenennen/
+    // Löschen/RV-Zuordnen ALLE Varianten desselben (jetzt zusammengeführten)
+    // Züchters trifft und nicht nur die zuerst gesehene.
+    if(r.breedernumber!=null && r.breedernumber!=='') b.rawNumbers.add(String(r.breedernumber));
     b.total++;
     if(r.tripid) b.trips.add(r.tripid);
-    const trip=tripById[r.tripid];
     // Preisausbeute nur über Reisen berechnen, bei denen die jeweilige Liste (RV/RegGr/Reg)
     // überhaupt ausgewertet wurde (pigeonsset_xx>0) — sonst zählt "keine Liste erstellt" fälschlich als 0%.
     if(trip){
@@ -7578,7 +7625,9 @@ async function openTripFromZuechter(tripid,breederName){
 function renderZuechter(){
   if(!ZT.loaded){ loadZuechterData().then(render); return '<div class="loading"><div class="spinner"></div>'+t('zt_loading')+'</div>'; }
   if(ZT.selected) return renderZuechterDetail(ZT.selected);
-  let list=zuechterAgg();
+  // Verfügbare Jahrgänge aus den geladenen Reisen ableiten (neueste zuerst).
+  const availableYears=[...new Set(RT.trips.map(tr=>tr.vintage).filter(Boolean))].sort((a,b)=>b-a);
+  let list=zuechterAgg(ZT.yearFilter||null);
   // Filter nach RV — sinnvoll, sobald aus mehreren Reisevereinigungen
   // importiert wurde, damit die Liste vergleichbar bleibt.
   if(ZT.vereinFilter==='__none__'){
@@ -7587,13 +7636,18 @@ function renderZuechter(){
     const v=getRV(ZT.vereinFilter), code=v?v.code:null;
     list = list.filter(b=>code && b.number && String(b.number).indexOf(code)===0);
   }
-  const filterBar = RVEN.length ? `<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+  const filterBar = RVEN.length ? `<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
       <span style="font-size:11px;color:var(--text3)">RV:</span>
       <span class="tag clickable" style="${!ZT.vereinFilter?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.vereinFilter=null;render()">Alle</span>
       ${RVEN.map(v=>`<span class="tag clickable" style="${ZT.vereinFilter===v.id?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.vereinFilter=${jsAttr(v.id)};render()">${escH(v.label)}</span>`).join('')}
       <span class="tag clickable" style="${ZT.vereinFilter==='__none__'?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.vereinFilter='__none__';render()">Nicht zugeordnet</span>
     </div>` : '';
-  if(list.length===0) return `<div>${filterBar}<div class="card" style="text-align:center;padding:48px;color:var(--text3)">${t('zt_empty1')}<br>${t('zt_empty2').replace('{tab}',t('nav_racing'))}</div></div>`;
+  const yearBar = availableYears.length>1 ? `<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <span style="font-size:11px;color:var(--text3)">Jahr:</span>
+      <span class="tag clickable" style="${!ZT.yearFilter?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.yearFilter=null;render()">Alle</span>
+      ${availableYears.map(y=>`<span class="tag clickable" style="${String(ZT.yearFilter)===String(y)?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.yearFilter=${jsAttr(y)};render()">${escH(String(y))}</span>`).join('')}
+    </div>` : '';
+  if(list.length===0) return `<div>${filterBar}${yearBar}<div class="card" style="text-align:center;padding:48px;color:var(--text3)">${t('zt_empty1')}<br>${t('zt_empty2').replace('{tab}',t('nav_racing'))}</div></div>`;
   const rows=list.map(b=>`
     <tr data-key="${escH(b.key)}" onclick="selectZuechter(this.dataset.key)" style="cursor:pointer">
       <td style="font-weight:500">${escH(b.name)}</td>
@@ -7607,14 +7661,41 @@ function renderZuechter(){
     </tr>`).join('');
   return `<div><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
       <div class="serif" style="font-size:20px">🧑‍🌾 ${list.length} ${t('breeders_word')}</div>
-      <button class="btn btn-outline btn-sm" onclick="showVereinManager()">🏛️ RVen verwalten</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="cleanupZuechterNumbers()">🔢 Nummern bereinigen</button>
+        <button class="btn btn-outline btn-sm" onclick="showVereinManager()">🏛️ RVen verwalten</button>
+      </div>
     </div>
-    ${filterBar}
+    ${filterBar}${yearBar}
     <div class="card"><div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr><th>${t('th_breeder')}</th><th>${t('col_number')}</th><th style="text-align:center">${t('trips_word')}</th><th style="text-align:center">${t('col_pigeons_total')}</th>
         <th style="text-align:center">${t('col_avg_rv')}</th><th style="text-align:center">${t('col_avg_reggr')}</th><th style="text-align:center">${t('col_avg_reg')}</th>
         <th style="text-align:center">${t('col_best_as')}</th></tr></thead>
       <tbody>${rows}</tbody></table></div></div></div>`;
+}
+// Schreibt uneinheitlich formatierte Vereins-/Züchternummern (siehe
+// canonicalizeZuechternummer) dauerhaft in der DB auf das einheitliche Format
+// um — führt dadurch bisher getrennt geführte Schreibweisen desselben
+// Züchters zu einem Eintrag zusammen. Wirkt auf ALLE betroffenen Datensätze,
+// unabhängig vom aktuell aktiven RV-/Jahr-Filter.
+async function cleanupZuechterNumbers(){
+  if(!ZT.loaded) await loadZuechterData();
+  const distinct=[...new Set(ZT.rows.map(r=>r.breedernumber).filter(n=>n!=null && n!==''))];
+  const changes=distinct.map(raw=>({raw, canonical:canonicalizeZuechternummer(raw)})).filter(c=>c.canonical!==c.raw);
+  if(!changes.length){ alert('Alle Züchternummern sind bereits einheitlich formatiert (Reg + RV + 2-stelliger Verein + 3-stellige Züchternummer) — nichts zu bereinigen.'); return; }
+  const preview=changes.map(c=>c.raw+'  →  '+c.canonical).join('\n');
+  if(!confirm('Folgende Züchternummern werden vereinheitlicht:\n\n'+preview+'\n\nBisher getrennt geführte Schreibweisen desselben Züchters werden dadurch zu einem Eintrag zusammengeführt. Fortfahren?')) return;
+  let ok=0; const failed=[];
+  for(const c of changes){
+    try{ await apiPatchBy('pigeontrips', 'breedernumber=eq.'+encodeURIComponent(c.raw), {breedernumber:c.canonical}); ok++; }
+    catch(e){ failed.push(c.raw+': '+e.message); }
+  }
+  clearPTCache();
+  ZT.loaded=false; ZT.selected=null;
+  render();
+  let msg=ok+' von '+changes.length+' Züchternummern-Varianten vereinheitlicht.';
+  if(failed.length) msg+='\n\nFehler bei:\n'+failed.join('\n');
+  alert(msg);
 }
 
 async function assignVereinToBreeder(key){
@@ -7629,7 +7710,9 @@ async function assignVereinToBreeder(key){
   const full = v.code + b.number;
   if(!confirm('Züchternummer für "'+b.name+'" von "'+b.number+'" auf "'+full+'" ('+v.label+') setzen?\n\nBetrifft '+b.total+' Datensätze.')) return;
   try{
-    await apiPatchBy('pigeontrips', 'breedernumber=eq.'+encodeURIComponent(b.number)+'&breedername=eq.'+encodeURIComponent(b.name), {breedernumber:full});
+    const nums=[...b.rawNumbers].length?[...b.rawNumbers]:[b.number];
+    const numFilter='breedernumber=in.('+nums.map(n=>encodeURIComponent(n)).join(',')+')';
+    await apiPatchBy('pigeontrips', numFilter+'&breedername=eq.'+encodeURIComponent(b.name), {breedernumber:full});
     ZT.loaded=false; ZT.selected=null;
     clearPTCache();
     render();
@@ -7646,8 +7729,9 @@ async function renameZuechter(key){
     // Über die Züchternummer aktualisieren (falls vorhanden) statt über den
     // alten Namen — erwischt so auch Datensätze mit abweichender
     // Namens-Schreibweise derselben Züchternummer mit.
-    const updated = b.number
-      ? await apiPatchBy('pigeontrips', 'breedernumber=eq.'+encodeURIComponent(b.number), {breedername:trimmed})
+    const nums=[...b.rawNumbers];
+    const updated = nums.length
+      ? await apiPatchBy('pigeontrips', 'breedernumber=in.('+nums.map(n=>encodeURIComponent(n)).join(',')+')', {breedername:trimmed})
       : await apiPatchBy('pigeontrips', 'breedername=eq.'+encodeURIComponent(b.name), {breedername:trimmed});
     if(Array.isArray(updated) && updated.length===0){
       alert('Es wurden 0 Datensätze umbenannt, obwohl '+b.total+' erwartet wurden.\n\nVermutlich verhindert eine Datenbank-Berechtigung (Row Level Security) das Ändern in der Tabelle "pigeontrips". Bitte prüfe die RLS-Policy für UPDATE auf dieser Tabelle in Supabase, oder wende dich an den Admin des Projekts.');
@@ -7675,8 +7759,9 @@ async function deleteZuechterData(key){
     // Über die Züchternummer löschen (falls vorhanden) statt über den Namen —
     // erwischt so auch ältere Datensätze mit abweichender Namens-Schreibweise
     // derselben Züchternummer zuverlässig mit.
-    const deleted = b.number
-      ? await apiDeleteBy('pigeontrips', 'breedernumber=eq.'+encodeURIComponent(b.number))
+    const nums=[...b.rawNumbers];
+    const deleted = nums.length
+      ? await apiDeleteBy('pigeontrips', 'breedernumber=in.('+nums.map(n=>encodeURIComponent(n)).join(',')+')')
       : await apiDeleteBy('pigeontrips', 'breedername=eq.'+encodeURIComponent(b.name));
     if(deleted.length===0){
       // Löschen "erfolgreich" laut HTTP-Status, aber 0 betroffene Zeilen —
