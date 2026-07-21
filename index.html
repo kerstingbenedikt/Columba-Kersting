@@ -5556,7 +5556,7 @@ function getTop10Placements(rows){
     CATS.forEach(([field,label,gesetztField])=>{
       const platz=rvField(r,field);
       if(platz!=null && platz>0 && platz<=10){
-        out.push({platz, kategorie:label+(field==='prize_rv'&&r.prize_rv==null?' (berechnet)':''), tripnumber:r.tripnumber, location:r.location,
+        out.push({platz, kategorie:label+(field==='prize_rv'&&r.prize_rv==null?' *':''), tripnumber:r.tripnumber, location:r.location,
           tripdate:r.tripdate, vintage:r.vintage,
           gesetzt: field==='prize_rv' ? rvGesetzt(r) : (rvField(r,gesetztField)!=null?rvField(r,gesetztField):r.pigeonsset),
           distance:r.distance});
@@ -5583,7 +5583,7 @@ function getTopPlacementsDeduped(rows, n){
     CATS.forEach(([field,gesetztField,label])=>{
       const platz=rvField(r,field);
       if(platz!=null && platz>0){
-        const kategorie = (field==='prize_rv' && r.prize_rv==null) ? label+' (berechnet)' : label;
+        const kategorie = (field==='prize_rv' && r.prize_rv==null) ? label+' *' : label;
         candidates.push({platz, kategorie, gesetzt: field==='prize_rv' ? rvGesetzt(r) : (rvField(r,gesetztField)!=null?rvField(r,gesetztField):r.pigeonsset)});
       }
     });
@@ -5922,13 +5922,17 @@ function renderPigeonTripsSection(p){
     const yr=S.pigeonTripYear;
     const rows=cached.filter(r=>String(r.vintage||'—')===String(yr))
       .sort((a,b)=>String(a.tripdate||'').localeCompare(String(b.tripdate||'')));
+    let anyCalcRV=false;
     const trRows=rows.map(r=>{
       const asVals=[r.as_rv,r.as_reg,r.as_nat].filter(v=>v!=null && v!=='');
       const bestAS=asVals.length?Math.max(...asVals.map(Number)):null;
+      const rvVal=rvField(r,'prize_rv');
+      const rvCalc=rvVal!=null && r.prize_rv==null;
+      if(rvCalc) anyCalcRV=true;
       return `<tr>
         <td style="font-size:12px">${escH(r.tripdate||'—')}</td>
         <td style="font-size:12px">${escH(r.location||'—')}</td>
-        <td style="font-size:12px;text-align:center">${r.prize_rv??'—'}</td>
+        <td style="font-size:12px;text-align:center">${rvVal??'—'}${rvCalc?' *':''}</td>
         <td style="font-size:12px;text-align:center">${r.prize_reggr??'—'}</td>
         <td style="font-size:12px;text-align:center">${r.prize_reg??'—'}</td>
         <td style="font-size:12px;text-align:center;color:var(--green)">${bestAS!=null?bestAS.toFixed(2):'—'}</td>
@@ -5945,7 +5949,8 @@ function renderPigeonTripsSection(p){
           <th style="font-size:11px;text-align:center">Pr.Reg</th><th style="font-size:11px;text-align:center">AS</th>
         </tr></thead>
         <tbody>${trRows}</tbody>
-      </table></div>`;
+      </table></div>
+      ${anyCalcRV?'<div style="font-size:11px;color:var(--text3);margin-top:8px">* RV-Platz selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (unter 200 gesetzte Tauben).</div>':''}`;
   }
 
   const years=groupPigeonTripsByYear(cached);
@@ -5977,7 +5982,8 @@ function renderPigeonTripsSection(p){
         <td style="font-size:12px;text-align:center">${t.gesetzt??'—'}</td>
         <td style="font-size:12px;text-align:center">${t.distance!=null?t.distance.toFixed(1)+' km':'—'}</td>
       </tr>`).join('')}</tbody>
-    </table></div>`:''}`;
+    </table></div>
+    ${top10.some(t=>t.kategorie.endsWith(' *'))?'<div style="font-size:11px;color:var(--text3);margin-top:8px">* RV-Platz selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (unter 200 gesetzte Tauben).</div>':''}`:''}`;
 }
 
 // ── Datensicherung: Logik ─────────────────────────────────────────
