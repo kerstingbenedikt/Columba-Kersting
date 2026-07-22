@@ -2561,6 +2561,7 @@ function renderPedigreeInner(root, opts, embedded){
             </label>
             <button class="btn btn-outline btn-sm" onclick="openPedigreePrintMenu(event,'${root.pigeonid}',4)">🖨 4 ${t('gens')}</button>
             <button class="btn btn-outline btn-sm" onclick="openPedigreePrintMenu(event,'${root.pigeonid}',5)">🖨 5 ${t('gens')}</button>
+            <button class="btn btn-outline btn-sm" onclick="openFamilyPedigreePrintMenu(event,'${root.pigeonid}',4)" title="Proband klein links in der Mitte, Vater/Mutter je 2/5, 4 Ahnengenerationen rechts">🖨 Familienstil</button>
             ${!embedded?`<button class="btn btn-outline btn-sm" onclick="toggleBreederProfileEditor()">🧑‍🌾 ${t('breeder_data_btn')}</button>`:''}
           </div>
         </div>
@@ -2767,6 +2768,71 @@ async function buildPedigreeTreeData(pid, gens){
   return { root, gens, tree, rows, landscape, pageWmm, pageHmm, totalConn, datWmm, conWmm, breederProf, filenameBase, _ring, _sex, _father, _mother };
 }
 
+// Gemeinsame Box-Rendering-Funktion für alle Stammbaum-Exportformate (Fächer-Stil
+// und Familien-Stil) — Infomenge abhängig von Generation und verfügbarem Platz.
+function pedigreeBoxHtml(p, gen, ctx){
+  const { withPhoto, landscape, _ring, _sex, _esc } = ctx;
+  if(!p) return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:7pt">–</div>`;
+  const sx   = _sex(p);
+  const col  = sx==='M'?'#3a7bd5':sx==='F'?'#8e44ad':'#888';
+  const tags = [p.color, p.strain, p.breeder?'Z: '+p.breeder:null].filter(Boolean);
+  const info = (p.info||'').trim();
+  const rn   = _ring(p);
+
+  const szRing = gen===0?'8pt':gen===1?'7.5pt':gen===2?'7pt':gen===3?'6.5pt':'6pt';
+  const szName = gen===0?'9pt':gen===1?'8pt':gen===2?'7.5pt':'6.5pt';
+  const szTag  = gen===0?'7pt':gen===1?'6.5pt':'6pt';
+  const szInfo = gen===0?'7.5pt':gen===1?'7pt':gen===2?'6.5pt':'6pt';
+  const showTags = gen<=3;
+  const showInfo = gen<=2 && info;
+  const showName = gen<=3 || !landscape;
+
+  const travelMaxYears = gen===0?3:gen===1?2:1;
+  const travelLines = (gen<=2 && p.pigeonid) ? pigeonTravelCompactLines(p.pigeonid, travelMaxYears) : [];
+  const szTravel = gen===0?'7pt':gen===1?'6.5pt':'6pt';
+
+  const topLines = (gen<=1 && p.pigeonid) ? pigeonTopPlacementsCompactLines(p.pigeonid) : [];
+  const szTop = gen===0?'7pt':'6.5pt';
+
+  const photoSize = gen===0?'15mm':gen===1?'11mm':'8mm';
+  const photoHtml = (withPhoto && p.photo)
+    ? `<img src="${p.photo}" style="width:${photoSize};height:${photoSize};object-fit:cover;border-radius:1mm;border:.2mm solid #ddd;float:left;margin:0 2mm 1mm 0;background:#fff">`
+    : '';
+
+  return `<div style="border-left:2mm solid ${col};padding:1.5mm 2mm;background:#fafafa;border-radius:.8mm;width:100%;height:100%;min-height:0;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column">
+    ${photoHtml}
+    ${p._virtual?`<div style="font-size:6.5pt;color:#666;background:#e8e8e8;display:inline-block;padding:.3mm 1.5mm;border-radius:2mm;flex-shrink:0">🧬 Prognose</div>`:`<div style="font-family:monospace;font-size:${szRing};font-weight:700;color:#1a6b1a;white-space:normal;word-break:break-word;line-height:1.2;flex-shrink:0">
+      ${sx==='M'?'♂':sx==='F'?'♀':'?'} ${_esc(rn)}</div>`}
+    ${p.name&&showName?`<div style="font-size:${szName};font-weight:700;white-space:${p._virtual?'normal':'nowrap'};overflow:hidden;text-overflow:ellipsis;margin-top:.3mm;flex-shrink:0">${_esc(p.name)}</div>`:''}
+    ${showTags&&tags.length?`<div style="font-size:${szTag};color:#666;margin-top:.4mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">${tags.map(_esc).join(' · ')}</div>`:''}
+    ${travelLines.length?`<div style="font-size:${szTravel};color:#1a6b1a;margin-top:.6mm;border-top:.2mm solid #ddd;padding-top:.4mm;line-height:1.35;flex-shrink:0">${travelLines.map(_esc).join('<br>')}</div>`:''}
+    ${topLines.length?`<div style="font-size:${szTop};color:#333;margin-top:.5mm;line-height:1.35;flex-shrink:0">${topLines.map(_esc).join('<br>')}</div>`:''}
+    ${showInfo?`<div style="font-size:${szInfo};color:#333;margin-top:1mm;border-top:.2mm solid #ddd;padding-top:.5mm;line-height:1.45;overflow:hidden;flex:1;word-break:break-word">${_esc(info)}</div>`:''}
+  </div>`;
+}
+
+// Gemeinsame Kopfzeile für alle Stammbaum-Exportformate: Züchterdaten links,
+// Logo/Foto mittig, im Druckdialog ausgewählte Züchtererfolge rechts.
+function pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc){
+  const p = breederProf || {};
+  if(!p.name && !p.strasse && !p.ort && !p.verein && !p.logo && !erfolgeText) return '';
+  const addr = [p.strasse, p.ort].filter(Boolean).join(', ');
+  const left = `<div>
+    ${p.name?`<div style="font-size:11pt;font-weight:700">${_esc(p.name)}</div>`:''}
+    ${addr?`<div style="font-size:7pt;color:#555;margin-top:.5mm">${_esc(addr)}</div>`:''}
+    ${p.verein?`<div style="font-size:7pt;color:#555">${_esc(p.verein)}</div>`:''}
+    ${p.telefon?`<div style="font-size:7pt;color:#555">Tel. ${_esc(p.telefon)}</div>`:''}
+  </div>`;
+  const mid = p.logo?`<div style="text-align:center"><img src="${p.logo}" style="max-height:18mm;max-width:40mm;object-fit:contain"></div>`:'<div></div>';
+  const right = erfolgeText?`<div style="font-size:7pt;color:#555;text-align:right;max-width:90mm">
+    <div style="font-size:8pt;font-weight:700;color:#1a6b1a;margin-bottom:.5mm">Züchtererfolge</div>
+    ${_esc(erfolgeText).replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>')}
+  </div>`:'<div></div>';
+  return `<div style="margin-bottom:2.5mm;padding-bottom:2mm;border-bottom:.3mm solid #ccc;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:4mm">
+    ${left}${mid}${right}
+  </div>`;
+}
+
 async function buildPedigreeHtml(pid, gens, withPhoto, erfolgeText){
   try{
     withPhoto = !!withPhoto;
@@ -2777,59 +2843,8 @@ async function buildPedigreeHtml(pid, gens, withPhoto, erfolgeText){
 
     const _esc    = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
-    // Box-HTML — Infomenge abhängig von Generation und verfügbarem Platz
-    function box(p, gen){
-      if(!p) return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:7pt">–</div>`;
-      const sx   = _sex(p);
-      const col  = sx==='M'?'#3a7bd5':sx==='F'?'#8e44ad':'#888';
-      const tags = [p.color, p.strain, p.breeder?'Z: '+p.breeder:null].filter(Boolean);
-      const info = (p.info||'').trim();
-      const rn   = _ring(p);
-
-      // Schriftgrößen je nach Generation
-      const szRing = gen===0?'8pt':gen===1?'7.5pt':gen===2?'7pt':gen===3?'6.5pt':'6pt';
-      const szName = gen===0?'9pt':gen===1?'8pt':gen===2?'7.5pt':'6.5pt';
-      const szTag  = gen===0?'7pt':gen===1?'6.5pt':'6pt';
-      const szInfo = gen===0?'7.5pt':gen===1?'7pt':gen===2?'6.5pt':'6pt';
-      const showTags = gen<=3;
-      const showInfo = gen<=2 && info;  // Info nur bei Proband, Eltern, Großeltern
-      const showName = gen<=3 || !landscape;  // bei 5 Gen (16 Zeilen, wenig Höhe) Name bei tiefster Ebene weglassen — Ringnummer hat Vorrang
-
-      // Reiseleistung kompakt (nur Proband/Eltern/Großeltern — Gen. 0-2): z.B.
-      // "2025: 13/11 Preise 1.-2.-3.-Preis". Anzahl Jahre je Ebene begrenzt, damit die Box
-      // nicht überläuft (Proband 3 Jahre, Eltern 2, Großeltern 1).
-      const travelMaxYears = gen===0?3:gen===1?2:1;
-      const travelLines = (gen<=2 && p.pigeonid) ? pigeonTravelCompactLines(p.pigeonid, travelMaxYears) : [];
-      const szTravel = gen===0?'7pt':gen===1?'6.5pt':'6pt';
-
-      // Beste Platzierungen (ohne Dopplungen) — nur Proband + Eltern, direkt unterhalb
-      // der Reiseleistungszeilen.
-      const topLines = (gen<=1 && p.pigeonid) ? pigeonTopPlacementsCompactLines(p.pigeonid) : [];
-      const szTop = gen===0?'7pt':'6.5pt';
-
-      // Foto nur einbetten, wenn "Mit Foto" aktiv ist UND die Taube tatsächlich ein
-      // eigenes hochgeladenes Foto hat (kein Farb-Platzhalterbild — der farbige
-      // linke Rand markiert das Geschlecht bereits eindeutig).
-      const photoSize = gen===0?'15mm':gen===1?'11mm':'8mm';
-      const photoHtml = (withPhoto && p.photo)
-        ? `<img src="${p.photo}" style="width:${photoSize};height:${photoSize};object-fit:cover;border-radius:1mm;border:.2mm solid #ddd;float:left;margin:0 2mm 1mm 0;background:#fff">`
-        : '';
-
-      // Info-Feld bekommt flex:1 → füllt restliche Box-Höhe vollständig aus
-      // kein max-height, kein Zeichenlimit → voller Text
-      // Ringnummer darf bei Bedarf auf 2 Zeilen umbrechen statt mit "…" abgeschnitten zu
-      // werden — eine unvollständige Ringnummer ist im Zweifel nutzlos, ein Umbruch nicht.
-      return `<div style="border-left:2mm solid ${col};padding:1.5mm 2mm;background:#fafafa;border-radius:.8mm;width:100%;height:100%;min-height:0;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column">
-        ${photoHtml}
-        ${p._virtual?`<div style="font-size:6.5pt;color:#666;background:#e8e8e8;display:inline-block;padding:.3mm 1.5mm;border-radius:2mm;flex-shrink:0">🧬 Prognose</div>`:`<div style="font-family:monospace;font-size:${szRing};font-weight:700;color:#1a6b1a;white-space:normal;word-break:break-word;line-height:1.2;flex-shrink:0">
-          ${sx==='M'?'♂':sx==='F'?'♀':'?'} ${_esc(rn)}</div>`}
-        ${p.name&&showName?`<div style="font-size:${szName};font-weight:700;white-space:${p._virtual?'normal':'nowrap'};overflow:hidden;text-overflow:ellipsis;margin-top:.3mm;flex-shrink:0">${_esc(p.name)}</div>`:''}
-        ${showTags&&tags.length?`<div style="font-size:${szTag};color:#666;margin-top:.4mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">${tags.map(_esc).join(' · ')}</div>`:''}
-        ${travelLines.length?`<div style="font-size:${szTravel};color:#1a6b1a;margin-top:.6mm;border-top:.2mm solid #ddd;padding-top:.4mm;line-height:1.35;flex-shrink:0">${travelLines.map(_esc).join('<br>')}</div>`:''}
-        ${topLines.length?`<div style="font-size:${szTop};color:#333;margin-top:.5mm;line-height:1.35;flex-shrink:0">${topLines.map(_esc).join('<br>')}</div>`:''}
-        ${showInfo?`<div style="font-size:${szInfo};color:#333;margin-top:1mm;border-top:.2mm solid #ddd;padding-top:.5mm;line-height:1.45;overflow:hidden;flex:1;word-break:break-word">${_esc(info)}</div>`:''}
-      </div>`;
-    }
+    // Box-HTML — nutzt die gemeinsame pedigreeBoxHtml() (s.o.)
+    const box = (p, gen) => pedigreeBoxHtml(p, gen, {withPhoto, landscape, _ring, _sex, _esc});
 
 
     // Grid-Template ohne Header-Zeile
@@ -2880,25 +2895,7 @@ async function buildPedigreeHtml(pid, gens, withPhoto, erfolgeText){
     // Kopfzeile: Züchterdaten links, Logo/Foto mittig, im Druckdialog ausgewählte
     // Züchtererfolge rechts. Grid statt flex-space-between, damit das Logo unabhängig
     // von der Breite der Nachbarspalten exakt mittig steht.
-    function buildBreederHeader(){
-      const p = breederProf;
-      if(!p.name && !p.strasse && !p.ort && !p.verein && !p.logo && !erfolgeText) return '';
-      const addr = [p.strasse, p.ort].filter(Boolean).join(', ');
-      const left = `<div>
-        ${p.name?`<div style="font-size:11pt;font-weight:700">${_esc(p.name)}</div>`:''}
-        ${addr?`<div style="font-size:7pt;color:#555;margin-top:.5mm">${_esc(addr)}</div>`:''}
-        ${p.verein?`<div style="font-size:7pt;color:#555">${_esc(p.verein)}</div>`:''}
-        ${p.telefon?`<div style="font-size:7pt;color:#555">Tel. ${_esc(p.telefon)}</div>`:''}
-      </div>`;
-      const mid = p.logo?`<div style="text-align:center"><img src="${p.logo}" style="max-height:18mm;max-width:40mm;object-fit:contain"></div>`:'<div></div>';
-      const right = erfolgeText?`<div style="font-size:7pt;color:#555;text-align:right;max-width:90mm">
-        <div style="font-size:8pt;font-weight:700;color:#1a6b1a;margin-bottom:.5mm">Züchtererfolge</div>
-        ${_esc(erfolgeText).replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>')}
-      </div>`:'<div></div>';
-      return `<div style="margin-bottom:2.5mm;padding-bottom:2mm;border-bottom:.3mm solid #ccc;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:4mm">
-        ${left}${mid}${right}
-      </div>`;
-    }
+    function buildBreederHeader(){ return pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc); }
 
     const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
 <title>Stammbaum – ${_esc(root.name||_ring(root))}</title>
@@ -2923,6 +2920,191 @@ ${buildBreederHeader()}
     alert('Druckfehler: '+e.message+'\n'+e.stack);
     return null;
   }
+}
+
+// ── Familien-Stil Stammbaum (à la "SG Steffl"-Vorlage) ──────────────────
+// Der Proband erscheint nicht als eigene volle Spalte, sondern als kleines
+// Feld ganz links in der Mitte (1/5 der Höhe der ersten Spalte), darüber der
+// Vater und darunter die Mutter (je 2/5) — rechts daneben folgen die
+// weiteren Ahnen-Generationen als normale Spalten mit je doppelter
+// Boxanzahl (Großeltern, Urgroßeltern, …), gleichmäßig über die volle Höhe
+// verteilt. "gens" zählt hier die Ahnen-Generationen (Vater/Mutter = 1,
+// Großeltern = 2, …) — der Proband kommt zusätzlich dazu.
+async function buildFamilyPedigreeHtml(pid, gens, withPhoto, erfolgeText){
+  try{
+    withPhoto = !!withPhoto;
+    const ancestorGens = parseInt(gens)||4;
+    // Eine Ebene mehr anfordern, als Ahnen-Spalten gewünscht sind: Ebene 0 =
+    // Proband (separat als kleines Feld gerendert), Ebenen 1..ancestorGens =
+    // die Ahnen-Spalten.
+    const data = await buildPedigreeTreeData(pid, ancestorGens+1);
+    if(!data){ alert('Taube nicht gefunden'); return null; }
+    const { root, tree, breederProf, _ring, _sex } = data;
+    const rows = Math.pow(2, ancestorGens); // Boxanzahl der tiefsten Ahnen-Spalte
+
+    const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+    const landscape = ancestorGens>=4;
+    const pageWmm = landscape ? 281 : 194;
+    const pageHmm = landscape ? 194 : 281;
+
+    const totalCols = ancestorGens+1; // Probandenspalte + Ahnen-Spalten
+    const gapMm = 1;
+    const datWmm = Math.floor((pageWmm - gapMm*(totalCols-1)) / totalCols);
+
+    // 5 Fünftel in Spalte 1: Vater 2/5, Proband 1/5, Mutter 2/5. Damit diese
+    // Drittelung bei jeder Ahnen-Tiefe auf ganzzahligen Grid-Linien landet,
+    // wird die Gesamthöhe in rows*5 Raster-Zeilen aufgeteilt.
+    const totalRows = rows*5;
+
+    const box = (p, gen) => pedigreeBoxHtml(p, gen, {withPhoto, landscape, _ring, _sex, _esc});
+
+    const probandCellHtml = `<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+      <div style="font-size:6.5pt;color:#666;font-weight:700;margin-bottom:.5mm;flex-shrink:0">Stammbaum von Taube:</div>
+      <div style="flex:1;min-height:0">${box(root,0)}</div>
+    </div>`;
+
+    let cells = '';
+    // Spalte 1: Proband-Feld, mittig, 1/5 Höhe
+    cells += `<div style="grid-column:1;grid-row:${2*rows+1}/${3*rows+1};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box;min-height:0;overflow:hidden">${probandCellHtml}</div>`;
+
+    // Spalte 2 (Ahnengeneration 1 = Vater/Mutter): Vater oben 2/5, Mutter unten 2/5
+    const father = tree[1] ? tree[1][0] : null;
+    const mother = tree[1] ? tree[1][1] : null;
+    cells += `<div style="grid-column:2;grid-row:1/${2*rows+1};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box;min-height:0;overflow:hidden">${box(father,1)}</div>`;
+    cells += `<div style="grid-column:2;grid-row:${3*rows+1}/${5*rows+1};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box;min-height:0;overflow:hidden">${box(mother,1)}</div>`;
+
+    // Weitere Ahnen-Spalten (Generation 2..ancestorGens): gleichmäßig über die
+    // volle Höhe verteilt, wie im klassischen Fächer-Stammbaum.
+    for(let g=2; g<=ancestorGens; g++){
+      const count = Math.pow(2,g);
+      const span  = totalRows/count;
+      const gridCol = g+1;
+      for(let i=0;i<count;i++){
+        const p  = tree[g] ? tree[g][i] : null;
+        const rs = i*span+1, re = rs+span;
+        cells += `<div style="grid-column:${gridCol};grid-row:${rs}/${re};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box;min-height:0;overflow:hidden">${box(p,g)}</div>`;
+      }
+    }
+
+    let gtc='';
+    for(let c=0;c<totalCols;c++){ gtc+=datWmm+'mm'; if(c<totalCols-1) gtc+=' '+gapMm+'mm '; }
+    const gtr = 'repeat('+totalRows+',minmax(0,1fr))';
+
+    const safeName = (root.name || _ring(root) || 'Taube').toString()
+      .replace(/[^\p{L}\p{N}\-]+/gu,'_').replace(/_+/g,'_').replace(/^_|_$/g,'') || 'Taube';
+    const filenameBase = `Familienstammbaum_${safeName}`;
+
+    const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+<title>Stammbaum – ${_esc(root.name||_ring(root))}</title>
+<style>
+  @page{size:A4 ${landscape?'landscape':'portrait'};margin:8mm 8mm 8mm 8mm}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
+  html,body{height:100%}
+  body{width:${pageWmm}mm;height:${pageHmm}mm;background:#fff;color:#111;display:flex;flex-direction:column;overflow:hidden}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+</head><body>
+<div style="flex-shrink:0">
+${pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc)}
+</div>
+<div style="flex:1;min-height:0;display:grid;grid-template-columns:${gtc};grid-template-rows:${gtr};border:.3mm solid #ccc;width:${pageWmm}mm;overflow:hidden">
+  ${cells}
+</div>
+</body></html>`;
+
+    return { html, pageWmm, pageHmm, filenameBase };
+  } catch(e){
+    alert('Druckfehler: '+e.message+'\n'+e.stack);
+    return null;
+  }
+}
+
+async function printFamilyPedigree(pid, gens, withPhoto, erfolgeText){
+  const built = await buildFamilyPedigreeHtml(pid, gens, withPhoto, erfolgeText);
+  if(!built) return;
+  const blob=new Blob([built.html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.target='_blank'; a.rel='noopener';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),15000);
+}
+
+async function exportFamilyPedigreeImage(pid, gens, withPhoto, erfolgeText){
+  let iframe;
+  try{
+    await ensureHtml2Canvas();
+    const built = await buildFamilyPedigreeHtml(pid, gens, withPhoto, erfolgeText);
+    if(!built) return;
+    const { html, pageWmm, pageHmm, filenameBase } = built;
+
+    const pxW = Math.round(pageWmm * 96/25.4);
+    const pxH = Math.round(pageHmm * 96/25.4);
+
+    iframe = document.createElement('iframe');
+    iframe.style.cssText = `position:fixed;top:-10000px;left:-10000px;width:${pxW}px;height:${pxH}px;border:0`;
+    document.body.appendChild(iframe);
+
+    await new Promise((resolve, reject)=>{
+      iframe.onload = resolve;
+      iframe.onerror = ()=>reject(new Error('Vorschau konnte nicht geladen werden'));
+      iframe.srcdoc = html;
+    });
+    await new Promise(r=>setTimeout(r, 200));
+
+    const canvas = await window.html2canvas(iframe.contentDocument.body, {
+      scale: 3,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      width: pxW,
+      height: pxH,
+      windowWidth: pxW,
+      windowHeight: pxH
+    });
+
+    const blob = await new Promise(res=>canvas.toBlob(res, 'image/png'));
+    if(!blob){ alert('Bild-Export fehlgeschlagen'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filenameBase + '.png';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 15000);
+
+  } catch(e){
+    alert('Bild-Export fehlgeschlagen: '+e.message);
+  } finally {
+    if(iframe) iframe.remove();
+  }
+}
+
+async function triggerFamilyPrint(pid, gens, withPhoto){
+  const erfolgeText = await loadPrintErfolgeText();
+  printFamilyPedigree(pid, gens, withPhoto, erfolgeText);
+}
+async function triggerFamilyImageExport(pid, gens, withPhoto){
+  const erfolgeText = await loadPrintErfolgeText();
+  exportFamilyPedigreeImage(pid, gens, withPhoto, erfolgeText);
+}
+
+// Druck/Export-Auswahlmenü für den Familienstil (kein Vektor-PDF-Export —
+// "Drucken" → Browser-Druckdialog → Ziel "Als PDF speichern" liefert dasselbe).
+function openFamilyPedigreePrintMenu(evt, pid, gens){
+  evt.stopPropagation();
+  closePedigreePrintMenu();
+  const withPhoto = document.getElementById('ped-print-photo')?.checked || false;
+  const rect = evt.currentTarget.getBoundingClientRect();
+  const itemStyle = 'display:block;width:100%;text-align:left;padding:10px 14px;background:none;border:none;color:inherit;font-size:13px;cursor:pointer;font-family:inherit';
+  const menu = document.createElement('div');
+  menu.id = 'ped-print-menu';
+  menu.style.cssText = `position:fixed;top:${rect.bottom+4}px;left:${rect.left}px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 6px 20px rgba(0,0,0,.4);z-index:500;min-width:220px;overflow:hidden`;
+  menu.onclick = e=>e.stopPropagation();
+  menu.innerHTML = `
+    <button style="${itemStyle};border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg3,rgba(255,255,255,.06))'" onmouseout="this.style.background='none'" onclick="closePedigreePrintMenu();triggerFamilyPrint('${pid}',${gens},${withPhoto})">🖨 Drucken</button>
+    <button style="${itemStyle}" onmouseover="this.style.background='var(--bg3,rgba(255,255,255,.06))'" onmouseout="this.style.background='none'" onclick="closePedigreePrintMenu();triggerFamilyImageExport('${pid}',${gens},${withPhoto})">🖼 Als Bild speichern (PNG)</button>
+  `;
+  document.body.appendChild(menu);
+  setTimeout(()=>document.addEventListener('click', closePedigreePrintMenu, {once:true}), 0);
 }
 
 // Öffnet das fertige Stammbaum-HTML in einem neuen Tab — von dort kann per
