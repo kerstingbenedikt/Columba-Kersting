@@ -2951,7 +2951,7 @@ async function buildFamilyPedigreeHtml(pid, gens, withPhoto, erfolgeText){
     const pageWmm = landscape ? 281 : 194;
     const pageHmm = landscape ? 194 : 281;
 
-    const totalCols = ancestorGens+1; // Probandenspalte + Ahnen-Spalten
+    const totalCols = ancestorGens; // Spalte 1 = Vater/Proband/Mutter zusammen + weitere Ahnen-Spalten
     const gapMm = 1;
     const datWmm = Math.floor((pageWmm - gapMm*(totalCols-1)) / totalCols);
 
@@ -2968,21 +2968,21 @@ async function buildFamilyPedigreeHtml(pid, gens, withPhoto, erfolgeText){
     </div>`;
 
     let cells = '';
-    // Spalte 1: Proband-Feld, mittig, 1/5 Höhe
-    cells += `<div style="grid-column:1;grid-row:${2*rows+1}/${3*rows+1};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box;min-height:0;overflow:hidden">${probandCellHtml}</div>`;
-
-    // Spalte 2 (Ahnengeneration 1 = Vater/Mutter): Vater oben 2/5, Mutter unten 2/5
+    // Spalte 1: Vater (oben, 2/5) — Proband (mittig, 1/5) — Mutter (unten, 2/5),
+    // alle drei übereinander in derselben Spalte statt in getrennten Spalten,
+    // damit keine Spaltenbreite an das kleine Probandenfeld verschenkt wird.
     const father = tree[1] ? tree[1][0] : null;
     const mother = tree[1] ? tree[1][1] : null;
-    cells += `<div style="grid-column:2;grid-row:1/${2*rows+1};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box;min-height:0;overflow:hidden">${box(father,1)}</div>`;
-    cells += `<div style="grid-column:2;grid-row:${3*rows+1}/${5*rows+1};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box;min-height:0;overflow:hidden">${box(mother,1)}</div>`;
+    cells += `<div style="grid-column:1;grid-row:1/${2*rows+1};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box;min-height:0;overflow:hidden">${box(father,1)}</div>`;
+    cells += `<div style="grid-column:1;grid-row:${2*rows+1}/${3*rows+1};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box;min-height:0;overflow:hidden">${probandCellHtml}</div>`;
+    cells += `<div style="grid-column:1;grid-row:${3*rows+1}/${5*rows+1};padding:.5mm;border-bottom:.15mm solid #e8e8e8;border-right:.15mm solid #e8e8e8;box-sizing:border-box;min-height:0;overflow:hidden">${box(mother,1)}</div>`;
 
     // Weitere Ahnen-Spalten (Generation 2..ancestorGens): gleichmäßig über die
     // volle Höhe verteilt, wie im klassischen Fächer-Stammbaum.
     for(let g=2; g<=ancestorGens; g++){
       const count = Math.pow(2,g);
       const span  = totalRows/count;
-      const gridCol = g+1;
+      const gridCol = g;
       for(let i=0;i<count;i++){
         const p  = tree[g] ? tree[g][i] : null;
         const rs = i*span+1, re = rs+span;
