@@ -2944,7 +2944,10 @@ async function buildFamilyPedigreeHtml(pid, gens, withPhoto, erfolgeText){
 
     const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
-    const landscape = ancestorGens>=4;
+    // Familienstil bleibt bewusst im Hochformat (DIN A4 Portrait) — auch bei
+    // 4-5 Ahnengenerationen bleiben die Boxen in der tiefsten Spalte schmal,
+    // enthalten dort aber ohnehin nur noch die Ringnummer.
+    const landscape = ancestorGens>=7;
     const pageWmm = landscape ? 281 : 194;
     const pageHmm = landscape ? 194 : 281;
 
@@ -2987,8 +2990,13 @@ async function buildFamilyPedigreeHtml(pid, gens, withPhoto, erfolgeText){
       }
     }
 
-    let gtc='';
-    for(let c=0;c<totalCols;c++){ gtc+=datWmm+'mm'; if(c<totalCols-1) gtc+=' '+gapMm+'mm '; }
+    // WICHTIG: keine manuell eingestreuten Gap-Spalten im Grid-Template — die
+    // Zellen oben werden mit durchgehenden grid-column-Indizes 1..totalCols
+    // platziert (Vater/Mutter bei Spalte 2!). Ein zusätzlicher literaler
+    // Gap-Track hätte diese Indizes verschoben und z.B. die Elternspalte in
+    // eine 1mm schmale Lücke statt in eine echte Datenspalte gelegt. Der
+    // optische Abstand kommt stattdessen über die CSS-Eigenschaft column-gap.
+    const gtc = 'repeat('+totalCols+','+datWmm+'mm)';
     const gtr = 'repeat('+totalRows+',minmax(0,1fr))';
 
     const safeName = (root.name || _ring(root) || 'Taube').toString()
@@ -3008,7 +3016,7 @@ async function buildFamilyPedigreeHtml(pid, gens, withPhoto, erfolgeText){
 <div style="flex-shrink:0">
 ${pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc)}
 </div>
-<div style="flex:1;min-height:0;display:grid;grid-template-columns:${gtc};grid-template-rows:${gtr};border:.3mm solid #ccc;width:${pageWmm}mm;overflow:hidden">
+<div style="flex:1;min-height:0;display:grid;grid-template-columns:${gtc};grid-template-rows:${gtr};column-gap:${gapMm}mm;border:.3mm solid #ccc;width:${pageWmm}mm;overflow:hidden">
   ${cells}
 </div>
 </body></html>`;
