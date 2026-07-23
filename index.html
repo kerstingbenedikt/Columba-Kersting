@@ -754,6 +754,10 @@ const S = {
   sortCol: 'ringnumber', sortDir: 1,
   selected: null, selectedPed: null, pigeonTripYear: null, breederProfileEditing: false, erfolgeEditingId: null,
   loading: true, error: null, _loadingMore: false,
+  // Merkt sich den Ausgangs-Tab, wenn man von außerhalb (z.B. Bestenliste,
+  // Züchter) auf eine Taube springt — damit der "Zurück"-Button in der
+  // Tauben-Detailansicht dorthin zurückführt statt immer zur Tauben-Übersicht.
+  navStack: [],
   paarungM: null, paarungF: null, selectedNach: null, nachStatusFilter: null, nachGenFilter: null, nachExpanded: {},
   neuMode: 'full',
   bulkMode: false, bulkSelected: new Set(), bulkField: 'gender', bulkValue: '1',
@@ -1949,14 +1953,57 @@ function showTab(t){
   setActiveNav(t);
   render();
 }
-function selectPigeon(id){ S.selected=findById(id); S.pigeonTripYear=null; S.tab='tauben'; setActiveNav('tauben'); render(); window.scrollTo(0,0); }
-function showPedigree(id){ S.selectedPed=id; S.tab='stammbaum'; setActiveNav('stammbaum'); render(); window.scrollTo(0,0); }
+// Merkt den aktuellen Tab auf dem navStack, wenn man von AUSSERHALB der
+// Tauben-Themengruppe (z.B. Bestenliste, Züchter, Reisen) zu einer Taube
+// springt. Springt man dagegen innerhalb der Tauben-Themengruppe selbst um
+// (Detail↔Stammbaum↔Nachkommen↔Paarung), wird nichts überschrieben, damit
+// der ursprüngliche Ausgangs-Tab für den Zurück-Button erhalten bleibt.
+// Beschriftung des Zurück-Buttons: verweist auf die gemerkte Ausgangsansicht
+// (z.B. "← Bestenliste"), sonst auf den Standard-Text "← Übersicht".
+const NAV_BACK_LABELS = {
+  bestenliste: ()=>'← '+t('sub_best'),
+  reisen:      ()=>'← '+t('sub_racing'),
+  zuechter:    ()=>'← '+t('sub_breeders'),
+  neu:'← Manuell', scan:'← Scan', import:'← Import', backup:'← Backup'
+};
+function backLabel(){
+  const top = S.navStack[S.navStack.length-1];
+  if(top && top.tab){
+    const l = NAV_BACK_LABELS[top.tab];
+    if(l) return typeof l==='function' ? l() : l;
+  }
+  return t('back_overview');
+}
+function pushPigeonNavIfNeeded(){
+  if((TAB_GROUP[S.tab]||S.tab) !== 'tauben'){
+    S.navStack.push({tab:S.tab});
+    if(S.navStack.length>20) S.navStack.shift();
+  }
+}
+// Zurück-Navigation aus der Tauben-Detailansicht (und Stammbaum/Nachkommen/
+// Paarung, wenn von dort aus erreicht): führt zur zuletzt gemerkten Ansicht
+// zurück (z.B. Bestenliste), sonst zur Tauben-Übersicht als Standardziel.
+function goBackFromPigeon(){
+  const prev = S.navStack.pop();
+  S.selected=null;
+  if(prev && prev.tab){
+    S.tab=prev.tab;
+    setActiveNav(prev.tab);
+  } else {
+    S.tab='tauben';
+    setActiveNav('tauben');
+  }
+  render();
+  window.scrollTo(0,0);
+}
+function selectPigeon(id){ pushPigeonNavIfNeeded(); S.selected=findById(id); S.pigeonTripYear=null; S.tab='tauben'; setActiveNav('tauben'); render(); window.scrollTo(0,0); }
+function showPedigree(id){ pushPigeonNavIfNeeded(); S.selectedPed=id; S.tab='stammbaum'; setActiveNav('stammbaum'); render(); window.scrollTo(0,0); }
 
 // Subnav: Kontext-Reiter für eine ausgewählte Taube — Details/Stammbaum/Nachkommen/
 // Paarungscheck sind bewusst KEINE eigenen Hauptreiter mehr, sondern nur erreichbar,
 // nachdem man in der Tauben-Übersicht eine Taube ausgewählt hat.
 function renderTaubenSubnav(active, p){
-  const back = `<button class="subnav-btn" onclick="S.selected=null;S.tab='tauben';setActiveNav('tauben');render();window.scrollTo(0,0)">${t('back_overview')}</button>`;
+  const back = `<button class="subnav-btn" onclick="goBackFromPigeon()">${backLabel()}</button>`;
   if(!p) return `<div class="subnav">${back}</div>`;
   const btn=(key,label,icon,fn)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="${fn}">${icon} ${label}</button>`;
   return `<div class="subnav">${back}
@@ -3505,6 +3552,7 @@ async function exportPedigreePdf(pid, gens, withPhoto, erfolgeText){
 function setPaarungVogel(id){
   const p=findById(id);
   if(!p) return;
+  pushPigeonNavIfNeeded();
   if(sex_(p)==='M') S.paarungM=p;
   else if(sex_(p)==='F') S.paarungF=p;
   showTab('paarung');
@@ -8725,6 +8773,7 @@ function escH(s){ if(s===null||s===undefined)return''; return String(s).replace(
 
 // ── NACHKOMMEN ────────────────────────────────────────────────
 function showNachkommen(id){
+  pushPigeonNavIfNeeded();
   if(S.selectedNach!==id){ S.nachStatusFilter=null; S.nachGenFilter=null; }
   S.selectedNach=id; S.tab='nachkommen';
   setActiveNav('nachkommen');
