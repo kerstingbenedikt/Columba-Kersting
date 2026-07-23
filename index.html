@@ -90,6 +90,21 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .badge-f{background:#2d1a3d;color:#c97fd4}
 .badge-u{background:var(--bg3);color:var(--text3);border:1px solid var(--border)}
 
+/* ── Quick-Edit (Bestand/Reisetaube-Schalter, Status-Auswahl) ── */
+.qe-switch{position:relative;display:inline-block;width:34px;height:19px;flex-shrink:0;vertical-align:middle;cursor:pointer}
+.qe-switch input{opacity:0;width:0;height:0;position:absolute}
+.qe-switch .qe-track{position:absolute;inset:0;background:var(--bg3);border:1px solid var(--border);border-radius:20px;transition:background .15s,border-color .15s}
+.qe-switch .qe-track:before{content:'';position:absolute;top:1px;left:1px;width:15px;height:15px;background:var(--text3);border-radius:50%;transition:transform .15s,background .15s}
+.qe-switch input:checked + .qe-track{background:color-mix(in srgb,var(--green) 25%,var(--bg3));border-color:var(--green)}
+.qe-switch input:checked + .qe-track:before{transform:translateX(15px);background:var(--green)}
+.qe-switch input:disabled + .qe-track{opacity:.5;cursor:not-allowed}
+.qe-row{display:flex;align-items:center;gap:6px}
+.qe-label{font-size:11px;color:var(--text3);white-space:nowrap}
+.qe-status-select{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;padding:3px 6px;max-width:140px}
+.qe-quickbar{display:flex;flex-wrap:wrap;gap:16px;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px}
+.qe-quickbar .qe-group{display:flex;flex-direction:column;gap:4px}
+.qe-quickbar .qe-group-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)}
+
 /* ── Pagination ── */
 .pagination{display:flex;align-items:center;gap:6px;margin-top:12px;justify-content:flex-end;flex-wrap:wrap}
 .pagination button{background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:5px 11px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;transition:all .15s}
@@ -912,18 +927,17 @@ const COLUMN_DEFS = [
   { key:'strain', get label(){return t('fld_strain');}, sortKey:'strain',
     val:p=>p.strain||'', cell:p=>escH(p.strain||'—') },
   { key:'status', get label(){return t('fld_status');}, sortKey:'status',
-    val:p=>tStatus(pigeonStateName(p)), cell:p=>escH(tStatus(pigeonStateName(p)))||'—' },
+    val:p=>tStatus(pigeonStateName(p)), cell:p=>qeStatusSelectHtml(p) },
   { key:'pigeontype', get label(){return t('fld_pigeontype');}, sortKey:'pigeontype',
     val:p=>p.pigeontype||'', cell:p=>{
       const pt=p.pigeontype;
-      if(pt==='Reisetaube') return `<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25)">✈ ${t('type_racing')}</span>`;
-      if(pt==='Zuchttaube') return `<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25)">🥚 ${t('type_breeding')}</span>`;
-      if(pt==='Heimtaube') return `<span class="badge badge-u">🏠 ${t('type_home')}</span>`;
-      return '—';
+      const extra = pt==='Zuchttaube' ? `<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25);margin-left:6px">🥚 ${t('type_breeding')}</span>`
+        : pt==='Heimtaube' ? `<span class="badge badge-u" style="margin-left:6px">🏠 ${t('type_home')}</span>` : '';
+      return qeReiseSwitchHtml(p) + extra;
     } },
   { key:'instock', get label(){return t('fld_instock');}, sortKey:'instock',
     val:p=>p.instock!=null?(p.instock?t('yes_word'):t('no_word')):'', sortVal:p=>p.instock?1:0,
-    cell:p=>p.instock?`<span style="color:var(--green)">✓ ${t('yes_word')}</span>`:`<span style="color:var(--text3)">${t('no_word')}</span>` },
+    cell:p=>qeInstockSwitchHtml(p) },
   { key:'standort', get label(){return t('fld_location');}, sortKey:'standort',
     val:p=>p.standort||'', cell:p=>escH(p.standort||'—') },
   { key:'father', get label(){return t('fld_father');}, sortKey:'father',
@@ -1190,6 +1204,64 @@ async function apiDelete(table, id){
   if(!r.ok){ const t=await r.text(); throw new Error(t); }
   return true;
 }
+// ── Quick-Edit (Bestand-/Reisetauben-Schalter, Status-Auswahl) ──────────
+// Speichert ein einzelnes Feld sofort (optimistisches Update + PATCH), ohne
+// den kompletten Bearbeitungsmodus im Detail zu öffnen. Nutzbar direkt in
+// der Liste (Tabelle/Karten) und in der Detailansicht.
+async function quickEditPigeonField(pigeonid, field, value, evt){
+  if(evt) evt.stopPropagation();
+  const p = findById(pigeonid);
+  if(!p) return;
+  const prev = p[field];
+  if(prev === value) return;
+  p[field] = value; // optimistisches Update
+  if(document.getElementById('table-wrap')) renderTableOnly();
+  else if(S.selected && S.selected.pigeonid===pigeonid) render();
+  try{
+    await apiPatch('pigeons', pigeonid, {[field]: value});
+  }catch(e){
+    p[field] = prev; // zurückrollen
+    alert('Speichern fehlgeschlagen: '+e.message);
+    if(document.getElementById('table-wrap')) renderTableOnly();
+    else if(S.selected && S.selected.pigeonid===pigeonid) render();
+  }
+}
+
+// Kleiner Ein/Aus-Schalter, z.B. für "Im Bestand" oder "Reisetaube".
+function qeSwitchHtml(p, field, value, label, evtStop){
+  const checked = value(p);
+  return `<label class="qe-switch" onclick="${evtStop!==false?'event.stopPropagation()':''}" title="${escH(label)}">
+    <input type="checkbox" ${checked?'checked':''} onchange="quickEditPigeonField('${p.pigeonid}','${field}',this.checked,event)">
+    <span class="qe-track"></span>
+  </label>`;
+}
+
+// "Im Bestand"-Schalter (Feld instock, boolean).
+function qeInstockSwitchHtml(p){
+  return `<div class="qe-row">${qeSwitchHtml(p,'instock',x=>!!x.instock,t('fld_instock'))}<span class="qe-label">${p.instock?t('yes_word'):t('no_word')}</span></div>`;
+}
+
+// "Reisetaube"-Schalter — vereinfachter Ein/Aus-Blick auf das pigeontype-Feld:
+// AN setzt pigeontype='Reisetaube', AUS setzt pigeontype=null (die Unterscheidung
+// Zucht-/Heimtaube bleibt der vollständigen Bearbeitung im Detail vorbehalten).
+function qeReiseSwitchHtml(p){
+  const isRacer = p.pigeontype==='Reisetaube';
+  return `<div class="qe-row">
+    <label class="qe-switch" onclick="event.stopPropagation()" title="${escH(t('type_racing'))}">
+      <input type="checkbox" ${isRacer?'checked':''} onchange="quickEditPigeonField('${p.pigeonid}','pigeontype',this.checked?'Reisetaube':null,event)">
+      <span class="qe-track"></span>
+    </label>
+    <span class="qe-label">✈ ${t('type_racing')}</span>
+  </div>`;
+}
+
+// Status-Auswahl (pigeonstateid) als Dropdown — sofort speichernd.
+function qeStatusSelectHtml(p){
+  const opts = `<option value=""${!p.pigeonstateid?' selected':''}>— ${t('type_unset')||'leer'} —</option>`
+    + S.pigeonStates.map(s=>`<option value="${escH(s.pigeonstateid)}"${p.pigeonstateid===s.pigeonstateid?' selected':''}>${escH(tStatus(s.name))}</option>`).join('');
+  return `<select class="qe-status-select" onclick="event.stopPropagation()" onchange="quickEditPigeonField('${p.pigeonid}','pigeonstateid',this.value||null,event)">${opts}</select>`;
+}
+
 async function apiDeleteBy(table, filter){
   const r = await fetch(SUPA_URL+'/'+table+'?'+filter,{method:'DELETE',headers:H()});
   if(!r.ok){ const t=await r.text(); throw new Error(t); }
@@ -2184,6 +2256,22 @@ function renderDetail(p){
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-sm" onclick="startEdit('${p.pigeonid}')">${t('btn_edit_pigeon')}</button>
+        </div>
+      </div>
+
+      <!-- Schnellbearbeitung: Bestand/Reisetaube/Status sofort speichernd, unabhängig vom Bearbeitungsmodus -->
+      <div class="qe-quickbar">
+        <div class="qe-group">
+          <span class="qe-group-label">${t('fld_instock')}</span>
+          ${qeInstockSwitchHtml(p)}
+        </div>
+        <div class="qe-group">
+          <span class="qe-group-label">${t('fld_pigeontype')}</span>
+          ${qeReiseSwitchHtml(p)}
+        </div>
+        <div class="qe-group">
+          <span class="qe-group-label">${t('fld_status')}</span>
+          ${qeStatusSelectHtml(p)}
         </div>
       </div>
 
