@@ -1374,41 +1374,99 @@ async function loadData(){
   // Status-Tabelle laden
   try{ const ps=await apiGet('/pigeonstates?order=name.asc'); S.pigeonStates=ps||[]; } catch(e){ S.pigeonStates=[]; }
   const BATCH=500;
-  try{
-    // Erste Batch sofort laden → UI erscheint schnell
-    const first = await apiGet('/pigeons?deleted=eq.false&limit='+BATCH+'&offset=0&order=date_year.desc,number.asc');
-    S.pigeons = first||[]; invalidatePedigreeCache();
-    S.error=null;
-    S.loading=false;
+  // Dedup-Hilfe: dieselbe Taube kann in mehreren Stufen auftauchen (z.B. eine
+  // Bestandstaube, die zugleich Ahne einer anderen Bestandstaube ist, oder beim
+  // finalen "Rest"-Durchlauf in Stufe 3, der der Einfachheit halber wieder bei
+  // offset=0 über die komplette Tabelle läuft). addBatch() ergänzt S.pigeons nur
+  // um wirklich neue pigeonid — das Endergebnis ist exakt wie vorher: irgendwann
+  // sind alle Tauben geladen, nur die Reihenfolge ist jetzt priorisiert.
+  const loadedIds = new Set();
+  const addBatch = (arr)=>{
+    const fresh = (arr||[]).filter(p=>p && p.pigeonid && !loadedIds.has(p.pigeonid));
+    fresh.forEach(p=>loadedIds.add(p.pigeonid));
+    if(fresh.length) S.pigeons = S.pigeons.concat(fresh);
+    return fresh;
+  };
+  const pushProgress = ()=>{
+    invalidatePedigreeCache();
     updateHeaderStats();
-    // Beim Start: komplettes render() damit DOM aufgebaut wird
-    render();
+    S.filtered=[...S.pigeons];
+    if(document.getElementById('table-wrap')) renderTableOnly();
+  };
+  const revealFirstPaint = ()=>{
+    if(!S.loading) return;
+    S.error=null; S.loading=false; updateHeaderStats();
+    render(); // Beim Start: komplettes render() damit DOM aufgebaut wird
     applyFilter();
+  };
+  try{
+    S.pigeons=[];
 
-    // Rest im Hintergrund nachladen
-    if((first||[]).length===BATCH){
-      S._loadingMore=true;
-      updateHeaderStats();
-      let offset=BATCH;
-      while(true){
-        const batch = await apiGet('/pigeons?deleted=eq.false&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc');
-        if(!batch||batch.length===0) break;
-        S.pigeons = S.pigeons.concat(batch); invalidatePedigreeCache();
-        updateHeaderStats();
-        // Hintergrund-Batch: Tabelle still aktualisieren
-        S.filtered=[...S.pigeons];
-        if(document.getElementById('table-wrap')) renderTableOnly();
-        if(batch.length<BATCH) break;
-        offset+=BATCH;
-      }
-      S._loadingMore=false;
-      updateHeaderStats();
-      applyFilter();
-      render(); // Filter-Dropdowns (Standort, Status, Farbe, Jahr…) mit vollständigen Daten neu aufbauen —
-                // applyFilter() ruft bei bereits vorhandener Tabelle nur renderTableOnly() auf, das die
-                // Dropdown-Optionen nicht neu berechnet. Erst nach kompletter Ladephase relevant, daher
-                // performance-unkritisch.
+    // ── Stufe 1: Reisetauben + Bestandstauben — der aktive Arbeitsbestand,
+    // mit dem täglich gearbeitet wird. Wird komplett zuerst geladen, damit die
+    // App so schnell wie möglich mit den relevanten Tauben nutzbar ist.
+    let offset=0;
+    while(true){
+      const batch = await apiGet('/pigeons?deleted=eq.false&or=(instock.eq.true,pigeontype.eq.Reisetaube)&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc');
+      if(!batch||!batch.length) break;
+      addBatch(batch);
+      if(offset===0) revealFirstPaint(); else pushProgress();
+      if(batch.length<BATCH) break;
+      offset+=BATCH;
     }
+    revealFirstPaint(); // falls Stufe 1 leer war (kein Bestand/keine Reisetauben eingetragen)
+    S._loadingMore=true;
+    updateHeaderStats();
+
+    // ── Stufe 2: Ahnen der Stufe-1-Tauben bis zur 5. Generation — werden für
+    // Stammbaum und Inzuchtberechnung gebraucht, auch wenn sie selbst längst
+    // nicht mehr im Bestand sind. Generation für Generation gezielt nachladen
+    // (über fatherid/motherid, ersatzweise über die Ringnummer), statt blind
+    // weiterzublättern.
+    let frontier = S.pigeons.slice();
+    for(let gen=0; gen<5 && frontier.length; gen++){
+      const parentIds=new Set(), parentRings=new Set();
+      frontier.forEach(p=>{
+        if(p.fatherid && !loadedIds.has(p.fatherid)) parentIds.add(p.fatherid);
+        if(p.motherid && !loadedIds.has(p.motherid)) parentIds.add(p.motherid);
+        if(!p.fatherid && p.ringnumberfather) parentRings.add(p.ringnumberfather);
+        if(!p.motherid && p.ringnumbermother) parentRings.add(p.ringnumbermother);
+      });
+      let nextGen=[];
+      const ids=[...parentIds];
+      for(let i=0;i<ids.length;i+=200){
+        const chunk=ids.slice(i,i+200).map(encodeURIComponent).join(',');
+        const res=await apiGet('/pigeons?deleted=eq.false&pigeonid=in.('+chunk+')');
+        nextGen=nextGen.concat(addBatch(res));
+      }
+      const rings=[...parentRings];
+      for(let i=0;i<rings.length;i+=200){
+        const chunk=rings.slice(i,i+200).map(encodeURIComponent).join(',');
+        const res=await apiGet('/pigeons?deleted=eq.false&ringnumber=in.('+chunk+')');
+        nextGen=nextGen.concat(addBatch(res));
+      }
+      if(nextGen.length) pushProgress();
+      frontier=nextGen;
+    }
+
+    // ── Stufe 3: Archiv (der Rest) — im Hintergrund wie bisher seitenweise,
+    // bereits geladene Tauben werden dabei automatisch übersprungen.
+    offset=0;
+    while(true){
+      const batch = await apiGet('/pigeons?deleted=eq.false&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc');
+      if(!batch||!batch.length) break;
+      if(addBatch(batch).length) pushProgress();
+      if(batch.length<BATCH) break;
+      offset+=BATCH;
+    }
+
+    S._loadingMore=false;
+    updateHeaderStats();
+    applyFilter();
+    render(); // Filter-Dropdowns (Standort, Status, Farbe, Jahr…) mit vollständigen Daten neu aufbauen —
+              // applyFilter() ruft bei bereits vorhandener Tabelle nur renderTableOnly() auf, das die
+              // Dropdown-Optionen nicht neu berechnet. Erst nach kompletter Ladephase relevant, daher
+              // performance-unkritisch.
   } catch(e){
     S.loading=false;
     S._loadingMore=false;
