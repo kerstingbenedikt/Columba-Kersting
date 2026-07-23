@@ -51,8 +51,8 @@ main{padding:18px 20px;max-width:1300px;margin:0 auto}
 
 /* ── Suche & Filter ── */
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
-.search-row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
-.search-wrap{position:relative;flex:1;min-width:200px}
+.search-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.search-wrap{position:relative;flex:1 1 110px;min-width:110px;order:2}
 .search-wrap input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px 9px 36px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .15s}
 .search-wrap input:focus{border-color:var(--green)}
 .search-wrap input::placeholder{color:var(--text3)}
@@ -65,7 +65,9 @@ select:focus{border-color:var(--green)}
 .count-label{font-size:12px;color:var(--text3);white-space:nowrap}
 /* Filter & Werkzeuge: eingeklappt per Default, damit die Ergebnisliste auf mobilen
    Geräten sofort sichtbar ist statt hinter langen Filterreihen zu verschwinden. */
-.filter-panel{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:14px;background:var(--bg2)}
+.filter-panel{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:0;background:var(--bg2);flex:0 0 auto;order:1;align-self:flex-start}
+.filter-panel[open]{flex-basis:100%}
+.count-label{order:3}
 .filter-panel summary{list-style:none;cursor:pointer;padding:10px 14px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);user-select:none}
 .filter-panel summary::-webkit-details-marker{display:none}
 .filter-panel summary::before{content:'▸';display:inline-block;color:var(--text3);transition:transform .15s;font-size:11px}
@@ -2126,61 +2128,61 @@ function renderList(){
   return `
     ${S.error?`<div class="error-box">⚠️ ${escH(S.error)}</div>`:''}
     <div class="search-row">
+      <details class="filter-panel" id="filter-panel" ${S.filtersOpen?'open':''} ontoggle="S.filtersOpen=this.open">
+        <summary>${t('filter_tools')}${activeFilterCount?` <span class="filter-badge">${activeFilterCount}</span>`:''}</summary>
+        <div class="filter-panel-body">
+          <div class="toolbar">
+            <select id="sex-filter" onchange="S.sexFilter=this.value;applyFilter()">
+              <option value="all" ${S.sexFilter==='all'?'selected':''}>${t('filter_all')}</option>
+              <option value="M" ${S.sexFilter==='M'?'selected':''}>${t('filter_sex_m')}</option>
+              <option value="F" ${S.sexFilter==='F'?'selected':''}>${t('filter_sex_f')}</option>
+            </select>
+            <select id="year-filter" onchange="S.yearFilter=this.value;applyFilter()">
+              <option value="all">${t('filter_all_years')}</option>
+              ${years.map(y=>`<option value="${y}"${S.yearFilter===String(y)?' selected':''}>${y}</option>`).join('')}
+            </select>
+            <select id="stock-filter" onchange="S.inStockFilter=this.value;applyFilter()">
+              <option value="all">${t('filter_all_stock')}</option>
+              <option value="yes"${S.inStockFilter==='yes'?' selected':''}>${t('filter_instock')}</option>
+              <option value="no"${S.inStockFilter==='no'?' selected':''}>${t('filter_not_instock')}</option>
+            </select>
+            <button class="btn btn-outline btn-sm" onclick="resetTaubenFilter()">${t('filter_reset')}</button>
+          </div>
+          <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
+            <select id="color-filter" onchange="S.colorFilter=this.value;S.page=0;applyFilter()">
+              <option value="all">${t('filter_all_colors')}</option>
+              ${COLOR_FILTER_KEYWORDS.filter(k=>S.pigeons.some(p=>colorMatchesKeyword(p.color,k))).map(k=>`<option value="${escH(k)}"${S.colorFilter===k?' selected':''}>${escH(tColor(k))}</option>`).join('')}
+            </select>
+            <select id="state-filter" onchange="S.stateFilter=this.value;S.page=0;applyFilter()">
+              <option value="all">${t('filter_all_status')}</option>
+              ${(S.pigeonStates.length?S.pigeonStates:S.pigeons.filter(p=>p.pigeonstate).map(p=>({name:p.pigeonstate,pigeonstateid:p.pigeonstate}))).map(s=>`<option value="${escH(s.name)}"${S.stateFilter===s.name?' selected':''}>${escH(tStatus(s.name))}</option>`).join('')}
+            </select>
+            <select id="type-filter" onchange="S.typeFilter=this.value;S.page=0;applyFilter()">
+              <option value="all">${t('filter_type_all')}</option>
+              <option value="Reisetaube"${S.typeFilter==='Reisetaube'?' selected':''}>✈ ${t('type_racing')}</option>
+              <option value="Zuchttaube"${S.typeFilter==='Zuchttaube'?' selected':''}>🥚 ${t('type_breeding')}</option>
+              <option value="Heimtaube"${S.typeFilter==='Heimtaube'?' selected':''}>🏠 ${t('type_home')}</option>
+            </select>
+            <select id="standort-filter" onchange="S.standortFilter=this.value;S.page=0;applyFilter()">
+              <option value="all">${t('filter_all_locations')}</option>
+              ${[...new Set(S.pigeons.map(p=>p.standort).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}"${S.standortFilter===s?' selected':''}>${escH(s)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
+            ${renderColumnPicker()}
+            <button class="btn ${S.bulkMode?'':'btn-outline'} btn-sm" onclick="toggleBulkMode()">${S.bulkMode?t('bulk_stop'):t('bulk_start')}</button>
+            <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben einheitlich formatieren und Duplikate zusammenführen">${t('cleanup_btn')}</button>
+            <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">${t('export_csv')}</button>
+            <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">${t('export_pdf')}</button>
+          </div>
+        </div>
+      </details>
       <div class="search-wrap"><span class="search-icon">🔍</span>
         <input id="tauben-search" type="text" placeholder="${escH(t('search_placeholder'))}" title="${escH(t('search_title'))}" value="${escH(S.search)}" oninput="S.search=this.value;toggleSearchClear('tauben-search-clear',this.value);applyFilter()">
         <button type="button" id="tauben-search-clear" class="search-clear" style="display:${S.search?'flex':'none'}" onclick="clearTaubenSearch()" title="${escH(t('search_clear_title'))}" aria-label="${escH(t('search_clear_title'))}">✕</button>
       </div>
       <span id="count-label" class="count-label">${S.filtered.length.toLocaleString('de')} / ${S.pigeons.length.toLocaleString('de')}</span>
     </div>
-    <details class="filter-panel" id="filter-panel" ${S.filtersOpen?'open':''} ontoggle="S.filtersOpen=this.open">
-      <summary>${t('filter_tools')}${activeFilterCount?` <span class="filter-badge">${activeFilterCount}</span>`:''}</summary>
-      <div class="filter-panel-body">
-        <div class="toolbar">
-          <select id="sex-filter" onchange="S.sexFilter=this.value;applyFilter()">
-            <option value="all" ${S.sexFilter==='all'?'selected':''}>${t('filter_all')}</option>
-            <option value="M" ${S.sexFilter==='M'?'selected':''}>${t('filter_sex_m')}</option>
-            <option value="F" ${S.sexFilter==='F'?'selected':''}>${t('filter_sex_f')}</option>
-          </select>
-          <select id="year-filter" onchange="S.yearFilter=this.value;applyFilter()">
-            <option value="all">${t('filter_all_years')}</option>
-            ${years.map(y=>`<option value="${y}"${S.yearFilter===String(y)?' selected':''}>${y}</option>`).join('')}
-          </select>
-          <select id="stock-filter" onchange="S.inStockFilter=this.value;applyFilter()">
-            <option value="all">${t('filter_all_stock')}</option>
-            <option value="yes"${S.inStockFilter==='yes'?' selected':''}>${t('filter_instock')}</option>
-            <option value="no"${S.inStockFilter==='no'?' selected':''}>${t('filter_not_instock')}</option>
-          </select>
-          <button class="btn btn-outline btn-sm" onclick="resetTaubenFilter()">${t('filter_reset')}</button>
-        </div>
-        <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
-          <select id="color-filter" onchange="S.colorFilter=this.value;S.page=0;applyFilter()">
-            <option value="all">${t('filter_all_colors')}</option>
-            ${COLOR_FILTER_KEYWORDS.filter(k=>S.pigeons.some(p=>colorMatchesKeyword(p.color,k))).map(k=>`<option value="${escH(k)}"${S.colorFilter===k?' selected':''}>${escH(tColor(k))}</option>`).join('')}
-          </select>
-          <select id="state-filter" onchange="S.stateFilter=this.value;S.page=0;applyFilter()">
-            <option value="all">${t('filter_all_status')}</option>
-            ${(S.pigeonStates.length?S.pigeonStates:S.pigeons.filter(p=>p.pigeonstate).map(p=>({name:p.pigeonstate,pigeonstateid:p.pigeonstate}))).map(s=>`<option value="${escH(s.name)}"${S.stateFilter===s.name?' selected':''}>${escH(tStatus(s.name))}</option>`).join('')}
-          </select>
-          <select id="type-filter" onchange="S.typeFilter=this.value;S.page=0;applyFilter()">
-            <option value="all">${t('filter_type_all')}</option>
-            <option value="Reisetaube"${S.typeFilter==='Reisetaube'?' selected':''}>✈ ${t('type_racing')}</option>
-            <option value="Zuchttaube"${S.typeFilter==='Zuchttaube'?' selected':''}>🥚 ${t('type_breeding')}</option>
-            <option value="Heimtaube"${S.typeFilter==='Heimtaube'?' selected':''}>🏠 ${t('type_home')}</option>
-          </select>
-          <select id="standort-filter" onchange="S.standortFilter=this.value;S.page=0;applyFilter()">
-            <option value="all">${t('filter_all_locations')}</option>
-            ${[...new Set(S.pigeons.map(p=>p.standort).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}"${S.standortFilter===s?' selected':''}>${escH(s)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
-          ${renderColumnPicker()}
-          <button class="btn ${S.bulkMode?'':'btn-outline'} btn-sm" onclick="toggleBulkMode()">${S.bulkMode?t('bulk_stop'):t('bulk_start')}</button>
-          <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben einheitlich formatieren und Duplikate zusammenführen">${t('cleanup_btn')}</button>
-          <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">${t('export_csv')}</button>
-          <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">${t('export_pdf')}</button>
-        </div>
-      </div>
-    </details>
     <div id="bulk-bar">${renderBulkBar()}</div>
     <div id="table-wrap" class="table-wrap">${buildTableHTML(page, si)}</div>
     <div id="pagination-wrap">${totalPages>1?buildPagination(totalPages):''}</div>`;
