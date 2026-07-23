@@ -758,6 +758,10 @@ const S = {
   // Züchter) auf eine Taube springt — damit der "Zurück"-Button in der
   // Tauben-Detailansicht dorthin zurückführt statt immer zur Tauben-Übersicht.
   navStack: [],
+  // Archiv (alle Tauben außerhalb Bestand/Reisetauben + deren Ahnen) wird
+  // nicht automatisch beim Start geladen, sondern erst bei Bedarf — siehe
+  // ensureArchiveLoaded().
+  _archiveLoaded: false, _archiveLoading: false,
   paarungM: null, paarungF: null, selectedNach: null, nachStatusFilter: null, nachGenFilter: null, nachExpanded: {},
   neuMode: 'full',
   bulkMode: false, bulkSelected: new Set(), bulkField: 'gender', bulkValue: '1',
@@ -1358,8 +1362,10 @@ async function storageDelete(bucket, paths){
 function updateHeaderStats(){
   const instock = S.pigeons.filter(p=>p.instock).length;
   const el = document.getElementById('db-status');
-  if(el) el.textContent = S._loadingMore
-    ? `${S.pigeons.length.toLocaleString('de')} Tauben geladen (lade weiter…)`
+  if(el) el.textContent = S._archiveLoading
+    ? `${S.pigeons.length.toLocaleString('de')} Tauben geladen (Archiv wird nachgeladen…)`
+    : S._loadingMore
+    ? `${S.pigeons.length.toLocaleString('de')} Tauben geladen (lade Ahnen nach…)`
     : `${S.pigeons.length.toLocaleString('de')} Tauben geladen`;
   const hs = document.getElementById('headerStats');
   if(hs) hs.innerHTML=`
@@ -1369,66 +1375,57 @@ function updateHeaderStats(){
     <div class="stat-pill">Täubin <span>${S.pigeons.filter(p=>sex_(p)==='F').length}</span></div>`;
 }
 
+// pigeonid-Set aller bereits geladenen Tauben, über loadData() und
+// ensureArchiveLoaded() hinweg genutzt, um beim Zusammenführen Duplikate zu
+// vermeiden.
+const LOADED_PIGEON_IDS = new Set();
+
 async function loadData(){
-  S.loading=true; S._loadingMore=false; render();
+  S.loading=true; S._loadingMore=false; S._archiveLoaded=false; S._archiveLoading=false; render();
   // Status-Tabelle laden
   try{ const ps=await apiGet('/pigeonstates?order=name.asc'); S.pigeonStates=ps||[]; } catch(e){ S.pigeonStates=[]; }
   const BATCH=500;
-  // Dedup-Hilfe: dieselbe Taube kann in mehreren Stufen auftauchen (z.B. eine
-  // Bestandstaube, die zugleich Ahne einer anderen Bestandstaube ist, oder beim
-  // finalen "Rest"-Durchlauf in Stufe 3, der der Einfachheit halber wieder bei
-  // offset=0 über die komplette Tabelle läuft). addBatch() ergänzt S.pigeons nur
-  // um wirklich neue pigeonid — das Endergebnis ist exakt wie vorher: irgendwann
-  // sind alle Tauben geladen, nur die Reihenfolge ist jetzt priorisiert.
-  const loadedIds = new Set();
+  LOADED_PIGEON_IDS.clear();
+  S.pigeons=[];
   const addBatch = (arr)=>{
-    const fresh = (arr||[]).filter(p=>p && p.pigeonid && !loadedIds.has(p.pigeonid));
-    fresh.forEach(p=>loadedIds.add(p.pigeonid));
+    const fresh = (arr||[]).filter(p=>p && p.pigeonid && !LOADED_PIGEON_IDS.has(p.pigeonid));
+    fresh.forEach(p=>LOADED_PIGEON_IDS.add(p.pigeonid));
     if(fresh.length) S.pigeons = S.pigeons.concat(fresh);
     return fresh;
   };
-  const pushProgress = ()=>{
-    invalidatePedigreeCache();
-    updateHeaderStats();
-    S.filtered=[...S.pigeons];
-    if(document.getElementById('table-wrap')) renderTableOnly();
-  };
-  const revealFirstPaint = ()=>{
-    if(!S.loading) return;
-    S.error=null; S.loading=false; updateHeaderStats();
-    render(); // Beim Start: komplettes render() damit DOM aufgebaut wird
-    applyFilter();
-  };
   try{
-    S.pigeons=[];
-
     // ── Stufe 1: Reisetauben + Bestandstauben — der aktive Arbeitsbestand,
-    // mit dem täglich gearbeitet wird. Wird komplett zuerst geladen, damit die
-    // App so schnell wie möglich mit den relevanten Tauben nutzbar ist.
+    // mit dem täglich gearbeitet wird. Läuft komplett STILL durch (kein
+    // Zwischen-Render pro Batch) — erst wenn Stufe 1 fertig ist, wird einmal
+    // gerendert. Das vermeidet das Flackern durch viele schnell aufeinander
+    // folgende Neuzeichnungen beim Start.
     let offset=0;
     while(true){
       const batch = await apiGet('/pigeons?deleted=eq.false&or=(instock.eq.true,pigeontype.eq.Reisetaube)&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc');
       if(!batch||!batch.length) break;
       addBatch(batch);
-      if(offset===0) revealFirstPaint(); else pushProgress();
       if(batch.length<BATCH) break;
       offset+=BATCH;
     }
-    revealFirstPaint(); // falls Stufe 1 leer war (kein Bestand/keine Reisetauben eingetragen)
-    S._loadingMore=true;
-    updateHeaderStats();
+    invalidatePedigreeCache();
+    S.error=null; S.loading=false; updateHeaderStats();
+    render();
+    applyFilter();
 
     // ── Stufe 2: Ahnen der Stufe-1-Tauben bis zur 5. Generation — werden für
     // Stammbaum und Inzuchtberechnung gebraucht, auch wenn sie selbst längst
-    // nicht mehr im Bestand sind. Generation für Generation gezielt nachladen
-    // (über fatherid/motherid, ersatzweise über die Ringnummer), statt blind
-    // weiterzublättern.
+    // nicht mehr im Bestand sind. Läuft im Hintergrund, ebenfalls OHNE
+    // Zwischen-Renders: diese Tauben tauchen im Standardfilter "Im Bestand"
+    // ohnehin nicht auf und werden erst beim Öffnen eines Stammbaums oder der
+    // Inzuchtberechnung wirklich gebraucht — ein Neuzeichnen der Liste
+    // währenddessen würde nur unnötig flackern.
+    S._loadingMore=true; updateHeaderStats();
     let frontier = S.pigeons.slice();
     for(let gen=0; gen<5 && frontier.length; gen++){
       const parentIds=new Set(), parentRings=new Set();
       frontier.forEach(p=>{
-        if(p.fatherid && !loadedIds.has(p.fatherid)) parentIds.add(p.fatherid);
-        if(p.motherid && !loadedIds.has(p.motherid)) parentIds.add(p.motherid);
+        if(p.fatherid && !LOADED_PIGEON_IDS.has(p.fatherid)) parentIds.add(p.fatherid);
+        if(p.motherid && !LOADED_PIGEON_IDS.has(p.motherid)) parentIds.add(p.motherid);
         if(!p.fatherid && p.ringnumberfather) parentRings.add(p.ringnumberfather);
         if(!p.motherid && p.ringnumbermother) parentRings.add(p.ringnumbermother);
       });
@@ -1445,34 +1442,61 @@ async function loadData(){
         const res=await apiGet('/pigeons?deleted=eq.false&ringnumber=in.('+chunk+')');
         nextGen=nextGen.concat(addBatch(res));
       }
-      if(nextGen.length) pushProgress();
       frontier=nextGen;
     }
-
-    // ── Stufe 3: Archiv (der Rest) — im Hintergrund wie bisher seitenweise,
-    // bereits geladene Tauben werden dabei automatisch übersprungen.
-    offset=0;
-    while(true){
-      const batch = await apiGet('/pigeons?deleted=eq.false&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc');
-      if(!batch||!batch.length) break;
-      if(addBatch(batch).length) pushProgress();
-      if(batch.length<BATCH) break;
-      offset+=BATCH;
-    }
-
+    invalidatePedigreeCache();
     S._loadingMore=false;
     updateHeaderStats();
-    applyFilter();
-    render(); // Filter-Dropdowns (Standort, Status, Farbe, Jahr…) mit vollständigen Daten neu aufbauen —
-              // applyFilter() ruft bei bereits vorhandener Tabelle nur renderTableOnly() auf, das die
-              // Dropdown-Optionen nicht neu berechnet. Erst nach kompletter Ladephase relevant, daher
-              // performance-unkritisch.
+
+    // ── Stufe 3 (Archiv: alles außerhalb Bestand/Reisetauben + deren Ahnen)
+    // wird HIER NICHT mehr automatisch geladen — das blockierte bisher die
+    // App beim Start unnötig, obwohl der Standardfilter "Im Bestand" diese
+    // Tauben gar nicht anzeigt. Stattdessen lädt ensureArchiveLoaded() das
+    // Archiv erst nach, sobald tatsächlich danach gesucht/gefiltert wird
+    // (siehe applyFilter()).
   } catch(e){
     S.loading=false;
     S._loadingMore=false;
     S.error=e.message;
     document.getElementById('db-status').textContent='Verbindungsfehler';
     render();
+  }
+}
+
+// Lädt das Archiv (alle übrigen Tauben, die nicht schon über Bestand/
+// Reisetauben oder deren Ahnen geladen wurden) bei Bedarf nach. Wird von
+// applyFilter() ausgelöst, sobald eine Sucheingabe erfolgt oder ein Filter
+// außerhalb des Standards ("Im Bestand") gesetzt wird — nicht automatisch
+// beim Start. Am Ende wird applyFilter() erneut aufgerufen, damit neu
+// geladene Treffer sofort erscheinen.
+async function ensureArchiveLoaded(){
+  if(S._archiveLoaded || S._archiveLoading) return;
+  S._archiveLoading=true;
+  updateHeaderStats();
+  const addBatch = (arr)=>{
+    const fresh = (arr||[]).filter(p=>p && p.pigeonid && !LOADED_PIGEON_IDS.has(p.pigeonid));
+    fresh.forEach(p=>LOADED_PIGEON_IDS.add(p.pigeonid));
+    if(fresh.length) S.pigeons = S.pigeons.concat(fresh);
+    return fresh;
+  };
+  try{
+    const BATCH=500;
+    let offset=0;
+    while(true){
+      const batch = await apiGet('/pigeons?deleted=eq.false&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc');
+      if(!batch||!batch.length) break;
+      addBatch(batch);
+      if(batch.length<BATCH) break;
+      offset+=BATCH;
+    }
+    S._archiveLoaded=true;
+    invalidatePedigreeCache();
+  } catch(e){
+    console.error('Archiv konnte nicht nachgeladen werden:', e);
+  } finally {
+    S._archiveLoading=false;
+    updateHeaderStats();
+    applyFilter(); // mit vollständigen Daten neu filtern/rendern
   }
 }
 
@@ -1826,6 +1850,13 @@ tr.bulk-row-selected td{background:color-mix(in srgb,var(--green) 10%,var(--bg3)
 }
 
 function applyFilter(){
+  // Archiv (alles außer Bestand/Reisetauben + deren Ahnen) erst jetzt nachladen,
+  // wenn tatsächlich danach gesucht/gefiltert wird — nicht automatisch beim Start.
+  const needsArchive = !!S.search.trim() || S.inStockFilter!=='yes' || S.sexFilter!=='all'
+    || S.yearFilter!=='all' || S.colorFilter!=='all' || S.stateFilter!=='all'
+    || S.standortFilter!=='all' || S.typeFilter!=='all';
+  if(needsArchive && !S._archiveLoaded && !S._archiveLoading) ensureArchiveLoaded();
+
   let arr=[...S.pigeons];
   const q=S.search.trim();
   const ql=q.toLowerCase();
