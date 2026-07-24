@@ -765,6 +765,8 @@ const S = {
   // Paarungsliste (Tabelle "matings" in Supabase) — null = noch nicht geladen
   matings: null, matingsLoading: false, matingsError: null,
   paarungM: null, paarungF: null, selectedNach: null, nachStatusFilter: null, nachGenFilter: null, nachExpanded: {},
+  // Automatische Paarungsempfehlungen (Empfehlungsliste im Paarungscheck)
+  pairRecOpen: false, pairRecTopN: 15, pairRecMaxInzucht: 6.5, pairRecMinScore: 0, pairRecIncludeReise: false,
   neuMode: 'full',
   bulkMode: false, bulkSelected: new Set(), bulkField: 'gender', bulkValue: '1',
   columns: (() => {
@@ -3683,6 +3685,7 @@ function renderPaarung(){
   }
 
   return `
+    <div style="margin-bottom:12px">${renderPairingRecommendations()}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       ${birdPicker('paarungM', S.paarungM, '♂ Täuber wählen','M')}
       ${birdPicker('paarungF', S.paarungF, '♀ Täubin wählen','F')}
@@ -6290,6 +6293,14 @@ function computeVererbungsstaerke(pigeonid){
 // Nachkommen, kombiniert per Durchschnitt) ──────────────────────────────
 const OWN_TRIPS_LOADING = new Set();
 
+// Mindestanzahl geflogener Wettflüge, ab der die eigene Preisquote/Top-AS-Quote
+// einer Taube überhaupt gewertet wird. Bei sehr wenigen Flügen (z.B. 2 Flüge,
+// beide mit Preis = 100% Preisquote) wäre die Quote statistisch nicht
+// aussagekräftig und würde den Erfolgs-Score künstlich in die Höhe treiben —
+// genau wie bei der Preisquote von Nachkommen (siehe VERERBER_MIN_ERFOLGREICHE
+// weiter unten), nur eben für die Taube selbst statt für ihre Nachkommen.
+const MIN_FLUEGE_EIGENLEISTUNG = 15;
+
 // Eigenleistung EINER Taube (nicht deren Nachkommen): Beständigkeit =
 // Preisquote, Geschwindigkeit = Anteil Flüge mit >90 AS-Punkten — dieselben
 // Kriterien wie bei computeVererbungsstaerke(), nur auf die eigenen Flüge
@@ -6304,6 +6315,10 @@ function computeEigenleistung(pigeonid){
     const as=getFlightAS(r);
     if(as!=null && as>90) topAS++;
   });
+  // Zu wenige Flüge -> Quote statistisch nicht belastbar, wird wie "keine
+  // eigenen Flugdaten" behandelt (der Erfolgs-Score stützt sich dann allein
+  // auf die Vererbung, sofern dafür genug Nachkommen-Daten vorliegen).
+  if(gesetzt<MIN_FLUEGE_EIGENLEISTUNG) return {ready:true, noFlights:true, gesetzt, tooFewFlights:true};
   const preisquote = preise/gesetzt*100;
   const topASquote = topAS/gesetzt*100;
   // Gleiche Gewichtung wie beim Nachkommen-Score: Preisquote dominiert
@@ -6364,7 +6379,9 @@ function _pp_parentLine(p, er){
   const c = er.score>=60?'var(--green)':er.score>=35?'var(--orange)':'#e07070';
   const ownPart = (er.own && er.own.ready && !er.own.noFlights)
     ? `Eigen: Preisq. ${er.own.preisquote.toFixed(0)}% · Top-AS ${er.own.topASquote.toFixed(0)}%`
-    : 'Eigen: keine eigenen Flugdaten';
+    : (er.own && er.own.tooFewFlights)
+      ? `Eigen: zu wenige Flüge (${er.own.gesetzt}/${MIN_FLUEGE_EIGENLEISTUNG})`
+      : 'Eigen: keine eigenen Flugdaten';
   const verPart = (er.ver && er.ver.ready && er.ver.score!=null)
     ? `Nachk.: Preisq. ${er.ver.preisquote.toFixed(0)}% · Top-AS ${er.ver.topASquote.toFixed(0)}% · ${er.ver.activeCount}/${er.ver.totalDescendants} akt.`
     : 'Nachk.: keine ausreichende Datenbasis';
@@ -6552,6 +6569,151 @@ function printMatingsList(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url),15000);
 }
+// ── Automatische Paarungsempfehlungen ─────────────────────────────────────
+// Bildet aus allen Bestandstäubern × Bestandstäubinnen sämtliche möglichen
+// Paare, berechnet je Paar den Erfolgs-Score (computePaarungsprognose, s.o. —
+// Ø aus Beständigkeit/Preisquote und Geschwindigkeit/Top-AS-Quote, jeweils
+// aus Eigenleistung UND Nachkommen beider Elternteile) sowie den Inzucht-
+// koeffizienten der Nachkommen, blendet zu eng verwandte Paare aus und
+// sortiert absteigend nach Score. Jede Zeile lässt sich direkt in den
+// Paarungsrechner laden oder per Klick in die Paarungsliste übernehmen.
+// Weitere Kriterien pro Taube (z.B. Formfaktor, Ausstellungsnoten, Wetter-
+// leistung) können später einfach als zusätzlicher Summand in den Score
+// von computePaarungsprognose() einfließen, ohne dass sich an dieser Stelle
+// etwas ändern muss.
+const PAIR_REC = { loading:false, error:null, results:null, total:0 };
+function invalidatePairRec(){ PAIR_REC.results=null; PAIR_REC.error=null; }
+
+function pairRecCandidates(){
+  // Fokus liegt auf Zuchttauben — das sind die Tiere, die tatsächlich verpaart
+  // werden. Reisetauben können optional dazugenommen werden (S.pairRecIncludeReise),
+  // Heimtauben und Tauben ohne Typ bleiben immer außen vor. Nur Bestandstiere.
+  function relevant(p){
+    if(!p.instock) return false;
+    if(p.pigeontype==='Zuchttaube') return true;
+    if(S.pairRecIncludeReise && p.pigeontype==='Reisetaube') return true;
+    return false;
+  }
+  var males   = S.pigeons.filter(function(p){ return relevant(p) && sex_(p)==='M'; });
+  var females = S.pigeons.filter(function(p){ return relevant(p) && sex_(p)==='F'; });
+  return {males:males, females:females};
+}
+
+function renderPairingRecommendations(){
+  var cand = pairRecCandidates();
+  var reiseToggle = '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap">'
+    +'<input type="checkbox" '+(S.pairRecIncludeReise?'checked':'')+' onchange="S.pairRecIncludeReise=this.checked;PAIR_REC.results=null;render()"> Reisetauben mit einbeziehen</label>';
+  if(!cand.males.length || !cand.females.length){
+    return '<div class="card"><div class="card-title">🏆 Top-Paarungsempfehlungen</div>'
+      +'<div style="font-size:13px;color:var(--text3);margin-bottom:10px">Es werden mindestens ein Täuber und eine Täubin als Zuchttaube im Bestand benötigt'+(S.pairRecIncludeReise?' (Reisetauben werden bereits einbezogen)':'')+'.</div>'
+      +reiseToggle+'</div>';
+  }
+  if(!S.pairRecOpen){
+    return '<div class="card">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<div><div class="card-title" style="margin-bottom:2px">🏆 Top-Paarungsempfehlungen</div>'
+      +'<div style="font-size:12px;color:var(--text3)">Automatischer Vorschlag der besten Paarungen aus '+cand.males.length+' Zucht'+(S.pairRecIncludeReise?'-/Reise':'')+'täubern × '+cand.females.length+' Zucht'+(S.pairRecIncludeReise?'-/Reise':'')+'täubinnen im Bestand — bewertet nach Beständigkeit (Preisquote) und Geschwindigkeit (AS-Punkte).</div></div>'
+      +'<button class="btn btn-outline btn-sm" onclick="S.pairRecOpen=true;render()">Empfehlungen berechnen</button>'
+      +'</div>'
+      +'<div style="margin-top:10px">'+reiseToggle+'</div>'
+      +'</div>';
+  }
+
+  // Benötigte Flugdaten (Eigenleistung der Kandidaten + Flugdaten ihrer
+  // Nachkommen für die Vererbungsstärke) einmalig gebündelt nachladen.
+  var all = cand.males.concat(cand.females);
+  var neededIds = {};
+  all.forEach(function(p){
+    neededIds[p.pigeonid]=true;
+    getVererbungDescendants(p.pigeonid).forEach(function(d){ neededIds[d.pigeonid]=true; });
+  });
+  var idList = Object.keys(neededIds);
+  var missing = idList.filter(function(id){ return !PT_CACHE[id]; });
+
+  if(PAIR_REC.error){
+    return '<div class="card"><div style="color:#e07070;font-size:13px">Fehler beim Laden der Flugdaten: '+escH(PAIR_REC.error)+'</div>'
+      +'<button class="btn btn-sm" style="margin-top:10px" onclick="PAIR_REC.error=null;render()">Erneut versuchen</button></div>';
+  }
+  if(missing.length){
+    if(!PAIR_REC.loading){
+      PAIR_REC.loading=true; PAIR_REC.total=idList.length;
+      withTimeout(loadPigeonTripsBatchChunked(idList), 60000)
+        .then(function(){ PAIR_REC.loading=false; render(); })
+        .catch(function(e){ PAIR_REC.loading=false; PAIR_REC.error=(e&&e.message)||'Unbekannter Fehler'; render(); });
+    }
+    return '<div class="card"><div class="card-title">🏆 Top-Paarungsempfehlungen</div>'
+      +'<div class="loading"><div class="spinner"></div>Lade Flugdaten für '+idList.length+' Tauben…</div></div>';
+  }
+  PAIR_REC.loading=false;
+
+  if(!PAIR_REC.results){
+    var list=[];
+    cand.males.forEach(function(m){
+      cand.females.forEach(function(f){
+        var pp = computePaarungsprognose(m,f);
+        // WICHTIG: Beide Elternteile müssen eine eigene Datenbasis haben (Score
+        // aus eigenen Flügen ODER aus Nachkommen). Sonst würde z.B. eine junge
+        // Taube ganz ohne eigene Flugdaten und ohne Nachkommen allein deshalb
+        // top platziert, weil der Partner einen hohen Score mitbringt — der
+        // kombinierte Score wäre dann de facto nur die Bewertung einer Seite.
+        if(pp.sF==null || pp.sM==null) return;
+        var ib = calcInbreedingPair(m,f);
+        list.push({m:m, f:f, pp:pp, ib:ib});
+      });
+    });
+    list.sort(function(a,b){ return b.pp.combined-a.pp.combined; });
+    PAIR_REC.results=list;
+  }
+
+  var maxInzucht = S.pairRecMaxInzucht/100;
+  var minScore = S.pairRecMinScore||0;
+  var filtered = PAIR_REC.results.filter(function(r){
+    return (r.ib==null || r.ib<=maxInzucht) && r.pp.combined>=minScore;
+  });
+  var excluded = PAIR_REC.results.length - filtered.length;
+  var shown = filtered.slice(0, S.pairRecTopN);
+
+  var rows = shown.map(function(r,i){
+    var c = r.pp.combined>=60?'var(--green)':r.pp.combined>=35?'var(--orange)':'#e07070';
+    var ibPct = r.ib!=null ? (r.ib*100).toFixed(2)+' %' : '—';
+    var ibColor = r.ib==null?'var(--text3)':r.ib<0.03?'var(--green)':r.ib<0.065?'var(--orange)':'#e07070';
+    return '<tr>'
+      +'<td style="text-align:center;color:var(--text3)">'+(i+1)+'</td>'
+      +'<td style="font-family:monospace;font-size:12px;cursor:pointer" onclick="selectPigeon(\''+r.m.pigeonid+'\')" title="Details anzeigen">♂ '+escH(ring(r.m))+(r.m.name?'<br><span style="color:var(--text3)">'+escH(r.m.name)+'</span>':'')+'</td>'
+      +'<td style="font-family:monospace;font-size:12px;cursor:pointer" onclick="selectPigeon(\''+r.f.pigeonid+'\')" title="Details anzeigen">♀ '+escH(ring(r.f))+(r.f.name?'<br><span style="color:var(--text3)">'+escH(r.f.name)+'</span>':'')+'</td>'
+      +'<td style="text-align:center;font-weight:700;color:'+c+'">'+r.pp.combined+'</td>'
+      +'<td style="text-align:center;color:'+ibColor+'">'+ibPct+'</td>'
+      +'<td style="text-align:center;white-space:nowrap">'
+      +'<button class="btn btn-outline btn-sm" title="In den Paarungsrechner laden" onclick="S.paarungM=findById(\''+r.m.pigeonid+'\');S.paarungF=findById(\''+r.f.pigeonid+'\');render();window.scrollTo(0,0)">👁</button> '
+      +'<button class="btn btn-outline btn-sm" title="In der Paarungsliste speichern" onclick="savePairingToList(\''+r.m.pigeonid+'\',\''+r.f.pigeonid+'\')">💾</button></td>'
+      +'</tr>';
+  }).join('');
+
+  return '<div class="card">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:2px">'
+    +'<div class="card-title" style="margin-bottom:0">🏆 Top-Paarungsempfehlungen</div>'
+    +'<button class="btn btn-outline btn-sm" onclick="S.pairRecOpen=false;render()">✕ Einklappen</button>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin:6px 0 10px">Alle '+PAIR_REC.results.length+' möglichen Paare aus '+cand.males.length+' Zucht'+(S.pairRecIncludeReise?'-/Reise':'')+'täubern × '+cand.females.length+' Zucht'+(S.pairRecIncludeReise?'-/Reise':'')+'täubinnen im Bestand, sortiert nach Erfolgs-Score (Ø aus Beständigkeit/Preisquote und Geschwindigkeit/Top-AS-Quote — jeweils aus Eigenleistung und Nachkommen beider Eltern). Für die eigene Preisquote zählen nur Tauben mit mind. '+MIN_FLUEGE_EIGENLEISTUNG+' geflogenen Wettflügen, und es werden nur Paare gelistet, bei denen beide Elternteile eine eigene Datenbasis (Flüge oder bewertete Nachkommen) haben. Zu eng verwandte Paare werden nach der eingestellten Inzuchtgrenze automatisch ausgeblendet'+(excluded?' ('+excluded+' Paare aktuell gefiltert)':'')+'.</div>'
+    +'<div class="qe-quickbar" style="margin-bottom:10px">'
+    +'<div class="qe-group"><span class="qe-group-label">Anzahl</span><select onchange="S.pairRecTopN=parseInt(this.value);render()">'
+    +[10,15,25,50,100].map(function(n){ return '<option value="'+n+'"'+(S.pairRecTopN===n?' selected':'')+'>Top '+n+'</option>'; }).join('')
+    +'</select></div>'
+    +'<div class="qe-group"><span class="qe-group-label">Max. Inzucht</span><select onchange="S.pairRecMaxInzucht=parseFloat(this.value);render()">'
+    +[3,6.5,10,100].map(function(n){ return '<option value="'+n+'"'+(S.pairRecMaxInzucht===n?' selected':'')+'>'+(n===100?'ohne Grenze':'≤ '+n+' %')+'</option>'; }).join('')
+    +'</select></div>'
+    +'<div class="qe-group"><span class="qe-group-label">Mindest-Score</span><select onchange="S.pairRecMinScore=parseInt(this.value);render()">'
+    +[0,35,50,60].map(function(n){ return '<option value="'+n+'"'+(S.pairRecMinScore===n?' selected':'')+'>'+(n===0?'alle':'≥ '+n)+'</option>'; }).join('')
+    +'</select></div>'
+    +'<div class="qe-group" style="justify-content:center">'+reiseToggle+'</div>'
+    +'</div>'
+    +(shown.length ? '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+      +'<thead><tr><th>#</th><th>♂ Täuber</th><th>♀ Täubin</th><th>Score</th><th>Inzucht</th><th></th></tr></thead>'
+      +'<tbody>'+rows+'</tbody></table></div>'
+      : '<div style="color:var(--text3);font-size:13px;padding:8px 0">Keine Paarungen erfüllen die aktuellen Filter — Mindest-Score senken oder Inzuchtgrenze anheben.</div>')
+    +'</div>';
+}
+
 // ── Detail-Overlay: zeigt die Formel und pro Nachkomme, wie gut geflogen wurde ──
 function closeVererbungDetail(){
   var el=document.querySelector('.veret-detail-overlay');
