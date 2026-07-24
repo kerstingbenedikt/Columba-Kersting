@@ -762,6 +762,8 @@ const S = {
   // nicht automatisch beim Start geladen, sondern erst bei Bedarf — siehe
   // ensureArchiveLoaded().
   _archiveLoaded: false, _archiveLoading: false,
+  // Paarungsliste (Tabelle "matings" in Supabase) — null = noch nicht geladen
+  matings: null, matingsLoading: false, matingsError: null,
   paarungM: null, paarungF: null, selectedNach: null, nachStatusFilter: null, nachGenFilter: null, nachExpanded: {},
   neuMode: 'full',
   bulkMode: false, bulkSelected: new Set(), bulkField: 'gender', bulkValue: '1',
@@ -2793,6 +2795,7 @@ function renderPedigreeInner(root, opts, embedded){
         </div>
       </div>
       ${!embedded && S.breederProfileEditing ? renderBreederProfileForm() : ''}
+      ${renderPaarungsprognoseCard(f, mo)}
       <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap">
         <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--blue)"></span>${t('cock')}</span>
         <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--purple)"></span>${t('hen')}</span>
@@ -3712,7 +3715,8 @@ function renderPaarung(){
       };
       return renderPedigree(VIRTUAL_PROBAND.pigeonid, {embedded:true});
     })()}
-    ` : `<div class="empty-state"><div class="icon">💑</div>Wähle einen Täuber und eine Täubin, um den Inzuchtkoeffizienten der Nachkommen zu berechnen.</div>`}`;
+    ` : `<div class="empty-state"><div class="icon">💑</div>Wähle einen Täuber und eine Täubin, um den Inzuchtkoeffizienten der Nachkommen zu berechnen.</div>`}
+    <div style="margin-top:18px">${renderMatingsList()}</div>`;
 }
 
 
@@ -6279,6 +6283,147 @@ function computeVererbungsstaerke(pigeonid){
     eliteCount:eliteCount, eliteDescendants:eliteDescendants, eliteBonus:eliteBonus,
     totalDescendants:desc.length, activeCount:flown.length, totalGesetzt:totalGesetzt, totalPreise:totalPreise, totalTopAS:totalTopAS,
     perDescendant:perDescendant};
+}
+
+// ── Beständigkeitsprognose eines Probanden (aus den Vererbungsstärke-Scores
+// von Vater und Mutter, kombiniert per Durchschnitt) ────────────────────────
+// Nutzt dieselbe Formel/Datenbasis wie computeVererbungsstaerke() oben — hier
+// nur auf die zwei Eltern angewendet und gemittelt, um vorherzusagen, wie gut
+// DIESER Proband (bzw. eine geplante Paarung) seine Leistung voraussichtlich
+// weitergibt. Kombination bewusst einfach gehalten: Ø beider Elternscores,
+// wenn beide eine ausreichende Datenbasis haben — sonst der einzelne
+// vorhandene Score mit Hinweis, sonst "keine Datenbasis".
+function computePaarungsprognose(father, mother){
+  const rf = father ? computeVererbungsstaerke(father.pigeonid) : null;
+  const rm = mother ? computeVererbungsstaerke(mother.pigeonid) : null;
+  if(father && (!rf || !rf.ready)) ensureVererbungLoaded(father.pigeonid);
+  if(mother && (!rm || !rm.ready)) ensureVererbungLoaded(mother.pigeonid);
+  const sF = (rf && rf.ready && rf.score!=null) ? rf.score : null;
+  const sM = (rm && rm.ready && rm.score!=null) ? rm.score : null;
+  let combined=null, note='';
+  if(sF!=null && sM!=null) combined = Math.round((sF+sM)/2);
+  else if(sF!=null){ combined=sF; note=' (nur Vater — Mutter ohne ausreichende Datenbasis)'; }
+  else if(sM!=null){ combined=sM; note=' (nur Mutter — Vater ohne ausreichende Datenbasis)'; }
+  const stillLoading = (father && rf && !rf.ready) || (mother && rm && !rm.ready);
+  return {rf, rm, sF, sM, combined, note, stillLoading};
+}
+
+// Kompaktes Ergebnis für einen Elternteil innerhalb der Prognose-Karte.
+function _pp_parentLine(p, r){
+  if(!p) return `<div style="color:var(--text3);font-size:12px">unbekannt</div>`;
+  const rg = escH(ring(p))+(p.name?' · '+escH(p.name):'');
+  if(!r || !r.ready) return `<div style="color:var(--text3);font-size:12px">${rg} — wird geladen…</div>`;
+  if(r.noDescendants) return `<div style="color:var(--text3);font-size:12px">${rg} — keine Nachkommen erfasst</div>`;
+  if(r.noFlights) return `<div style="color:var(--text3);font-size:12px">${rg} — Nachkommen noch ohne Flugergebnisse</div>`;
+  if(r.notEnough) return `<div style="color:var(--text3);font-size:12px">${rg} — zu wenig Datenbasis (${r.erfolgreicheCount}/${VERERBER_MIN_ERFOLGREICHE} erfolgr. Nachk. im Bestand)</div>`;
+  const c = r.score>=60?'var(--green)':r.score>=35?'var(--orange)':'#e07070';
+  return `<div style="cursor:pointer" onclick="event.stopPropagation();showVererbungDetail('${p.pigeonid}')">
+    <span style="font-weight:700;color:${c};font-size:15px">${r.score}</span>
+    <span style="font-size:11px;color:var(--text3)"> · ${rg}</span>
+    <div style="font-size:10px;color:var(--text3);margin-top:1px">Preisq. ${r.preisquote.toFixed(0)}% · Top-AS ${r.topASquote.toFixed(0)}% · ${r.activeCount}/${r.totalDescendants} akt.${r.eliteCount?' · '+r.eliteCount+' Elite':''}</div>
+  </div>`;
+}
+
+// Beständigkeitsprognose-Karte fürs Stammbaum-Proband (echte Taube ODER
+// virtueller Nachkomme aus dem Paarungscheck) — zeigt Ø-Score sowie beide
+// Einzelwerte, plus Button zum Speichern in der Paarungsliste.
+function renderPaarungsprognoseCard(father, mother){
+  if(!father && !mother) return '';
+  const pp = computePaarungsprognose(father, mother);
+  const combinedHtml = pp.combined!=null
+    ? `<div style="font-size:26px;font-weight:700;color:${pp.combined>=60?'var(--green)':pp.combined>=35?'var(--orange)':'#e07070'}">${pp.combined}</div>
+       <div style="font-size:11px;color:var(--text3)">Ø Vererbungsstärke der Eltern${pp.note}</div>`
+    : `<div style="font-size:13px;color:var(--text3)">${pp.stillLoading?'Daten werden geladen…':'Noch keine ausreichende Datenbasis bei den Eltern'}</div>`;
+  const saveBtn = (father && mother) ? `<button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="savePairingToList('${father.pigeonid}','${mother.pigeonid}')">💾 Paarung speichern</button>` : '';
+  return `<div class="card" style="margin-bottom:14px">
+    <div class="card-title">🧬 Beständigkeitsprognose</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Prognose für die Nachzucht dieses Probanden, basierend auf der Vererbungsstärke von Vater und Mutter (Preisquote, Top-AS-Quote &gt;90 Punkte, Aktivenanteil und Bestands-Elite-Bonus der jeweils eigenen Nachkommen).</div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+      <div style="min-width:150px">${combinedHtml}</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+        <div>${_pp_parentLine(father,pp.rf)}</div>
+        <div>${_pp_parentLine(mother,pp.rm)}</div>
+      </div>
+    </div>
+    ${saveBtn}
+  </div>`;
+}
+
+// ── Paarungsliste (Supabase-Tabelle "matings") ──────────────────────────
+// WICHTIG: Diese Tabelle muss einmalig in Supabase angelegt werden (SQL
+// siehe Antworttext) — ohne sie schlägt savePairingToList()/loadMatings()
+// mit einer verständlichen Fehlermeldung fehl.
+function loadMatingsIfNeeded(){
+  if(S.matings!==null || S.matingsLoading) return;
+  S.matingsLoading=true; S.matingsError=null;
+  apiGet('/matings?order=created_at.desc&limit=200')
+    .then(rows=>{ S.matings=rows||[]; S.matingsLoading=false; render(); })
+    .catch(e=>{ S.matingsError=e.message; S.matingsLoading=false; S.matings=[]; render(); });
+}
+async function savePairingToList(fatherId, motherId){
+  const f=findById(fatherId), m=findById(motherId);
+  if(!f || !m) return;
+  const pp = computePaarungsprognose(f,m);
+  const ib = calcInbreedingPair(f,m);
+  const body = {
+    fatherid: fatherId, motherid: motherId,
+    father_ring: ring(f), father_name: f.name||null,
+    mother_ring: ring(m), mother_name: m.name||null,
+    inzucht: ib!=null ? Math.round(ib*10000)/100 : null,
+    score_father: pp.sF, score_mother: pp.sM, score_combined: pp.combined
+  };
+  try{
+    await apiPost('matings', body);
+    S.matings=null; // beim nächsten Öffnen der Liste neu laden
+    alert('Paarung gespeichert.');
+    render();
+  }catch(e){
+    alert('Speichern fehlgeschlagen: '+e.message+'\n\nWurde die Tabelle "matings" in Supabase bereits angelegt?');
+  }
+}
+async function deleteMating(id){
+  if(!confirm('Diese gespeicherte Paarung wirklich löschen?')) return;
+  try{
+    await apiDeleteBy('matings','id=eq.'+id);
+    S.matings = (S.matings||[]).filter(r=>r.id!==id);
+    render();
+  }catch(e){ alert('Löschen fehlgeschlagen: '+e.message); }
+}
+// Lädt eine gespeicherte Paarung wieder in den Paarungscheck (falls beide
+// Tauben noch lokal geladen sind — Archiv ggf. vorher per Suche nachladen).
+function loadMatingIntoCheck(fatherId, motherId){
+  const f=findById(fatherId), m=findById(motherId);
+  if(!f || !m){ alert('Eine der beiden Tauben ist aktuell nicht geladen (evtl. im Archiv). Bitte kurz danach suchen und erneut versuchen.'); return; }
+  S.paarungM=f; S.paarungF=m; S.tab='paarung'; setActiveNav('paarung'); render(); window.scrollTo(0,0);
+}
+function renderMatingsList(){
+  loadMatingsIfNeeded();
+  if(S.matingsError) return `<div class="card"><div style="color:#e07070;font-size:13px">Paarungsliste konnte nicht geladen werden: ${escH(S.matingsError)}</div>
+    <div style="font-size:12px;color:var(--text3);margin-top:6px">Falls die Tabelle "matings" in Supabase noch nicht existiert, muss sie einmalig angelegt werden.</div></div>`;
+  if(S.matingsLoading || S.matings===null) return `<div class="loading"><div class="spinner"></div>Lade Paarungsliste…</div>`;
+  if(!S.matings.length) return `<div class="card"><div style="color:var(--text3);font-size:13px">Noch keine Paarungen gespeichert — im Stammbaum eines Probanden auf "💾 Paarung speichern" klicken.</div></div>`;
+  const rows = S.matings.map(r=>{
+    const sc = v => v==null?'—':v;
+    const cColor = v => v==null?'var(--text3)':v>=60?'var(--green)':v>=35?'var(--orange)':'#e07070';
+    return `<tr style="cursor:pointer" onclick="loadMatingIntoCheck('${r.fatherid}','${r.motherid}')">
+      <td style="font-family:monospace;font-size:12px">♂ ${escH(r.father_ring||'')}${r.father_name?'<br><span style=\"color:var(--text3)\">'+escH(r.father_name)+'</span>':''}</td>
+      <td style="font-family:monospace;font-size:12px">♀ ${escH(r.mother_ring||'')}${r.mother_name?'<br><span style=\"color:var(--text3)\">'+escH(r.mother_name)+'</span>':''}</td>
+      <td style="text-align:center">${r.inzucht!=null?r.inzucht.toFixed(2)+' %':'—'}</td>
+      <td style="text-align:center;color:${cColor(r.score_father)}">${sc(r.score_father)}</td>
+      <td style="text-align:center;color:${cColor(r.score_mother)}">${sc(r.score_mother)}</td>
+      <td style="text-align:center;font-weight:700;color:${cColor(r.score_combined)}">${sc(r.score_combined)}</td>
+      <td style="text-align:center">${r.created_at?new Date(r.created_at).toLocaleDateString('de'):''}</td>
+      <td style="text-align:center"><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();deleteMating('${r.id}')">🗑</button></td>
+    </tr>`;
+  }).join('');
+  return `<div class="card">
+    <div class="card-title">📋 Gespeicherte Paarungen</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Zeile anklicken lädt die Paarung in den Rechner oben. Score-Spalten = Vererbungsstärke (Preisquote/Top-AS/Aktivenanteil/Elite-Bonus der jeweils eigenen Nachkommen).</div>
+    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr><th>Vater</th><th>Mutter</th><th>Inzucht</th><th>Score V</th><th>Score M</th><th>Score Ø</th><th>Datum</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  </div>`;
 }
 // ── Detail-Overlay: zeigt die Formel und pro Nachkomme, wie gut geflogen wurde ──
 function closeVererbungDetail(){
