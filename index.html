@@ -6415,6 +6415,15 @@ function loadMatingsIfNeeded(){
 async function savePairingToList(fatherId, motherId){
   const f=findById(fatherId), m=findById(motherId);
   if(!f || !m) return;
+  // Duplikatsprüfung direkt gegen die DB (nicht nur gegen S.matings — die Liste
+  // ist evtl. in dieser Sitzung noch gar nicht geladen worden).
+  try{
+    const existing = await apiGet('/matings?fatherid=eq.'+fatherId+'&motherid=eq.'+motherId+'&select=id&limit=1');
+    if(existing && existing.length){
+      alert('Diese Paarung ('+ring(f)+' × '+ring(m)+') ist bereits in der Paarungsliste gespeichert.');
+      return;
+    }
+  }catch(e){ /* Prüfung fehlgeschlagen — Speichern trotzdem versuchen */ }
   const pp = computePaarungsprognose(f,m);
   const ib = calcInbreedingPair(f,m);
   const body = {
@@ -6469,13 +6478,79 @@ function renderMatingsList(){
     </tr>`;
   }).join('');
   return `<div class="card">
-    <div class="card-title">📋 Gespeicherte Paarungen</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Zeile anklicken lädt die Paarung in den Rechner oben. Score-Spalten = Erfolgs-Score (Beständigkeit/Preisquote + Geschwindigkeit/Top-AS-Quote, jeweils aus Eigenleistung und Nachkommen).</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:2px">
+      <div class="card-title" style="margin-bottom:0">📋 Gespeicherte Paarungen</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="printMatingsList()">🖨 Drucken</button>
+        <button class="btn btn-outline btn-sm" onclick="exportMatingsCSV()">⬇️ CSV</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin:6px 0 10px">Zeile anklicken lädt die Paarung in den Rechner oben. Score-Spalten = Erfolgs-Score (Beständigkeit/Preisquote + Geschwindigkeit/Top-AS-Quote, jeweils aus Eigenleistung und Nachkommen).</div>
     <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr><th>Vater</th><th>Mutter</th><th>Inzucht</th><th>Score V</th><th>Score M</th><th>Score Ø</th><th>Datum</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
   </div>`;
+}
+function exportMatingsCSV(){
+  if(!S.matings || !S.matings.length){ alert('Keine gespeicherten Paarungen zum Exportieren.'); return; }
+  const header = ['Vater Ring','Vater Name','Mutter Ring','Mutter Name','Inzucht %','Score Vater','Score Mutter','Score Ø','Datum'];
+  const rows = S.matings.map(r=>[
+    r.father_ring||'', r.father_name||'', r.mother_ring||'', r.mother_name||'',
+    r.inzucht!=null?r.inzucht.toFixed(2):'', r.score_father??'', r.score_mother??'', r.score_combined??'',
+    r.created_at?new Date(r.created_at).toLocaleDateString('de'):''
+  ]);
+  const csv = [header, ...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href=url; a.download='paarungsliste.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+function printMatingsList(){
+  if(!S.matings || !S.matings.length){ alert('Keine gespeicherten Paarungen zum Drucken.'); return; }
+  const esc = s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const today = new Date().toLocaleDateString('de-DE');
+  const rows = S.matings.map(r=>`<tr>
+    <td>${esc(r.father_ring)}${r.father_name?'<br><span class="sub">'+esc(r.father_name)+'</span>':''}</td>
+    <td>${esc(r.mother_ring)}${r.mother_name?'<br><span class="sub">'+esc(r.mother_name)+'</span>':''}</td>
+    <td style="text-align:center">${r.inzucht!=null?r.inzucht.toFixed(2)+' %':'—'}</td>
+    <td style="text-align:center">${r.score_father??'—'}</td>
+    <td style="text-align:center">${r.score_mother??'—'}</td>
+    <td style="text-align:center;font-weight:700">${r.score_combined??'—'}</td>
+    <td style="text-align:center">${r.created_at?new Date(r.created_at).toLocaleDateString('de'):''}</td>
+  </tr>`).join('');
+  const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+<title>Paarungsliste ${today}</title>
+<style>
+  @page{size:A4 landscape;margin:10mm}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,sans-serif;font-size:9pt}
+  body{color:#111}
+  h1{font-size:14pt;font-weight:700;margin-bottom:1mm}
+  .meta{font-size:8pt;color:#555;margin-bottom:4mm}
+  table{width:100%;border-collapse:collapse}
+  th{background:#222;color:#fff;padding:2.5mm 3mm;text-align:left;font-size:8.5pt}
+  td{padding:2mm 3mm;border-bottom:.2mm solid #e0e0e0;vertical-align:top}
+  .sub{color:#777;font-size:7.5pt}
+  tr:nth-child(even) td{background:#f7f7f7}
+  .footer{margin-top:4mm;font-size:7.5pt;color:#aaa;text-align:right}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body>
+<h1>📋 Paarungsliste</h1>
+<div class="meta">${today} &nbsp;·&nbsp; ${S.matings.length} Paarungen &nbsp;·&nbsp; Score = Erfolgs-Score (Beständigkeit + Geschwindigkeit, Eigenleistung + Nachkommen)</div>
+<table>
+  <thead><tr><th>Vater</th><th>Mutter</th><th>Inzucht</th><th>Score V</th><th>Score M</th><th>Score Ø</th><th>Datum</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="footer">Brieftauben-Verwaltung · ${today}</div>
+</body></html>`;
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.target='_blank'; a.rel='noopener';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),15000);
 }
 // ── Detail-Overlay: zeigt die Formel und pro Nachkomme, wie gut geflogen wurde ──
 function closeVererbungDetail(){
