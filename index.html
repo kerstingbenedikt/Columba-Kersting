@@ -7389,7 +7389,7 @@ function renderTripsList(){
     </div>`;
   }).join('');
 
-  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" title="Für alle bereits importierten Flüge ohne eigene RV-Liste (zu wenig Tauben) die RV-Rangliste selbst berechnen und speichern — einmalig nötig für Altbestand, neue Importe machen das automatisch." onclick="runBackfillRVFallbackAll(event)">🧮 RV-Ranglisten nachrechnen</button><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div></div>'
+  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" title="Findet Reisen, die versehentlich mehrfach angelegt wurden (gleicher Jahrgang/Ort/Datum) und führt sie zusammen." onclick="showDuplicateTripsModal()">🧹 Duplikate bereinigen</button><button class="btn btn-outline" title="Für alle bereits importierten Flüge ohne eigene RV-Liste (zu wenig Tauben) die RV-Rangliste selbst berechnen und speichern — einmalig nötig für Altbestand, neue Importe machen das automatisch." onclick="runBackfillRVFallbackAll(event)">🧮 RV-Ranglisten nachrechnen</button><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div></div>'
     +(anyComputedRV?'<div style="font-size:11px;color:var(--text3);margin:-8px 0 12px">* RV-Taubenzahl selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene).</div>':'')
     +(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
 }
@@ -8401,8 +8401,16 @@ async function runTripsImport(){
     if(lbl)lbl.textContent=RT.imp.stats.results+' von '+total+' ('+pct+'%)';
   };
 
-  // Sammle alle tripids dieser Session für Duplikat-Check
-  const sessionTrips=[...RT.trips];
+  // Sammle alle tripids dieser Session für Duplikat-Check. WICHTIG: Immer frisch
+  // und VOLLSTÄNDIG (nicht die für die Reisen-Übersicht auf 500 Zeilen gedeckelte
+  // RT.trips!) direkt aus der DB laden — sonst werden Reisen übersehen, die z.B.
+  // schon in einer früheren Import-Sitzung (ohne Seiten-Neuladen dazwischen) oder
+  // auf einem anderen Gerät angelegt wurden, und es entstehen doppelte Reisen,
+  // wenn später eine weitere Züchter-Datei für dieselbe Reise nachgereicht wird.
+  setS('Prüfe bereits vorhandene Reisen…');
+  let sessionTrips;
+  try{ sessionTrips = await apiGetAll('/trips?select=*'); }
+  catch(e){ sessionTrips=[...RT.trips]; } // Fallback, falls apiGetAll scheitert
   const touchedTripIds=new Set();
   // Ass-Kategorie-Flags (A/B/C/D) werden nur EINMAL pro Jahr auf einem Flug
   // gesetzt. Sie werden am Flug-Ergebnis (pigeontrips) gespeichert, damit
@@ -8585,6 +8593,185 @@ async function runTripsImport(){
   }
   clearPTCache();
   RT.imp.step='done'; render();
+}
+
+// ── Duplikate bereinigen ──────────────────────────────────────────────
+// Findet Reisen, die versehentlich mehrfach angelegt wurden (gleicher
+// Jahrgang, Ort und Datum) — das passiert typischerweise, wenn für dieselbe
+// Reise Züchter-Dateien in getrennten Sitzungen nachimportiert werden.
+// runTripsImport() gleicht seit Kurzem vor JEDEM Import frisch und
+// vollständig (statt der auf 500 Zeilen gedeckelten Übersichtsliste) gegen
+// die DB ab, um das künftig zu verhindern — dieses Werkzeug bereinigt
+// bereits vorhandene Altfälle.
+let DUPE = { scanning:false, groups:null, error:null, merging:false, log:[] };
+
+async function scanDuplicateTrips(){
+  DUPE.scanning=true; DUPE.groups=null; DUPE.error=null; DUPE.log=[]; updateDupeModal();
+  try{
+    const all = await apiGetAll('/trips?select=*');
+    const normL=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
+    const map={};
+    all.forEach(function(t){
+      const key=(t.vintage||'?')+'|'+normL(t.location)+'|'+(t.tripdate||'?');
+      (map[key]=map[key]||[]).push(t);
+    });
+    const groups = Object.values(map).filter(function(g){ return g.length>1; });
+    const allIds = [];
+    groups.forEach(function(g){ g.forEach(function(t){ allIds.push(t.tripid); }); });
+    const counts = {};
+    for(let i=0;i<allIds.length;i+=100){
+      const chunk = allIds.slice(i,i+100);
+      let rows=[];
+      try{ rows = await apiGet('/pigeontrips?tripid=in.('+chunk.join(',')+')&select=id,tripid'); }catch(e){}
+      (rows||[]).forEach(function(r){ counts[r.tripid]=(counts[r.tripid]||0)+1; });
+    }
+    // Je Gruppe: die "vollständigste" Reise zuerst (bleibt als Ziel bestehen) —
+    // bevorzugt eine, für die bereits eine eigene RV-Liste importiert wurde,
+    // sonst die mit den meisten erfassten Ergebnissen/gesetzten Tauben.
+    groups.forEach(function(g){
+      g.forEach(function(t){ t._resultCount = counts[t.tripid]||0; });
+      g.sort(function(a,b){
+        const rvA=a.pigeonsset_rv?1:0, rvB=b.pigeonsset_rv?1:0;
+        if(rvB!==rvA) return rvB-rvA;
+        if(b._resultCount!==a._resultCount) return b._resultCount-a._resultCount;
+        return (b.pigeonsset||0)-(a.pigeonsset||0);
+      });
+    });
+    groups.sort(function(a,b){ return (b[0].tripdate||'').localeCompare(a[0].tripdate||''); });
+    DUPE.groups = groups;
+  }catch(e){ DUPE.error = e.message||'Unbekannter Fehler'; }
+  DUPE.scanning=false; updateDupeModal();
+}
+
+// Führt eine Gruppe doppelter Reisen zusammen: group[0] bleibt bestehen (Ziel),
+// alle weiteren werden hineingeführt und danach gelöscht. Ergebnisse (pigeontrips)
+// werden verschoben — außer ein Ergebnis mit gleichem Ring+Züchter existiert
+// bereits im Ziel (z.B. weil dieselbe Züchter-Datei versehentlich zweimal
+// importiert wurde); dann wird die echte Dopplung gelöscht statt verschoben.
+async function mergeDuplicateGroup(group){
+  const primary = group[0];
+  const dupes = group.slice(1);
+  let movedResults=0, deletedDupeResults=0;
+  for(const dup of dupes){
+    let primRows=[], dupRows=[];
+    try{ primRows = await apiGet('/pigeontrips?tripid=eq.'+primary.tripid+'&select=id,ringnumber,breedername')||[]; }catch(e){}
+    try{ dupRows = await apiGet('/pigeontrips?tripid=eq.'+dup.tripid+'&select=id,ringnumber,breedername')||[]; }catch(e){}
+    const key=function(r){ return (r.ringnumber||'')+'|'+(r.breedername||''); };
+    const primKeys = new Set(primRows.map(key));
+    for(const r of dupRows){
+      if(primKeys.has(key(r))){
+        try{ await apiDeleteBy('pigeontrips','id=eq.'+r.id); deletedDupeResults++; }catch(e){}
+      } else {
+        try{ await apiPatchBy('pigeontrips','id=eq.'+r.id,{tripid:primary.tripid}); movedResults++; primKeys.add(key(r)); }catch(e){}
+      }
+    }
+    // Fehlende Felder der Ziel-Reise aus der Dublette auffüllen (nur wenn dort noch leer)
+    const upd={};
+    ['prices1','prices2','prices3','prices4','prices5','averagedistance3','pigeonsset_rv','pigeonsset_reggr','pigeonsset_reg'].forEach(function(k){
+      if((primary[k]==null||primary[k]==='') && dup[k]!=null && dup[k]!=='') upd[k]=dup[k];
+    });
+    if(Object.keys(upd).length){
+      try{ await apiPatchBy('trips','tripid=eq.'+primary.tripid,upd); Object.assign(primary,upd); }catch(e){}
+    }
+    try{ await apiDeleteBy('trips','tripid=eq.'+dup.tripid); }catch(e){}
+  }
+  try{
+    const finalRows = await apiGet('/pigeontrips?tripid=eq.'+primary.tripid+'&select=id')||[];
+    await apiPatchBy('trips','tripid=eq.'+primary.tripid,{pigeonsset:finalRows.length});
+  }catch(e){}
+  return {movedResults:movedResults, deletedDupeResults:deletedDupeResults, mergedTrips:dupes.length, location:primary.location, tripdate:primary.tripdate};
+}
+
+async function mergeOneDuplicateGroup(idx){
+  if(DUPE.merging || !DUPE.groups || !DUPE.groups[idx]) return;
+  DUPE.merging=true; updateDupeModal();
+  const group = DUPE.groups[idx];
+  try{
+    const r = await mergeDuplicateGroup(group);
+    DUPE.log.unshift((r.location||'?')+' · '+(r.tripdate||'?')+': '+r.mergedTrips+' Dublette(n) zusammengeführt, '+r.movedResults+' Ergebnisse übernommen'+(r.deletedDupeResults?', '+r.deletedDupeResults+' echte Dopplung(en) entfernt':'')+'.');
+    DUPE.groups.splice(idx,1);
+  }catch(e){ DUPE.log.unshift('Fehler: '+e.message); }
+  DUPE.merging=false;
+  await loadTrips(); clearPTCache();
+  updateDupeModal();
+}
+
+async function mergeAllDuplicateGroups(){
+  if(DUPE.merging || !DUPE.groups || !DUPE.groups.length) return;
+  DUPE.merging=true; updateDupeModal();
+  while(DUPE.groups.length){
+    const group = DUPE.groups[0];
+    try{
+      const r = await mergeDuplicateGroup(group);
+      DUPE.log.unshift((r.location||'?')+' · '+(r.tripdate||'?')+': '+r.mergedTrips+' Dublette(n) zusammengeführt, '+r.movedResults+' Ergebnisse übernommen'+(r.deletedDupeResults?', '+r.deletedDupeResults+' echte Dopplung(en) entfernt':'')+'.');
+    }catch(e){ DUPE.log.unshift('Fehler: '+e.message); }
+    DUPE.groups.shift();
+    updateDupeModal();
+  }
+  DUPE.merging=false;
+  await loadTrips(); clearPTCache();
+  updateDupeModal();
+}
+
+function renderDupeModalBody(){
+  if(DUPE.error){
+    return '<div style="color:#e07070;font-size:13px;margin-bottom:10px">Fehler: '+escH(DUPE.error)+'</div>'
+      +'<button class="btn btn-sm" onclick="scanDuplicateTrips()">Erneut versuchen</button>';
+  }
+  if(DUPE.scanning){
+    return '<div class="loading"><div class="spinner"></div>Suche nach doppelt angelegten Reisen…</div>';
+  }
+  if(!DUPE.groups){
+    return '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">Sucht Reisen mit identischem Jahrgang, Ort und Datum und führt sie auf Wunsch zu einer Reise zusammen — Ergebnisse werden übernommen, keine gehen verloren. Ein versehentlicher doppelter Import derselben Züchter-Datei wird dabei erkannt und nicht dupliziert, sondern entfernt.</div>'
+      +'<button class="btn" onclick="scanDuplicateTrips()">🔍 Nach Duplikaten suchen</button>';
+  }
+  var logHtml = DUPE.log.length ? '<div style="font-size:11px;color:var(--text3);margin:10px 0;max-height:100px;overflow-y:auto">'+DUPE.log.map(function(l){ return '<div>'+escH(l)+'</div>'; }).join('')+'</div>' : '';
+  if(!DUPE.groups.length){
+    return '<div style="font-size:13px;color:var(--green);margin-bottom:10px">✓ Keine doppelten Reisen (mehr) gefunden.</div>'+logHtml;
+  }
+  var rows = DUPE.groups.map(function(g,i){
+    var detailRows = g.map(function(t,j){
+      return '<div style="font-size:11px;color:'+(j===0?'var(--green)':'var(--text3)')+';margin-top:2px">'
+        +(j===0?'✓ Ziel (bleibt bestehen): ':'– wird hineingeführt: ')
+        +(t.pigeonsset||0)+' Tb.'+(t.pigeonsset_rv?', RV-Liste vorhanden':'')+', '+(t._resultCount||0)+' Ergebnis(se) erfasst'
+        +'</div>';
+    }).join('');
+    return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+      +'<div style="font-size:13px"><strong>'+escH(g[0].location||'?')+'</strong> · '+escH(g[0].tripdate||'?')+' · Jg. '+(g[0].vintage||'?')+' <span style="color:var(--text3)">('+g.length+'× angelegt)</span></div>'
+      +'<button class="btn btn-outline btn-sm" '+(DUPE.merging?'disabled':'')+' onclick="mergeOneDuplicateGroup('+i+')">Zusammenführen</button>'
+      +'</div>'
+      + detailRows
+      +'</div>';
+  }).join('');
+  return '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">'+DUPE.groups.length+' Gruppe(n) mit doppelt angelegten Reisen gefunden. Die jeweils vollständigste Reise (grün) bleibt bestehen, die andere(n) werden hineingeführt und danach gelöscht.</div>'
+    +'<button class="btn" '+(DUPE.merging?'disabled':'')+' style="margin-bottom:12px" onclick="mergeAllDuplicateGroups()">'+(DUPE.merging?'Führe zusammen…':'✓ Alle zusammenführen')+'</button>'
+    + rows + logHtml;
+}
+
+function updateDupeModal(){
+  var body = document.getElementById('dupe-modal-body');
+  if(body) body.innerHTML = renderDupeModalBody();
+}
+
+function showDuplicateTripsModal(){
+  DUPE = { scanning:false, groups:null, error:null, merging:false, log:[] };
+  var overlay=document.createElement('div');
+  overlay.className='lightbox-overlay dupe-overlay';
+  overlay.style.cursor='default';
+  overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
+  var panel=document.createElement('div');
+  panel.style.cssText='background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:600px;width:92vw;max-height:86vh;overflow-y:auto;padding:20px;cursor:default';
+  panel.onclick=function(e){ e.stopPropagation(); };
+  panel.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px">'
+      +'<div class="card-title" style="margin:0">🧹 Doppelte Reisen bereinigen</div>'
+      +'<span onclick="this.closest(\'.dupe-overlay\').remove()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>'
+    +'</div>'
+    +'<div id="dupe-modal-body"></div>';
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  scanDuplicateTrips();
 }
 
 // ── ZÜCHTER-MODUL ─────────────────────────────────────────────────
