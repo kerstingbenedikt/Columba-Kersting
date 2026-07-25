@@ -6070,6 +6070,85 @@ function pigeonTopPlacementsCompactLines(pigeonid){
 function openPigeonTripYear(yr){ S.pigeonTripYear=yr; render(); }
 function closePigeonTripYear(){ S.pigeonTripYear=null; render(); }
 
+// ── Zentrale, einstellbare Score-Gewichtung ───────────────────────────────
+// Diese Gewichte steuern EINHEITLICH sowohl die Eigenleistung als auch die
+// Vererbungsstärke (Nachkommen) einer Taube — dieselbe Formel wird für die
+// Anzeige im Stammbaum/Details, in der Nachkommen-Ansicht, im Paarungscheck
+// und in der Vererberliste verwendet, damit überall derselbe Score erscheint.
+// Persistiert lokal im Browser (localStorage), damit die Einstellung über
+// Sitzungen hinweg erhalten bleibt.
+const SCORE_CFG_DEFAULT = {
+  eigenAnteil: 50,            // % Gewicht der Eigenleistung am Erfolgs-Score einer Taube (Rest = Nachkommen)
+  gewichtBestaendigkeit: 60,  // Gewichtung Beständigkeit (Preisquote) — von 100 Punkten je Teilscore
+  gewichtSchnelligkeit: 40,   // Gewichtung Schnelligkeit (Anteil Flüge mit >90 AS-Punkten) — von 100 Punkten je Teilscore
+  minFluegePreisquote: 15     // Mindestanzahl Flüge, ab der eine Preisquote (eigene Taube ODER einzelner Nachkomme) gewertet wird
+};
+let SCORE_CFG = (function(){
+  try{
+    const saved = JSON.parse(localStorage.getItem('scoreCfg')||'null');
+    return saved ? Object.assign({}, SCORE_CFG_DEFAULT, saved) : Object.assign({}, SCORE_CFG_DEFAULT);
+  }catch(e){ return Object.assign({}, SCORE_CFG_DEFAULT); }
+})();
+function saveScoreCfg(cfg){
+  SCORE_CFG = Object.assign({}, SCORE_CFG_DEFAULT, cfg);
+  try{ localStorage.setItem('scoreCfg', JSON.stringify(SCORE_CFG)); }catch(e){}
+  invalidatePairRec(); // gecachte Empfehlungsliste basiert auf alten Gewichten
+  render();
+}
+function resetScoreCfg(){ saveScoreCfg(Object.assign({}, SCORE_CFG_DEFAULT)); }
+
+// Rechnet Preisquote (Beständigkeit) + Top-AS-Quote (Schnelligkeit) nach den
+// aktuell eingestellten Gewichten in einen Teilscore von 0-100 um. Wird
+// identisch für die Eigenleistung EINER Taube und für die gepoolten Werte
+// ihrer Nachkommen verwendet, damit beide Seiten vergleichbar bleiben.
+function computeQuoteScore(preisquote, topASquote){
+  var wB = SCORE_CFG.gewichtBestaendigkeit, wS = SCORE_CFG.gewichtSchnelligkeit;
+  var sum = wB+wS; if(!(sum>0)) sum=100;
+  var wBn = wB/sum*100, wSn = wS/sum*100; // auf 100 normalisiert, falls Nutzer nicht exakt 100 einstellt
+  var bestPunkte = preisquote/100 * wBn;
+  var schnellPunkte = Math.min(topASquote * (wSn/10), wSn); // Sättigung bei Top-AS-Quote = 1/10 des Gewichts
+  return Math.min(100, bestPunkte + schnellPunkte);
+}
+
+function showScoreSettingsModal(){
+  var c = SCORE_CFG;
+  var overlay=document.createElement('div');
+  overlay.className='lightbox-overlay score-cfg-overlay';
+  overlay.style.cursor='default';
+  overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
+  var panel=document.createElement('div');
+  panel.style.cssText='background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:480px;width:92vw;max-height:86vh;overflow-y:auto;padding:20px;cursor:default';
+  panel.onclick=function(e){ e.stopPropagation(); };
+  function row(label, id, val, min, max, step, suffix, hint){
+    return '<div style="margin-bottom:16px">'
+      +'<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>'+label+'</span><span id="'+id+'-val" style="font-weight:700;color:var(--green)">'+val+suffix+'</span></div>'
+      +'<input type="range" id="'+id+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" style="width:100%" oninput="document.getElementById(\''+id+'-val\').textContent=this.value+\''+suffix+'\'">'
+      +(hint?'<div style="font-size:11px;color:var(--text3);margin-top:3px">'+hint+'</div>':'')
+      +'</div>';
+  }
+  panel.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px">'
+      +'<div class="card-title" style="margin:0">⚙️ Score-Einstellungen</div>'
+      +'<span onclick="this.closest(\'.score-cfg-overlay\').remove()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>'
+    +'</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:16px">Steuert einheitlich Eigenleistung, Vererbungsstärke, Erfolgs-Score und Paarungsempfehlungen.</div>'
+    +row('Eigenleistung vs. Nachkommen', 'sc-eigen', c.eigenAnteil, 0, 100, 5, '% Eigenleistung', 'Wie stark die eigene Flugleistung im Vergleich zur Vererbungsstärke (Nachkommen) in den Erfolgs-Score einer Taube einfließt.')
+    +row('Gewichtung Beständigkeit', 'sc-best', c.gewichtBestaendigkeit, 0, 100, 5, '', 'Preisquote — Anteil Flüge mit Preis.')
+    +row('Gewichtung Schnelligkeit', 'sc-schnell', c.gewichtSchnelligkeit, 0, 100, 5, '', 'Anteil Flüge mit mehr als 90 AS-Punkten.')
+    +row('Mindestflüge für Preisquote', 'sc-minflug', c.minFluegePreisquote, 0, 30, 1, ' Flüge', 'Unter dieser Flugzahl wird die Preisquote (eigene Taube oder einzelner Nachkomme) als statistisch nicht belastbar ignoriert.')
+    +'<div style="display:flex;gap:8px;margin-top:6px">'
+    +'<button class="btn" style="flex:1" onclick="'
+      +'saveScoreCfg({eigenAnteil:parseInt(document.getElementById(\'sc-eigen\').value),'
+      +'gewichtBestaendigkeit:parseInt(document.getElementById(\'sc-best\').value),'
+      +'gewichtSchnelligkeit:parseInt(document.getElementById(\'sc-schnell\').value),'
+      +'minFluegePreisquote:parseInt(document.getElementById(\'sc-minflug\').value)});'
+      +'this.closest(\'.score-cfg-overlay\').remove()">Speichern</button>'
+    +'<button class="btn btn-outline" onclick="resetScoreCfg();this.closest(\'.score-cfg-overlay\').remove()">Zurücksetzen</button>'
+    +'</div>';
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
+
 // ── Vererbungsstärke nach Flügen ─────────────────────────────────────────
 // Misst, wie gut eine Taube ihre Flugleistung an ihre Nachkommen (Kinder +
 // Enkel) weitergibt. Grundlage: die gepoolten Flugergebnisse aller Kinder
@@ -6079,7 +6158,8 @@ function closePigeonTripYear(){ S.pigeonTripYear=null; render(); }
 // In die Wertung fließen NUR Nachkommen ein, die überhaupt an mind. einem
 // Flug teilgenommen haben (nie geflogene Nachkommen werden ignoriert, nicht
 // als "schlecht" gewertet). Ein Nachkomme gilt als "erfolgreich", wenn er
-// eine Preisquote von mind. VERERBER_ERFOLG_MIN_PREISQUOTE% aufweist UND
+// mind. SCORE_CFG.minFluegePreisquote Flüge absolviert hat UND eine
+// Preisquote von mind. VERERBER_ERFOLG_MIN_PREISQUOTE% aufweist UND
 // davon mind. VERERBER_ERFOLG_MIN_TOPAS Preise mit mehr als
 // VERERBER_ELITE_AS_SCHWELLE AS-Punkten erflogen hat (ein einzelner Preis
 // reicht also nicht mehr). Von diesen "erfolgreichen" Nachkommen müssen
@@ -6193,8 +6273,9 @@ function renderVererberRanking(){
   var nichtBestand = results.filter(function(r){ return !r.pigeon.instock; });
 
   return '<div class="card">'
-    +'<div class="card-title">🧬 Vererbungsstärke nach Flügen</div>'
-    +'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Bewertet Tauben, deren Nachkommen (Kinder + Enkel) geflogen sind — mind. '+VERERBER_MIN_ERFOLGREICHE+' davon müssen "erfolgreich" (Preisquote ≥'+VERERBER_ERFOLG_MIN_PREISQUOTE+'%, davon mind. '+VERERBER_ERFOLG_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten) und noch im Bestand sein. Wichtigster Faktor ist die Erfolgsquote (Anteil der geflogenen Nachkommen, die "erfolgreich" sind) — wenige erfolgreiche Nachkommen unter vielen geflogenen drücken den Score deutlich. Hinzu kommen Preisquote und Anteil Top-Platzierungen (&gt;90 AS-Punkte, ein Flug zählt max. 1x) der erfolgreichen Nachkommen, ein kleiner Bonus für den Anteil überhaupt geflogener Nachkommen sowie ein Bonus für Nachkommen im eigenen Bestand ohne Status mit mind. '+VERERBER_ELITE_MIN_PREISE+' Preisen, mind. '+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote und mind. '+VERERBER_ELITE_MIN_TOPAS+' Preisen über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten. Höherer Score = stärkere Vererbung. Auf den Score klicken zeigt die Details.</div>'
+    +'<div class="card-title" style="display:flex;align-items:center;gap:8px">🧬 Vererbungsstärke nach Flügen (reine Nachkommen-Wertung) <span onclick="showScoreSettingsModal()" title="Score-Einstellungen" style="cursor:pointer;color:var(--text3);font-size:14px;font-weight:400">⚙️</span></div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Diese Liste bewertet reine Vererbung (nur Nachkommen). Der Erfolgs-Score einer einzelnen Taube (Details/Stammbaum, Paarungscheck) mischt zusätzlich die Eigenleistung mit ein.</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Bewertet Tauben, deren Nachkommen (Kinder + Enkel) geflogen sind — mind. '+VERERBER_MIN_ERFOLGREICHE+' davon müssen "erfolgreich" (Preisquote ≥'+VERERBER_ERFOLG_MIN_PREISQUOTE+'%, davon mind. '+VERERBER_ERFOLG_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten, mind. '+SCORE_CFG.minFluegePreisquote+' Flüge) und noch im Bestand sein. Wichtigster Faktor ist die Erfolgsquote (Anteil der geflogenen Nachkommen, die "erfolgreich" sind) — wenige erfolgreiche Nachkommen unter vielen geflogenen drücken den Score deutlich. Hinzu kommen der einstellbare Beständigkeits-/Schnelligkeits-Teilscore der erfolgreichen Nachkommen, ein kleiner Bonus für den Anteil überhaupt geflogener Nachkommen sowie ein Bonus für Nachkommen im eigenen Bestand ohne Status mit mind. '+VERERBER_ELITE_MIN_PREISE+' Preisen, mind. '+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote und mind. '+VERERBER_ELITE_MIN_TOPAS+' Preisen über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten. Höherer Score = stärkere Vererbung. Auf den Score klicken zeigt die Details.</div>'
     +'<div style="font-size:12px;font-weight:600;color:var(--text2);margin:14px 0 6px">Bestandstauben</div>'
     +renderVererberTable(bestand)
     +'<div style="font-size:12px;font-weight:600;color:var(--text2);margin:18px 0 6px">Nicht im Bestand</div>'
@@ -6256,11 +6337,15 @@ function computeVererbungsstaerke(pigeonid){
       if(as!=null && as>VERERBER_ELITE_AS_SCHWELLE) topAS80++;
     });
     var preisquoteD = gesetzt>0 ? preise/gesetzt*100 : 0;
-    var elite = !!d.instock && !d.pigeonstateid
+    // Zu wenige Flüge -> Preisquote dieses Nachkommen statistisch nicht
+    // belastbar, zählt nicht als "erfolgreich"/"elite" (gleiche Schwelle wie
+    // bei der Eigenleistung, siehe SCORE_CFG.minFluegePreisquote).
+    var qualifiziert = gesetzt>=SCORE_CFG.minFluegePreisquote;
+    var elite = qualifiziert && !!d.instock && !d.pigeonstateid
       && preise>=VERERBER_ELITE_MIN_PREISE
       && preisquoteD>=VERERBER_ELITE_MIN_PREISQUOTE
       && topAS80>=VERERBER_ELITE_MIN_TOPAS;
-    var erfolgreich = preisquoteD>=VERERBER_ERFOLG_MIN_PREISQUOTE && topAS80>=VERERBER_ERFOLG_MIN_TOPAS;
+    var erfolgreich = qualifiziert && preisquoteD>=VERERBER_ERFOLG_MIN_PREISQUOTE && topAS80>=VERERBER_ERFOLG_MIN_TOPAS;
     return {pigeon:d, gesetzt:gesetzt, preise:preise, topAS:topAS, topAS80:topAS80,
       preisquoteD:preisquoteD, flown:gesetzt>0, erfolgreich:erfolgreich, elite:elite};
   });
@@ -6291,13 +6376,14 @@ function computeVererbungsstaerke(pigeonid){
   var eliteCount = eliteDescendants.length;
   var eliteBonus = Math.min(7*eliteCount, 20);
   // Erfolgsquote ist der mit Abstand größte Faktor (max. 45 von 100 Punkten) —
-  // erst danach folgen die gepoolte Beständigkeit/Geschwindigkeit der bereits
-  // als erfolgreich eingestuften Nachkommen, ein kleiner Aktivenanteil-Bonus
+  // erst danach folgt die gepoolte Beständigkeit/Geschwindigkeit (computeQuoteScore,
+  // nach den einstellbaren Gewichten SCORE_CFG.gewichtBestaendigkeit/-Schnelligkeit,
+  // auf ein Budget von max. 37 Punkten skaliert), ein kleiner Aktivenanteil-Bonus
   // (nur Teilnahme, kein Erfolg) und der bestandsgebundene Elite-Bonus.
+  var qualityScore = computeQuoteScore(preisquote, topASquote); // 0-100
   var score = Math.round(Math.min(100,
     erfolgsquote*0.45
-    + preisquote*0.25
-    + Math.min(topASquote*3,12)
+    + qualityScore*0.37
     + aktivenanteil*0.06
     + eliteBonus*0.6
   ));
@@ -6310,21 +6396,14 @@ function computeVererbungsstaerke(pigeonid){
 
 // ── Erfolgs-Prognose eines Probanden (Beständigkeit + Geschwindigkeit,
 // jeweils sowohl aus der EIGENEN Flugleistung der Eltern als auch aus deren
-// Nachkommen, kombiniert per Durchschnitt) ──────────────────────────────
+// Nachkommen, kombiniert nach SCORE_CFG.eigenAnteil) ──────────────────────
 const OWN_TRIPS_LOADING = new Set();
 
-// Mindestanzahl geflogener Wettflüge, ab der die eigene Preisquote/Top-AS-Quote
-// einer Taube überhaupt gewertet wird. Bei sehr wenigen Flügen (z.B. 2 Flüge,
-// beide mit Preis = 100% Preisquote) wäre die Quote statistisch nicht
-// aussagekräftig und würde den Erfolgs-Score künstlich in die Höhe treiben —
-// genau wie bei der Preisquote von Nachkommen (siehe VERERBER_MIN_ERFOLGREICHE
-// weiter unten), nur eben für die Taube selbst statt für ihre Nachkommen.
-const MIN_FLUEGE_EIGENLEISTUNG = 15;
-
 // Eigenleistung EINER Taube (nicht deren Nachkommen): Beständigkeit =
-// Preisquote, Geschwindigkeit = Anteil Flüge mit >90 AS-Punkten — dieselben
-// Kriterien wie bei computeVererbungsstaerke(), nur auf die eigenen Flüge
-// statt auf die der Nachkommen angewendet.
+// Preisquote, Geschwindigkeit = Anteil Flüge mit >90 AS-Punkten — dieselbe
+// Formel (computeQuoteScore, nach SCORE_CFG gewichtet) wie bei
+// computeVererbungsstaerke(), nur auf die eigenen Flüge statt auf die der
+// Nachkommen angewendet.
 function computeEigenleistung(pigeonid){
   const rows = PT_CACHE[pigeonid];
   if(!rows) return {ready:false};
@@ -6338,20 +6417,20 @@ function computeEigenleistung(pigeonid){
   // Zu wenige Flüge -> Quote statistisch nicht belastbar, wird wie "keine
   // eigenen Flugdaten" behandelt (der Erfolgs-Score stützt sich dann allein
   // auf die Vererbung, sofern dafür genug Nachkommen-Daten vorliegen).
-  if(gesetzt<MIN_FLUEGE_EIGENLEISTUNG) return {ready:true, noFlights:true, gesetzt, tooFewFlights:true};
+  if(gesetzt<SCORE_CFG.minFluegePreisquote) return {ready:true, noFlights:true, gesetzt, tooFewFlights:true};
   const preisquote = preise/gesetzt*100;
   const topASquote = topAS/gesetzt*100;
-  // Gleiche Gewichtung wie beim Nachkommen-Score: Preisquote dominiert
-  // (Beständigkeit), Top-AS-Quote gedeckelt (Geschwindigkeit-Bonus).
-  const score = Math.round(Math.min(100, preisquote*0.6 + Math.min(topASquote*4,40)));
+  const score = Math.round(computeQuoteScore(preisquote, topASquote));
   return {ready:true, gesetzt, preise, topAS, preisquote, topASquote, score};
 }
 
-// Erfolgs-Score EINER Taube: Ø aus Eigenleistung (eigene Preisquote +
-// Geschwindigkeit) und Vererbungsstärke (Preisquote + Geschwindigkeit der
-// Nachkommen, siehe computeVererbungsstaerke oben). Ist nur eine der beiden
-// Seiten verfügbar (z.B. junge Taube ohne eigene Flüge, oder alte Taube ohne
-// im Bestand verbliebene Nachkommen), zählt diese Seite allein.
+// Erfolgs-Score EINER Taube: gewichteter Mix aus Eigenleistung (eigene
+// Preisquote + Geschwindigkeit) und Vererbungsstärke (Preisquote +
+// Geschwindigkeit der Nachkommen, siehe computeVererbungsstaerke oben) nach
+// SCORE_CFG.eigenAnteil. Ist nur eine der beiden Seiten verfügbar (z.B. junge
+// Taube ohne eigene Flüge, oder alte Taube ohne im Bestand verbliebene
+// Nachkommen), zählt diese Seite allein. Dieser Score wird identisch im
+// Stammbaum/Details, in der Nachkommen-Ansicht UND im Paarungscheck verwendet.
 function computeErfolgsScore(pigeonid){
   const ver = computeVererbungsstaerke(pigeonid);
   if(!ver.ready) ensureVererbungLoaded(pigeonid);
@@ -6364,7 +6443,10 @@ function computeErfolgsScore(pigeonid){
   const ownScore = (own.ready && !own.noFlights) ? own.score : null;
   const verScore = (ver.ready && ver.score!=null) ? ver.score : null;
   let score=null, note='';
-  if(ownScore!=null && verScore!=null) score = Math.round((ownScore+verScore)/2);
+  if(ownScore!=null && verScore!=null){
+    const wEigen = SCORE_CFG.eigenAnteil/100;
+    score = Math.round(ownScore*wEigen + verScore*(1-wEigen));
+  }
   else if(ownScore!=null){ score=ownScore; note='nur Eigenleistung — Nachkommen ohne ausreichende Datenbasis'; }
   else if(verScore!=null){ score=verScore; note='nur Nachkommen — keine eigenen Flugdaten'; }
   const stillLoading = !own.ready || !ver.ready;
@@ -6400,7 +6482,7 @@ function _pp_parentLine(p, er){
   const ownPart = (er.own && er.own.ready && !er.own.noFlights)
     ? `Eigen: Preisq. ${er.own.preisquote.toFixed(0)}% · Top-AS ${er.own.topASquote.toFixed(0)}%`
     : (er.own && er.own.tooFewFlights)
-      ? `Eigen: zu wenige Flüge (${er.own.gesetzt}/${MIN_FLUEGE_EIGENLEISTUNG})`
+      ? `Eigen: zu wenige Flüge (${er.own.gesetzt}/${SCORE_CFG.minFluegePreisquote})`
       : 'Eigen: keine eigenen Flugdaten';
   const verPart = (er.ver && er.ver.ready && er.ver.score!=null)
     ? `Nachk.: Erfolgsq. ${er.ver.erfolgsquote.toFixed(0)}% (${er.ver.erfolgreicheCount}/${er.ver.activeCount}) · Preisq. ${er.ver.preisquote.toFixed(0)}% · Top-AS ${er.ver.topASquote.toFixed(0)}%`
@@ -6425,7 +6507,7 @@ function renderPaarungsprognoseCard(father, mother){
     : `<div style="font-size:13px;color:var(--text3)">${pp.stillLoading?'Daten werden geladen…':'Noch keine ausreichende Datenbasis bei den Eltern'}</div>`;
   const saveBtn = (father && mother) ? `<button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="savePairingToList('${father.pigeonid}','${mother.pigeonid}')">💾 Paarung speichern</button>` : '';
   return `<div class="card" style="margin-bottom:14px">
-    <div class="card-title">🏆 Erfolgs-Prognose</div>
+    <div class="card-title" style="display:flex;align-items:center;gap:8px">🏆 Erfolgs-Prognose <span onclick="showScoreSettingsModal()" title="Score-Einstellungen" style="cursor:pointer;color:var(--text3);font-size:14px;font-weight:400">⚙️</span></div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Prognose für die Nachzucht dieses Probanden, aus zwei Faktoren je Elternteil: Beständigkeit (Preisquote) und Geschwindigkeit (Anteil Preise über 90 AS-Punkten) — jeweils sowohl aus der eigenen Flugleistung als auch aus der der eigenen Nachkommen (Kinder + Enkel).</div>
     <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
       <div style="min-width:150px">${combinedHtml}</div>
@@ -6711,10 +6793,10 @@ function renderPairingRecommendations(){
 
   return '<div class="card">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:2px">'
-    +'<div class="card-title" style="margin-bottom:0">🏆 Top-Paarungsempfehlungen</div>'
+    +'<div class="card-title" style="margin-bottom:0;display:flex;align-items:center;gap:8px">🏆 Top-Paarungsempfehlungen <span onclick="showScoreSettingsModal()" title="Score-Einstellungen" style="cursor:pointer;color:var(--text3);font-size:14px;font-weight:400">⚙️</span></div>'
     +'<button class="btn btn-outline btn-sm" onclick="S.pairRecOpen=false;render()">✕ Einklappen</button>'
     +'</div>'
-    +'<div style="font-size:11px;color:var(--text3);margin:6px 0 10px">Alle '+PAIR_REC.results.length+' möglichen Paare aus '+cand.males.length+' Zucht'+(S.pairRecIncludeReise?'-/Reise':'')+'täubern × '+cand.females.length+' Zucht'+(S.pairRecIncludeReise?'-/Reise':'')+'täubinnen im Bestand, sortiert nach Erfolgs-Score (Ø aus Beständigkeit/Preisquote und Geschwindigkeit/Top-AS-Quote — jeweils aus Eigenleistung und Nachkommen beider Eltern). Für die eigene Preisquote zählen nur Tauben mit mind. '+MIN_FLUEGE_EIGENLEISTUNG+' geflogenen Wettflügen, und es werden nur Paare gelistet, bei denen beide Elternteile eine eigene Datenbasis (Flüge oder bewertete Nachkommen) haben. Zu eng verwandte Paare werden nach der eingestellten Inzuchtgrenze automatisch ausgeblendet'+(excluded?' ('+excluded+' Paare aktuell gefiltert)':'')+'.</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin:6px 0 10px">Alle '+PAIR_REC.results.length+' möglichen Paare aus '+cand.males.length+' Zucht'+(S.pairRecIncludeReise?'-/Reise':'')+'täubern × '+cand.females.length+' Zucht'+(S.pairRecIncludeReise?'-/Reise':'')+'täubinnen im Bestand, sortiert nach Erfolgs-Score (Ø aus Beständigkeit/Preisquote und Geschwindigkeit/Top-AS-Quote — jeweils aus Eigenleistung und Nachkommen beider Eltern). Für die eigene Preisquote zählen nur Tauben mit mind. '+SCORE_CFG.minFluegePreisquote+' geflogenen Wettflügen, und es werden nur Paare gelistet, bei denen beide Elternteile eine eigene Datenbasis (Flüge oder bewertete Nachkommen) haben. Zu eng verwandte Paare werden nach der eingestellten Inzuchtgrenze automatisch ausgeblendet'+(excluded?' ('+excluded+' Paare aktuell gefiltert)':'')+'.</div>'
     +'<div class="qe-quickbar" style="margin-bottom:10px">'
     +'<div class="qe-group"><span class="qe-group-label">Anzahl</span><select onchange="S.pairRecTopN=parseInt(this.value);render()">'
     +[10,15,25,50,100].map(function(n){ return '<option value="'+n+'"'+(S.pairRecTopN===n?' selected':'')+'>Top '+n+'</option>'; }).join('')
@@ -6741,16 +6823,19 @@ function closeVererbungDetail(){
 }
 function showVererbungDetail(pigeonid){
   var p = findById(pigeonid); if(!p) return;
-  var r = computeVererbungsstaerke(pigeonid);
-  if(!r.ready){ ensureVererbungLoaded(pigeonid); return; }
+  var er = computeErfolgsScore(pigeonid);
+  var r = er.ver;
+  if(!er.ready){ return; } // wird beim nächsten render() automatisch neu versucht, sobald Daten da sind
 
   var body, banner='';
   if(r.noDescendants){
     body = '<div style="color:var(--text3);font-size:13px">Keine Nachkommen (Kinder/Enkel) vorhanden.</div>';
+  } else if(!r.ready){
+    body = '<div style="color:var(--text3);font-size:13px">Lade Flugdaten der Nachkommen…</div>';
   } else {
     if(r.notEnough){
       banner = '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">'
-        +'Noch kein Score: '+r.flownCount+' Nachkommen sind geflogen, davon '+r.erfolgreicheCount+' erfolgreich und im Bestand (mind. '+VERERBER_MIN_ERFOLGREICHE+' nötig).</div>';
+        +'Kein Nachkommen-Score: '+r.flownCount+' Nachkommen sind geflogen, davon '+r.erfolgreicheCount+' erfolgreich und im Bestand (mind. '+VERERBER_MIN_ERFOLGREICHE+' nötig).</div>';
     } else if(r.noFlights){
       banner = '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">'
         +r.totalDescendants+' Nachkommen (Kinder+Enkel), aber noch keine Flugergebnisse erfasst.</div>';
@@ -6775,11 +6860,23 @@ function showVererbungDetail(pigeonid){
       +'<tbody>'+rowsHtml+'</tbody></table></div>';
   }
 
-  var scoreLine = r.score!=null
+  var combinedLine = er.score!=null
+    ? '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:10px;font-size:13px;color:var(--text2)">'
+      +'<strong style="font-size:16px;color:'+(er.score>=60?'var(--green)':er.score>=35?'var(--orange)':'#e07070')+'">'+er.score+' / 100</strong> Erfolgs-Score = '+SCORE_CFG.eigenAnteil+'% × Eigenleistung ('+(er.own.score!=null?er.own.score:'—')+') + '+(100-SCORE_CFG.eigenAnteil)+'% × Vererbung ('+(r.score!=null?r.score:'—')+')'
+      +(er.note?'<div style="color:var(--text3);font-size:11px;margin-top:4px">'+er.note+'</div>':'')
+      +'</div>'
+    : '';
+  var verScoreLine = r.score!=null
     ? '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">'
-      +'Score = 0,45 × Erfolgsquote ('+r.erfolgsquote.toFixed(1)+'%) + 0,25 × Preisquote ('+r.preisquote.toFixed(1)+'%) + min(3 × Top-Quote ('+r.topASquote.toFixed(1)+'%), 12) + 0,06 × Aktivenanteil ('+r.aktivenanteil.toFixed(1)+'%) + min(0,6 × 7 × Elite-Nachkommen ('+r.eliteCount+'), 12) = <strong>'+r.score+' / 100</strong>'
+      +'Vererbung ('+r.score+') = 0,45 × Erfolgsquote ('+r.erfolgsquote.toFixed(1)+'%) + 0,37 × Beständigkeits-/Schnelligkeits-Teilscore + 0,06 × Aktivenanteil ('+r.aktivenanteil.toFixed(1)+'%) + 0,6 × Elite-Bonus (Elite-Nachkommen: '+r.eliteCount+')'
       +'</div>'
     : banner;
+  var ownLine = (er.own && er.own.ready && !er.own.noFlights)
+    ? '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">'
+      +'Eigenleistung ('+er.own.score+') = Preisquote '+er.own.preisquote.toFixed(1)+'% + Top-AS-Quote '+er.own.topASquote.toFixed(1)+'% (mind. '+SCORE_CFG.minFluegePreisquote+' Flüge, '+er.own.gesetzt+' vorhanden), gewichtet nach Beständigkeit/Schnelligkeit-Einstellung.</div>'
+    : (er.own && er.own.tooFewFlights)
+      ? '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">Eigenleistung: zu wenige Flüge ('+er.own.gesetzt+'/'+SCORE_CFG.minFluegePreisquote+') für eine belastbare Preisquote.</div>'
+      : '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">Eigenleistung: keine eigenen Flugdaten erfasst.</div>';
 
   var overlay=document.createElement('div');
   overlay.className='lightbox-overlay veret-detail-overlay';
@@ -6790,40 +6887,61 @@ function showVererbungDetail(pigeonid){
   panel.onclick=function(e){ e.stopPropagation(); };
   panel.innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px">'
-      +'<div class="card-title" style="margin:0">🧬 Vererbungsstärke nach Flügen — '+escH(ring(p))+(p.name?' · '+escH(p.name):'')+'</div>'
+      +'<div class="card-title" style="margin:0">🧬 Erfolgs-Score — '+escH(ring(p))+(p.name?' · '+escH(p.name):'')+'</div>'
+      +'<div style="display:flex;align-items:center;gap:10px">'
+      +'<span onclick="showScoreSettingsModal()" title="Score-Einstellungen" style="cursor:pointer;color:var(--text3);font-size:16px">⚙️</span>'
       +'<span onclick="closeVererbungDetail()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>'
+      +'</div>'
     +'</div>'
-    +'<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Misst, wie gut eine Taube ihre Flugleistung an ihre Nachkommen (Kinder + Enkel) weitergibt. Gewertet werden nur Nachkommen, die geflogen sind — davon müssen mind. '+VERERBER_MIN_ERFOLGREICHE+' "erfolgreich" (Preisquote ≥'+VERERBER_ERFOLG_MIN_PREISQUOTE+'%, davon mind. '+VERERBER_ERFOLG_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten) und noch im Bestand gewesen sein. Erfolgsquote (größter Faktor im Score) = Anteil der geflogenen Nachkommen, die "erfolgreich" sind — bringt eine Taube z.B. 19 fliegende Nachkommen hervor, von denen nur 1-2 wirklich erfolgreich sind, bleibt der Score trotz dieser guten Einzeltiere niedrig. Preisquote = Anteil Flüge mit Preis, Top-Quote = Anteil Flüge mit mehr als 90 AS-Punkten (ein Flug zählt nur einmal) — beide nur über die erfolgreichen Nachkommen gepoolt. Aktivenanteil = Anteil aller Nachkommen, die überhaupt geflogen sind (kleiner Bonus, unabhängig vom Erfolg). Elite-Nachkommen (★) = Nachkommen, die noch im Bestand sind, keinen Status haben und mind. '+VERERBER_ELITE_MIN_PREISE+' Preise bei mind. '+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote erzielt haben, davon mind. '+VERERBER_ELITE_MIN_TOPAS+' mit mehr als '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten — je mehr davon, desto höher der Bonus.</div>'
-    + scoreLine
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Derselbe Erfolgs-Score wie im Paarungscheck: ein einstellbarer Mix aus Eigenleistung (eigene Flüge) und Vererbung (Flugleistung von Kindern + Enkeln). Gewichtung über das ⚙-Symbol einstellbar. Erfolgsquote (größter Faktor der Vererbung) = Anteil der geflogenen Nachkommen, die "erfolgreich" sind (Preisquote ≥'+VERERBER_ERFOLG_MIN_PREISQUOTE+'%, davon mind. '+VERERBER_ERFOLG_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten, mind. '+SCORE_CFG.minFluegePreisquote+' Flüge, noch im Bestand) — bringt eine Taube z.B. 19 fliegende Nachkommen hervor, von denen nur 1-2 wirklich erfolgreich sind, bleibt der Score trotz dieser guten Einzeltiere niedrig. Elite-Nachkommen (★) = im Bestand, ohne Status, mind. '+VERERBER_ELITE_MIN_PREISE+' Preise bei mind. '+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote, davon mind. '+VERERBER_ELITE_MIN_TOPAS+' über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten.</div>'
+    + combinedLine
+    + ownLine
+    + verScoreLine
     + body;
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
 }
 // Kompakte Karte für die Tauben-Detailseite und für andere Views wiederverwendbar.
+// Zeigt denselben Erfolgs-Score wie der Paarungscheck (Eigenleistung + Vererbung,
+// nach SCORE_CFG gewichtet) — Details/Stammbaum und Paarungscheck sind damit
+// konsistent.
 function renderVererbungCard(pigeonid){
-  var desc = getVererbungDescendants(pigeonid);
-  if(!desc.length) return '';
-  var r = computeVererbungsstaerke(pigeonid);
-  var label = '<div class="section-label clickable" style="margin-top:14px;cursor:pointer" onclick="showVererbungDetail(\''+pigeonid+'\')" title="Details zur Berechnung anzeigen">🧬 Vererbungsstärke nach Flügen</div>';
-  if(!r.ready){ ensureVererbungLoaded(pigeonid);
-    return label + `<div style="color:var(--text3);font-size:13px;padding:8px 0">Lade Flugdaten der Nachkommen…</div>`;
+  var er = computeErfolgsScore(pigeonid);
+  var label = '<div class="section-label" style="margin-top:14px;display:flex;align-items:center;gap:8px">'
+    +'<span class="clickable" style="cursor:pointer" onclick="showVererbungDetail(\''+pigeonid+'\')" title="Details zur Berechnung anzeigen">🧬 Erfolgs-Score (Eigenleistung + Vererbung)</span>'
+    +'<span onclick="showScoreSettingsModal()" title="Score-Einstellungen" style="cursor:pointer;color:var(--text3);font-size:13px">⚙️</span>'
+    +'</div>';
+  if(!er.ready){
+    return label + `<div style="color:var(--text3);font-size:13px;padding:8px 0">Lade Flugdaten…</div>`;
   }
-  if(r.noFlights) return label + `<div style="color:var(--text3);font-size:13px;padding:8px 0;cursor:pointer" onclick="showVererbungDetail('${pigeonid}')">${r.totalDescendants} Nachkommen (Kinder+Enkel), aber noch keine Flugergebnisse erfasst.</div>`;
-  if(r.notEnough) return label + `<div style="color:var(--text3);font-size:13px;padding:8px 0;cursor:pointer" onclick="showVererbungDetail('${pigeonid}')">${r.flownCount} Nachkommen geflogen, ${r.erfolgreicheCount} davon erfolgreich und im Bestand (mind. ${VERERBER_MIN_ERFOLGREICHE} nötig für einen Score). Details anzeigen →</div>`;
-  var col = r.score>=60?'var(--green)':r.score>=35?'var(--orange)':'#e07070';
+  if(er.score==null){
+    var ver=er.ver;
+    var msg = ver.noDescendants ? 'Keine Nachkommen (Kinder/Enkel) vorhanden und keine eigenen Flugdaten.'
+      : ver.notEnough ? ver.flownCount+' Nachkommen geflogen, '+ver.erfolgreicheCount+' davon erfolgreich (mind. '+VERERBER_MIN_ERFOLGREICHE+' nötig) — und keine eigenen Flugdaten.'
+      : 'Keine ausreichende Datenbasis (weder eigene Flüge noch bewertete Nachkommen).';
+    return label + `<div style="color:var(--text3);font-size:13px;padding:8px 0;cursor:pointer" onclick="showVererbungDetail('${pigeonid}')">${msg} Details anzeigen →</div>`;
+  }
+  var col = er.score>=60?'var(--green)':er.score>=35?'var(--orange)':'#e07070';
+  var own=er.own, ver=er.ver;
+  var ownBadge = (own.ready && !own.noFlights)
+    ? own.score+' <span style="color:var(--text3);font-weight:400">(Preisq. '+own.preisquote.toFixed(0)+'% · Top-AS '+own.topASquote.toFixed(0)+'%)</span>'
+    : (own.tooFewFlights ? '<span style="color:var(--text3)">zu wenige Flüge ('+own.gesetzt+'/'+SCORE_CFG.minFluegePreisquote+')</span>' : '<span style="color:var(--text3)">keine eigenen Flugdaten</span>');
+  var verBadge = (ver.ready && ver.score!=null)
+    ? ver.score+' <span style="color:var(--text3);font-weight:400">(Erfolgsq. '+ver.erfolgsquote.toFixed(0)+'% · '+ver.erfolgreicheCount+'/'+ver.activeCount+')</span>'
+    : (ver.notEnough ? '<span style="color:var(--text3)">'+ver.flownCount+' geflogen, '+ver.erfolgreicheCount+' erfolgreich</span>'
+      : ver.noDescendants ? '<span style="color:var(--text3)">keine Nachkommen</span>'
+      : ver.noFlights ? '<span style="color:var(--text3)">Nachkommen noch ohne Flugdaten</span>'
+      : '<span style="color:var(--text3)">keine ausreichende Datenbasis</span>');
   return label
     +`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;cursor:pointer" onclick="showVererbungDetail('${pigeonid}')" title="Details zur Berechnung anzeigen">
       <div style="text-align:center">
-        <div style="font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:${col}">${r.score}</div>
-        <div style="font-size:10px;color:var(--text3)">Score / 100</div>
+        <div style="font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:${col}">${er.score}</div>
+        <div style="font-size:10px;color:var(--text3)">Erfolgs-Score / 100</div>
       </div>
-      <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--text2)">
-        <div><div style="font-weight:600">${r.erfolgreicheCount}/${r.activeCount} <span style="color:var(--text3);font-weight:400">(${r.erfolgsquote.toFixed(0)}%)</span></div><div style="color:var(--text3);font-size:10px">Erfolgsquote</div></div>
-        <div><div style="font-weight:600">${r.preisquote.toFixed(1)}%</div><div style="color:var(--text3);font-size:10px">Preisquote</div></div>
-        <div><div style="font-weight:600">${r.topASquote.toFixed(1)}%</div><div style="color:var(--text3);font-size:10px">Top-Quote (&gt;90 AS)</div></div>
-        <div><div style="font-weight:600">${r.activeCount}/${r.totalDescendants}</div><div style="color:var(--text3);font-size:10px">Nachk. geflogen</div></div>
-        <div><div style="font-weight:600">${r.totalGesetzt}</div><div style="color:var(--text3);font-size:10px">Flüge gesamt</div></div>
-        <div><div style="font-weight:600;color:${r.eliteCount>0?'var(--green)':'inherit'}">${r.eliteCount>0?'★ ':''}${r.eliteCount}</div><div style="color:var(--text3);font-size:10px">Elite-Nachk. im Bestand</div></div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--text2)">
+        <div><span style="color:var(--text3)">Eigenleistung (${SCORE_CFG.eigenAnteil}%):</span> <strong>${ownBadge}</strong></div>
+        <div><span style="color:var(--text3)">Vererbung (${100-SCORE_CFG.eigenAnteil}%):</span> <strong>${verBadge}</strong></div>
+        ${er.note?`<div style="color:var(--text3);font-size:11px">${er.note}</div>`:''}
       </div>
     </div>`;
 }
