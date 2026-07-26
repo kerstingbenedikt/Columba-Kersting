@@ -8603,7 +8603,7 @@ async function runTripsImport(){
 // vollständig (statt der auf 500 Zeilen gedeckelten Übersichtsliste) gegen
 // die DB ab, um das künftig zu verhindern — dieses Werkzeug bereinigt
 // bereits vorhandene Altfälle.
-let DUPE = { scanning:false, groups:null, error:null, merging:false, log:[] };
+let DUPE = { scanning:false, groups:null, fuzzyGroups:null, error:null, merging:false, log:[] };
 
 async function scanDuplicateTrips(){
   DUPE.scanning=true; DUPE.groups=null; DUPE.error=null; DUPE.log=[]; updateDupeModal();
@@ -8639,6 +8639,49 @@ async function scanDuplicateTrips(){
     });
     groups.sort(function(a,b){ return (b[0].tripdate||'').localeCompare(a[0].tripdate||''); });
     DUPE.groups = groups;
+
+    // Zweiter, weicherer Scan: Reisen mit gleichem Jahrgang + Datum, aber
+    // (leicht) ABWEICHENDEM Ortsnamen — z.B. Tippfehler, Zusätze wie
+    // "(überstellt)" oder unterschiedliche Schreibweisen zwischen zwei
+    // Züchter-Dateien derselben physischen Reise. Diese werden NICHT
+    // automatisch zusammengeführt (könnten theoretisch zwei echte Reisen am
+    // selben Tag sein), sondern nur zur manuellen Prüfung vorgeschlagen.
+    const byDate = {};
+    all.forEach(function(t){
+      if(!t.tripdate) return;
+      const dk=(t.vintage||'?')+'|'+t.tripdate;
+      (byDate[dk]=byDate[dk]||[]).push(t);
+    });
+    const fuzzyGroups = Object.values(byDate).filter(function(g){
+      if(g.length<2) return false;
+      const locs = new Set(g.map(function(t){ return normL(t.location); }));
+      return locs.size>1; // unterschiedliche Ortsnamen am selben Datum -> vermutlich Schreibweise-Duplikat
+    });
+    fuzzyGroups.forEach(function(g){
+      g.forEach(function(t){ t._resultCount = counts[t.tripid]!=null?counts[t.tripid]:null; });
+    });
+    // Ergebnis-Anzahl für die Fuzzy-Kandidaten separat nachladen (waren nicht
+    // Teil der Ids oben, da nicht im exakten Duplikat-Scan enthalten)
+    const fuzzyIds = [];
+    fuzzyGroups.forEach(function(g){ g.forEach(function(t){ if(t._resultCount==null) fuzzyIds.push(t.tripid); }); });
+    for(let i=0;i<fuzzyIds.length;i+=100){
+      const chunk = fuzzyIds.slice(i,i+100);
+      let rows=[];
+      try{ rows = await apiGet('/pigeontrips?tripid=in.('+chunk.join(',')+')&select=id,tripid'); }catch(e){}
+      const c2={}; (rows||[]).forEach(function(r){ c2[r.tripid]=(c2[r.tripid]||0)+1; });
+      fuzzyGroups.forEach(function(g){ g.forEach(function(t){ if(fuzzyIds.indexOf(t.tripid)>=0 && c2[t.tripid]!=null) t._resultCount=c2[t.tripid]; }); });
+    }
+    fuzzyGroups.forEach(function(g){
+      g.forEach(function(t){ if(t._resultCount==null) t._resultCount=0; });
+      g.sort(function(a,b){
+        const rvA=a.pigeonsset_rv?1:0, rvB=b.pigeonsset_rv?1:0;
+        if(rvB!==rvA) return rvB-rvA;
+        if(b._resultCount!==a._resultCount) return b._resultCount-a._resultCount;
+        return (b.pigeonsset||0)-(a.pigeonsset||0);
+      });
+    });
+    fuzzyGroups.sort(function(a,b){ return (b[0].tripdate||'').localeCompare(a[0].tripdate||''); });
+    DUPE.fuzzyGroups = fuzzyGroups;
   }catch(e){ DUPE.error = e.message||'Unbekannter Fehler'; }
   DUPE.scanning=false; updateDupeModal();
 }
@@ -8692,10 +8735,9 @@ async function mergeOneDuplicateGroup(idx){
     DUPE.groups.splice(idx,1);
   }catch(e){ DUPE.log.unshift('Fehler: '+e.message); }
   DUPE.merging=false;
-  await loadTrips(); clearPTCache();
+  await loadTrips(); clearPTCache(); ZT.loaded=false;
   updateDupeModal();
 }
-
 async function mergeAllDuplicateGroups(){
   if(DUPE.merging || !DUPE.groups || !DUPE.groups.length) return;
   DUPE.merging=true; updateDupeModal();
@@ -8709,7 +8751,21 @@ async function mergeAllDuplicateGroups(){
     updateDupeModal();
   }
   DUPE.merging=false;
-  await loadTrips(); clearPTCache();
+  await loadTrips(); clearPTCache(); ZT.loaded=false;
+  updateDupeModal();
+}
+
+async function mergeOneFuzzyGroup(idx){
+  if(DUPE.merging || !DUPE.fuzzyGroups || !DUPE.fuzzyGroups[idx]) return;
+  DUPE.merging=true; updateDupeModal();
+  const group = DUPE.fuzzyGroups[idx];
+  try{
+    const r = await mergeDuplicateGroup(group);
+    DUPE.log.unshift((r.location||'?')+' · '+(r.tripdate||'?')+': '+r.mergedTrips+' Dublette(n) mit abweichendem Ortsnamen zusammengeführt, '+r.movedResults+' Ergebnisse übernommen'+(r.deletedDupeResults?', '+r.deletedDupeResults+' echte Dopplung(en) entfernt':'')+'.');
+    DUPE.fuzzyGroups.splice(idx,1);
+  }catch(e){ DUPE.log.unshift('Fehler: '+e.message); }
+  DUPE.merging=false;
+  await loadTrips(); clearPTCache(); ZT.loaded=false;
   updateDupeModal();
 }
 
@@ -8726,8 +8782,29 @@ function renderDupeModalBody(){
       +'<button class="btn" onclick="scanDuplicateTrips()">🔍 Nach Duplikaten suchen</button>';
   }
   var logHtml = DUPE.log.length ? '<div style="font-size:11px;color:var(--text3);margin:10px 0;max-height:100px;overflow-y:auto">'+DUPE.log.map(function(l){ return '<div>'+escH(l)+'</div>'; }).join('')+'</div>' : '';
+  var fuzzyHtml = '';
+  if(DUPE.fuzzyGroups && DUPE.fuzzyGroups.length){
+    var fRows = DUPE.fuzzyGroups.map(function(g,i){
+      var detailRows = g.map(function(t,j){
+        return '<div style="font-size:11px;color:'+(j===0?'var(--green)':'var(--text3)')+';margin-top:2px">'
+          +(j===0?'✓ Ziel (bleibt bestehen): "':'– wird hineingeführt: "')+escH(t.location||'?')+'" — '
+          +(t.pigeonsset||0)+' Tb.'+(t.pigeonsset_rv?', RV-Liste vorhanden':'')+', '+(t._resultCount||0)+' Ergebnis(se) erfasst'
+          +'</div>';
+      }).join('');
+      return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+        +'<div style="font-size:13px">'+escH(g[0].tripdate||'?')+' · Jg. '+(g[0].vintage||'?')+' <span style="color:var(--text3)">(unterschiedliche Ortsnamen, '+g.length+'× angelegt)</span></div>'
+        +'<button class="btn btn-outline btn-sm" '+(DUPE.merging?'disabled':'')+' onclick="mergeOneFuzzyGroup('+i+')">Zusammenführen</button>'
+        +'</div>'
+        + detailRows
+        +'</div>';
+    }).join('');
+    fuzzyHtml = '<div class="section-label" style="margin-top:18px">⚠️ Mögliche Duplikate — gleiches Datum, abweichender Ortsname</div>'
+      +'<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Diese wurden NICHT automatisch erkannt (Ortsname weicht ab, z.B. Tippfehler oder Zusatz) — bitte prüfen, ob es wirklich dieselbe Reise ist, bevor du zusammenführst. Es könnten auch zwei echte Reisen am selben Tag sein.</div>'
+      + fRows;
+  }
   if(!DUPE.groups.length){
-    return '<div style="font-size:13px;color:var(--green);margin-bottom:10px">✓ Keine doppelten Reisen (mehr) gefunden.</div>'+logHtml;
+    return '<div style="font-size:13px;color:var(--green);margin-bottom:10px">✓ Keine eindeutigen Duplikate (mehr) gefunden.</div>'+fuzzyHtml+logHtml;
   }
   var rows = DUPE.groups.map(function(g,i){
     var detailRows = g.map(function(t,j){
@@ -8746,7 +8823,7 @@ function renderDupeModalBody(){
   }).join('');
   return '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">'+DUPE.groups.length+' Gruppe(n) mit doppelt angelegten Reisen gefunden. Die jeweils vollständigste Reise (grün) bleibt bestehen, die andere(n) werden hineingeführt und danach gelöscht.</div>'
     +'<button class="btn" '+(DUPE.merging?'disabled':'')+' style="margin-bottom:12px" onclick="mergeAllDuplicateGroups()">'+(DUPE.merging?'Führe zusammen…':'✓ Alle zusammenführen')+'</button>'
-    + rows + logHtml;
+    + rows + fuzzyHtml + logHtml;
 }
 
 function updateDupeModal(){
@@ -8755,7 +8832,7 @@ function updateDupeModal(){
 }
 
 function showDuplicateTripsModal(){
-  DUPE = { scanning:false, groups:null, error:null, merging:false, log:[] };
+  DUPE = { scanning:false, groups:null, fuzzyGroups:null, error:null, merging:false, log:[] };
   var overlay=document.createElement('div');
   overlay.className='lightbox-overlay dupe-overlay';
   overlay.style.cursor='default';
