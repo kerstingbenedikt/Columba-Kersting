@@ -8603,7 +8603,7 @@ async function runTripsImport(){
 // vollständig (statt der auf 500 Zeilen gedeckelten Übersichtsliste) gegen
 // die DB ab, um das künftig zu verhindern — dieses Werkzeug bereinigt
 // bereits vorhandene Altfälle.
-let DUPE = { scanning:false, groups:null, fuzzyGroups:null, error:null, merging:false, log:[] };
+let DUPE = { scanning:false, groups:null, fuzzyGroups:null, resultGroups:null, resultScanning:false, resultError:null, error:null, merging:false, log:[] };
 
 async function scanDuplicateTrips(){
   DUPE.scanning=true; DUPE.groups=null; DUPE.error=null; DUPE.log=[]; updateDupeModal();
@@ -8640,22 +8640,62 @@ async function scanDuplicateTrips(){
     groups.sort(function(a,b){ return (b[0].tripdate||'').localeCompare(a[0].tripdate||''); });
     DUPE.groups = groups;
 
-    // Zweiter, weicherer Scan: Reisen mit gleichem Jahrgang + Datum, aber
-    // (leicht) ABWEICHENDEM Ortsnamen — z.B. Tippfehler, Zusätze wie
-    // "(überstellt)" oder unterschiedliche Schreibweisen zwischen zwei
-    // Züchter-Dateien derselben physischen Reise. Diese werden NICHT
-    // automatisch zusammengeführt (könnten theoretisch zwei echte Reisen am
-    // selben Tag sein), sondern nur zur manuellen Prüfung vorgeschlagen.
+    // Zweiter, weicherer Scan: Reisen mit gleichem Jahrgang + Datum, ÄHNLICHEM
+    // Ortsnamen (Tippfehler/Zusatz) UND ähnlicher Durchschnittsdistanz.
+    // WICHTIG: Nur Datum + abweichender Ortsname reicht NICHT als Kriterium —
+    // wenn sich ein Reiseverein für einzelne Flüge in mehrere Teil-RVs
+    // aufteilt (z.B. nur für die ersten Flüge der Saison getrennt geflogen
+    // wird), gibt es am selben Tag mehrere ECHTE, unterschiedliche Reisen mit
+    // unterschiedlichem Ort UND unterschiedlicher Distanz — das darf nicht als
+    // Duplikat vorgeschlagen werden. Ein echtes Schreibweise-Duplikat betrifft
+    // dagegen dieselbe physische Reise und hat daher eine (fast) identische
+    // Durchschnittsdistanz. Diese Vorschläge werden trotzdem NIE automatisch
+    // zusammengeführt, sondern nur zur manuellen Prüfung angezeigt.
+    function levenshtein(a,b){
+      a=a||''; b=b||''; const m=a.length, n=b.length;
+      if(!m) return n; if(!n) return m;
+      const dp=new Array(n+1); for(let j=0;j<=n;j++) dp[j]=j;
+      for(let i=1;i<=m;i++){
+        let prev=dp[0]; dp[0]=i;
+        for(let j=1;j<=n;j++){
+          const tmp=dp[j];
+          dp[j]=Math.min(dp[j]+1, dp[j-1]+1, prev+(a[i-1]===b[j-1]?0:1));
+          prev=tmp;
+        }
+      }
+      return dp[n];
+    }
     const byDate = {};
     all.forEach(function(t){
       if(!t.tripdate) return;
       const dk=(t.vintage||'?')+'|'+t.tripdate;
       (byDate[dk]=byDate[dk]||[]).push(t);
     });
-    const fuzzyGroups = Object.values(byDate).filter(function(g){
-      if(g.length<2) return false;
-      const locs = new Set(g.map(function(t){ return normL(t.location); }));
-      return locs.size>1; // unterschiedliche Ortsnamen am selben Datum -> vermutlich Schreibweise-Duplikat
+    const fuzzyGroups = [];
+    Object.values(byDate).forEach(function(g){
+      if(g.length<2) return;
+      // Union-Find, um innerhalb eines Tages nur wirklich ähnliche Paare zu clustern
+      const parent = g.map(function(_,i){ return i; });
+      function find(x){ while(parent[x]!==x){ x=parent[x]; } return x; }
+      function union(x,y){ const rx=find(x), ry=find(y); if(rx!==ry) parent[rx]=ry; }
+      for(let i=0;i<g.length;i++){
+        for(let j=i+1;j<g.length;j++){
+          const a=g[i], b=g[j];
+          const la=normL(a.location), lb=normL(b.location);
+          if(la===lb) continue; // exakte Übereinstimmung -> schon im ersten Scan erfasst
+          const textSimilar = levenshtein(la,lb)<=3 || la.indexOf(lb)>=0 || lb.indexOf(la)>=0;
+          if(!textSimilar) continue;
+          const da=a.averagedistance3, db=b.averagedistance3;
+          if(da==null || db==null) continue; // ohne Distanz keine verlässliche Aussage -> nicht vorschlagen
+          const diff = Math.abs(Number(da)-Number(db));
+          const distSimilar = diff<=10 || diff<=0.06*Math.max(Number(da),Number(db));
+          if(!distSimilar) continue;
+          union(i,j);
+        }
+      }
+      const clusters={};
+      g.forEach(function(t,i){ const r=find(i); (clusters[r]=clusters[r]||[]).push(t); });
+      Object.values(clusters).forEach(function(c){ if(c.length>1) fuzzyGroups.push(c); });
     });
     fuzzyGroups.forEach(function(g){
       g.forEach(function(t){ t._resultCount = counts[t.tripid]!=null?counts[t.tripid]:null; });
@@ -8769,6 +8809,104 @@ async function mergeOneFuzzyGroup(idx){
   updateDupeModal();
 }
 
+async function mergeOneFuzzyGroup(idx){
+  if(DUPE.merging || !DUPE.fuzzyGroups || !DUPE.fuzzyGroups[idx]) return;
+  DUPE.merging=true; updateDupeModal();
+  const group = DUPE.fuzzyGroups[idx];
+  try{
+    const r = await mergeDuplicateGroup(group);
+    DUPE.log.unshift((r.location||'?')+' · '+(r.tripdate||'?')+': '+r.mergedTrips+' Dublette(n) mit abweichendem Ortsnamen zusammengeführt, '+r.movedResults+' Ergebnisse übernommen'+(r.deletedDupeResults?', '+r.deletedDupeResults+' echte Dopplung(en) entfernt':'')+'.');
+    DUPE.fuzzyGroups.splice(idx,1);
+  }catch(e){ DUPE.log.unshift('Fehler: '+e.message); }
+  DUPE.merging=false;
+  await loadTrips(); clearPTCache(); ZT.loaded=false;
+  updateDupeModal();
+}
+
+// ── Ergebnis-Duplikate (dritter Scan, über die Flugzeit statt über Reise-
+// Metadaten) ────────────────────────────────────────────────────────────
+// Manche Duplikate entstehen nicht durch eine simple Doppel-Anlage derselben
+// Reise, sondern dadurch, dass für denselben physischen Flug zwei
+// verschiedene Ranglisten (z.B. Teil-RV-Liste und übergeordnete VO-/Reg-
+// Gesamtliste) je einen EIGENEN Reise-Datensatz mit unterschiedlicher
+// Distanzangabe erzeugt haben — Ort und/oder Datum können dabei leicht
+// abweichen, weshalb weder der exakte noch der Fuzzy-Scan (der bewusst nur
+// bei ÄHNLICHER Distanz anschlägt) das erkennt. Verlässlicher Fingerabdruck
+// für "ist derselbe Flug": die Fluggeschwindigkeit (m/min) einer Taube ist
+// auf 3 Nachkommastellen identisch — das ist bei zwei wirklich verschiedenen
+// Flügen praktisch ausgeschlossen. Zählt man das über mehrere Tauben hinweg
+// (mind. 2 Tauben mit exakt gleicher Geschwindigkeit auf zwei verschiedenen
+// Reisen), ist das ein sehr starkes Duplikat-Signal für die beiden Reisen.
+async function scanResultDuplicates(){
+  DUPE.resultScanning=true; DUPE.resultGroups=null; DUPE.resultError=null; updateDupeModal();
+  try{
+    const allTrips = await apiGetAll('/trips?select=tripid,location,tripdate,vintage,pigeonsset_rv,pigeonsset');
+    const tripById={}; allTrips.forEach(function(t){ tripById[t.tripid]=t; });
+    const tripIds = allTrips.map(function(t){ return t.tripid; });
+    const byRingSpeed={};
+    for(let i=0;i<tripIds.length;i+=60){
+      const chunk = tripIds.slice(i,i+60);
+      let rows=[];
+      try{ rows = await apiGetAll('/pigeontrips?tripid=in.('+chunk.join(',')+')&select=tripid,ringnumber,speed&speed=not.is.null'); }catch(e){}
+      rows.forEach(function(r){
+        if(r.speed==null || !r.ringnumber) return;
+        const key = String(r.ringnumber).trim().toUpperCase()+'|'+Number(r.speed).toFixed(3);
+        (byRingSpeed[key]=byRingSpeed[key]||new Set()).add(r.tripid);
+      });
+    }
+    const pairVotes={};
+    Object.values(byRingSpeed).forEach(function(set){
+      const uniq=[...set];
+      if(uniq.length<2) return;
+      for(let i=0;i<uniq.length;i++) for(let j=i+1;j<uniq.length;j++){
+        const key=[uniq[i],uniq[j]].sort().join('|');
+        pairVotes[key]=(pairVotes[key]||0)+1;
+      }
+    });
+    // Nur Paare, bei denen MINDESTENS 2 unterschiedliche Tauben dieselbe
+    // Flugzeit auf beiden Reisen zeigen — ein einzelner Treffer könnte
+    // theoretisch Zufall sein, zwei sind es praktisch nicht.
+    const strongPairs = Object.entries(pairVotes).filter(function(e){ return e[1]>=2; });
+    const parentMap={};
+    function find(x){ if(!(x in parentMap)) parentMap[x]=x; while(parentMap[x]!==x){ x=parentMap[x]; } return x; }
+    function union(x,y){ const rx=find(x),ry=find(y); if(rx!==ry) parentMap[rx]=ry; }
+    strongPairs.forEach(function(e){ const parts=e[0].split('|'); union(parts[0],parts[1]); });
+    const clusters={};
+    Object.keys(parentMap).forEach(function(id){ const r=find(id); (clusters[r]=clusters[r]||[]).push(id); });
+    const groups = Object.values(clusters).map(function(ids){
+      let votes=0;
+      for(let i=0;i<ids.length;i++) for(let j=i+1;j<ids.length;j++){
+        const k=[ids[i],ids[j]].sort().join('|');
+        votes=Math.max(votes,pairVotes[k]||0);
+      }
+      const trips = ids.map(function(id){ return tripById[id]; }).filter(Boolean).sort(function(a,b){
+        const rvA=a.pigeonsset_rv?1:0, rvB=b.pigeonsset_rv?1:0;
+        if(rvB!==rvA) return rvB-rvA;
+        return (b.pigeonsset||0)-(a.pigeonsset||0);
+      });
+      trips._votes = votes;
+      return trips;
+    }).filter(function(g){ return g.length>1; });
+    groups.sort(function(a,b){ return (b._votes||0)-(a._votes||0); });
+    DUPE.resultGroups = groups;
+  }catch(e){ DUPE.resultError = e.message||'Unbekannter Fehler'; }
+  DUPE.resultScanning=false; updateDupeModal();
+}
+
+async function mergeOneResultGroup(idx){
+  if(DUPE.merging || !DUPE.resultGroups || !DUPE.resultGroups[idx]) return;
+  DUPE.merging=true; updateDupeModal();
+  const group = DUPE.resultGroups[idx];
+  try{
+    const r = await mergeDuplicateGroup(group);
+    DUPE.log.unshift((r.location||'?')+' · '+(r.tripdate||'?')+': '+r.mergedTrips+' Ergebnis-Dublette(n) zusammengeführt, '+r.movedResults+' Ergebnisse übernommen'+(r.deletedDupeResults?', '+r.deletedDupeResults+' echte Dopplung(en) entfernt':'')+'.');
+    DUPE.resultGroups.splice(idx,1);
+  }catch(e){ DUPE.log.unshift('Fehler: '+e.message); }
+  DUPE.merging=false;
+  await loadTrips(); clearPTCache(); ZT.loaded=false;
+  updateDupeModal();
+}
+
 function renderDupeModalBody(){
   if(DUPE.error){
     return '<div style="color:#e07070;font-size:13px;margin-bottom:10px">Fehler: '+escH(DUPE.error)+'</div>'
@@ -8800,11 +8938,41 @@ function renderDupeModalBody(){
         +'</div>';
     }).join('');
     fuzzyHtml = '<div class="section-label" style="margin-top:18px">⚠️ Mögliche Duplikate — gleiches Datum, abweichender Ortsname</div>'
-      +'<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Diese wurden NICHT automatisch erkannt (Ortsname weicht ab, z.B. Tippfehler oder Zusatz) — bitte prüfen, ob es wirklich dieselbe Reise ist, bevor du zusammenführst. Es könnten auch zwei echte Reisen am selben Tag sein.</div>'
+      +'<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Gleiches Datum, ähnlicher Ortsname UND ähnliche Durchschnittsdistanz (±10 km) — typisch für ein Tippfehler-Duplikat derselben Reise. Trotzdem bitte prüfen, bevor du zusammenführst: Reisevereine, die sich für einzelne Flüge aufteilen, können auch am selben Tag zwei echte, unterschiedliche Reisen haben.</div>'
       + fRows;
   }
+  var resultHtml = '<div class="section-label" style="margin-top:18px">🎯 Ergebnis-Duplikate (Flugzeit-Abgleich)</div>';
+  if(DUPE.resultError){
+    resultHtml += '<div style="color:#e07070;font-size:13px;margin-bottom:10px">Fehler: '+escH(DUPE.resultError)+'</div>'
+      +'<button class="btn btn-sm" onclick="scanResultDuplicates()">Erneut versuchen</button>';
+  } else if(DUPE.resultScanning){
+    resultHtml += '<div class="loading"><div class="spinner"></div>Vergleiche Flugzeiten aller Tauben…</div>';
+  } else if(DUPE.resultGroups==null){
+    resultHtml += '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Findet Duplikate, bei denen Ort und/oder Distanz abweichen (z.B. Teil-RV-Liste vs. übergeordnete Gesamtliste desselben Fluges), indem die Fluggeschwindigkeit einzelner Tauben abgeglichen wird — dauert je nach Datenmenge etwas länger.</div>'
+      +'<button class="btn btn-outline" onclick="scanResultDuplicates()">🎯 Nach Ergebnis-Duplikaten suchen</button>';
+  } else if(!DUPE.resultGroups.length){
+    resultHtml += '<div style="font-size:13px;color:var(--green)">✓ Keine gefunden.</div>';
+  } else {
+    var rRows = DUPE.resultGroups.map(function(g,i){
+      var detailRows = g.map(function(t,j){
+        return '<div style="font-size:11px;color:'+(j===0?'var(--green)':'var(--text3)')+';margin-top:2px">'
+          +(j===0?'✓ Ziel (bleibt bestehen): ':'– wird hineingeführt: ')
+          +escH(t.location||'?')+' · '+escH(t.tripdate||'?')+' — '+(t.pigeonsset||0)+' Tb.'+(t.pigeonsset_rv?', RV-Liste vorhanden':'')
+          +'</div>';
+      }).join('');
+      return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+        +'<div style="font-size:13px">Jg. '+(g[0].vintage||'?')+' <span style="color:var(--text3)">('+(g._votes||0)+' Taube(n) mit identischer Flugzeit auf beiden Reisen)</span></div>'
+        +'<button class="btn btn-outline btn-sm" '+(DUPE.merging?'disabled':'')+' onclick="mergeOneResultGroup('+i+')">Zusammenführen</button>'
+        +'</div>'
+        + detailRows
+        +'</div>';
+    }).join('');
+    resultHtml += '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">'+DUPE.resultGroups.length+' Gruppe(n), bei denen mehrere Tauben auf zwei verschiedenen Reisen exakt dieselbe Fluggeschwindigkeit haben — sehr starkes Duplikat-Indiz, auch wenn Ort/Datum/Distanz abweichen. Bitte trotzdem kurz prüfen.</div>'
+      + rRows;
+  }
   if(!DUPE.groups.length){
-    return '<div style="font-size:13px;color:var(--green);margin-bottom:10px">✓ Keine eindeutigen Duplikate (mehr) gefunden.</div>'+fuzzyHtml+logHtml;
+    return '<div style="font-size:13px;color:var(--green);margin-bottom:10px">✓ Keine eindeutigen Duplikate (mehr) gefunden.</div>'+fuzzyHtml+resultHtml+logHtml;
   }
   var rows = DUPE.groups.map(function(g,i){
     var detailRows = g.map(function(t,j){
@@ -8823,7 +8991,7 @@ function renderDupeModalBody(){
   }).join('');
   return '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">'+DUPE.groups.length+' Gruppe(n) mit doppelt angelegten Reisen gefunden. Die jeweils vollständigste Reise (grün) bleibt bestehen, die andere(n) werden hineingeführt und danach gelöscht.</div>'
     +'<button class="btn" '+(DUPE.merging?'disabled':'')+' style="margin-bottom:12px" onclick="mergeAllDuplicateGroups()">'+(DUPE.merging?'Führe zusammen…':'✓ Alle zusammenführen')+'</button>'
-    + rows + fuzzyHtml + logHtml;
+    + rows + fuzzyHtml + resultHtml + logHtml;
 }
 
 function updateDupeModal(){
@@ -8832,7 +9000,7 @@ function updateDupeModal(){
 }
 
 function showDuplicateTripsModal(){
-  DUPE = { scanning:false, groups:null, fuzzyGroups:null, error:null, merging:false, log:[] };
+  DUPE = { scanning:false, groups:null, fuzzyGroups:null, resultGroups:null, resultScanning:false, resultError:null, error:null, merging:false, log:[] };
   var overlay=document.createElement('div');
   overlay.className='lightbox-overlay dupe-overlay';
   overlay.style.cursor='default';
