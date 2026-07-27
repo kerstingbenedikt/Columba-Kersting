@@ -6247,6 +6247,7 @@ function saveScoreCfg(cfg){
   SCORE_CFG = Object.assign({}, SCORE_CFG_DEFAULT, cfg);
   try{ localStorage.setItem('scoreCfg', JSON.stringify(SCORE_CFG)); }catch(e){}
   invalidatePairRec(); // gecachte Empfehlungsliste basiert auf alten Gewichten
+  invalidateESList();
   render();
 }
 function resetScoreCfg(){ saveScoreCfg(Object.assign({}, SCORE_CFG_DEFAULT)); }
@@ -6436,6 +6437,160 @@ function renderVererberRanking(){
     +renderVererberTable(nichtBestand)
     +'</div>';
 }
+// ── Erfolgs-Score-Liste (alle Bestandstauben, sortierbar & exportierbar) ──
+// Im Gegensatz zur Vererberliste oben (reine Nachkommen-Wertung, nur Tauben
+// mit ausreichend erfolgreichen Nachkommen) listet dies JEDE Bestandstaube
+// mit ihrem individuellen Erfolgs-Score (Eigenleistung + Vererbung, siehe
+// computeErfolgsScore) sowie den eigenen Flugkennzahlen — als breite,
+// vollständige Tabelle zum Sortieren, Filtern (nur Elite) und CSV-Export.
+let ESLIST = { loading:false, error:null, results:null, onlyElite:false, sortKey:'score', sortDir:'desc' };
+function invalidateESList(){ ESLIST.results=null; ESLIST.error=null; }
+function setESListSort(key){
+  if(ESLIST.sortKey===key) ESLIST.sortDir = ESLIST.sortDir==='desc'?'asc':'desc';
+  else { ESLIST.sortKey=key; ESLIST.sortDir='desc'; }
+  render();
+}
+function toggleESListElite(){ ESLIST.onlyElite=!ESLIST.onlyElite; render(); }
+
+function renderErfolgsScoreListe(){
+  var cand = S.pigeons.filter(function(p){ return p.instock; });
+  if(!cand.length){
+    return '<div class="card"><div class="card-title">📋 Erfolgs-Score-Liste</div><div style="font-size:13px;color:var(--text3)">Keine Bestandstauben vorhanden.</div></div>';
+  }
+  if(ESLIST.error){
+    return '<div class="card"><div style="color:#e07070;font-size:13px">Fehler beim Laden der Flugdaten: '+escH(ESLIST.error)+'</div>'
+      +'<button class="btn btn-sm" style="margin-top:10px" onclick="ESLIST.error=null;render()">Erneut versuchen</button></div>';
+  }
+  var neededIds={};
+  cand.forEach(function(p){
+    neededIds[p.pigeonid]=true;
+    getVererbungDescendants(p.pigeonid).forEach(function(d){ neededIds[d.pigeonid]=true; });
+  });
+  var idList=Object.keys(neededIds);
+  var missing=idList.filter(function(id){ return !PT_CACHE[id]; });
+  if(missing.length){
+    if(!ESLIST.loading){
+      ESLIST.loading=true;
+      withTimeout(loadPigeonTripsBatchChunked(idList),60000)
+        .then(function(){ ESLIST.loading=false; render(); })
+        .catch(function(e){ ESLIST.loading=false; ESLIST.error=(e&&e.message)||'Unbekannter Fehler'; render(); });
+    }
+    return '<div class="card"><div class="card-title">📋 Erfolgs-Score-Liste</div><div class="loading"><div class="spinner"></div>Lade Flugdaten für '+idList.length+' Tauben…</div></div>';
+  }
+  ESLIST.loading=false;
+
+  if(!ESLIST.results){
+    ESLIST.results = cand.map(function(p){
+      var er = computeErfolgsScore(p.pigeonid);
+      var own = er.own||{};
+      var eliteOwn = !!(own.ready && !own.noFlights && !p.pigeonstateid
+        && own.preise>=VERERBER_ELITE_MIN_PREISE
+        && own.preisquote>=VERERBER_ELITE_MIN_PREISQUOTE
+        && own.topAS80>=VERERBER_ELITE_MIN_TOPAS);
+      return {p:p, er:er, own:own, ver:er.ver||{}, eliteOwn:eliteOwn};
+    });
+  }
+
+  var list = ESLIST.onlyElite ? ESLIST.results.filter(function(x){ return x.eliteOwn; }) : ESLIST.results.slice();
+  var key = ESLIST.sortKey, dir = ESLIST.sortDir==='asc'?1:-1;
+  var val = function(x){
+    switch(key){
+      case 'ring': return ring(x.p)||'';
+      case 'name': return x.p.name||'';
+      case 'jahrgang': return x.p.date_year||0;
+      case 'score': return x.er.score!=null?x.er.score:-1;
+      case 'own': return (x.own.ready&&!x.own.noFlights)?x.own.score:-1;
+      case 'ver': return (x.ver.ready&&x.ver.score!=null)?x.ver.score:-1;
+      case 'erfolgsquote': return (x.ver.ready&&x.ver.erfolgsquote!=null)?x.ver.erfolgsquote:-1;
+      case 'gesetzt': return (x.own.ready&&!x.own.noFlights)?x.own.gesetzt:-1;
+      case 'preisquote': return (x.own.ready&&!x.own.noFlights)?x.own.preisquote:-1;
+      case 'topas90': return (x.own.ready&&!x.own.noFlights)?x.own.topAS:-1;
+      case 'topas80': return (x.own.ready&&!x.own.noFlights)?x.own.topAS80:-1;
+      default: return 0;
+    }
+  };
+  list.sort(function(a,b){
+    var va=val(a), vb=val(b);
+    if(typeof va==='string') return dir*va.localeCompare(vb);
+    return dir*((va>vb)?1:(va<vb?-1:0));
+  });
+
+  var th = function(label, k){
+    var active = ESLIST.sortKey===k;
+    var arrow = active?(ESLIST.sortDir==='desc'?' ▾':' ▴'):'';
+    return '<th style="cursor:pointer;user-select:none'+(active?';color:var(--text)':'')+'" onclick="setESListSort(\''+k+'\')" title="Klick zum Sortieren">'+label+arrow+'</th>';
+  };
+  var rows = list.map(function(x){
+    var scoreCol = x.er.score!=null?x.er.score:'—';
+    var scoreColor = x.er.score==null?'var(--text3)':x.er.score>=60?'var(--green)':x.er.score>=35?'var(--orange)':'#e07070';
+    var ownCol = (x.own.ready&&!x.own.noFlights)?x.own.score:'—';
+    var verCol = (x.ver.ready&&x.ver.score!=null)?x.ver.score:'—';
+    var erfCol = (x.ver.ready&&x.ver.erfolgsquote!=null)?x.ver.erfolgsquote.toFixed(0)+'%':'—';
+    var gesetztCol = (x.own.ready&&!x.own.noFlights)?x.own.gesetzt:(x.own.tooFewFlights?x.own.gesetzt:'—');
+    var preisqCol = (x.own.ready&&!x.own.noFlights)?x.own.preisquote.toFixed(0)+'%':'—';
+    var top90Col = (x.own.ready&&!x.own.noFlights)?x.own.topAS:'—';
+    var top80Col = (x.own.ready&&!x.own.noFlights)?x.own.topAS80:'—';
+    var sx=sex_(x.p);
+    return '<tr style="cursor:pointer" onclick="selectPigeon(\''+x.p.pigeonid+'\')">'
+      +'<td style="font-family:monospace;font-size:12px">'+escH(ring(x.p))+' '+(sx==='M'?'♂':sx==='F'?'♀':'')+'</td>'
+      +'<td>'+escH(x.p.name||'—')+'</td>'
+      +'<td style="text-align:center">'+(x.p.date_year||'—')+'</td>'
+      +'<td style="text-align:center;font-weight:700;color:'+scoreColor+'">'+scoreCol+'</td>'
+      +'<td style="text-align:center">'+ownCol+'</td>'
+      +'<td style="text-align:center">'+verCol+'</td>'
+      +'<td style="text-align:center">'+erfCol+'</td>'
+      +'<td style="text-align:center">'+gesetztCol+'</td>'
+      +'<td style="text-align:center">'+preisqCol+'</td>'
+      +'<td style="text-align:center">'+top90Col+'</td>'
+      +'<td style="text-align:center">'+top80Col+'</td>'
+      +'<td style="text-align:center">'+(x.eliteOwn?'<span style="color:var(--green);font-weight:700" title="Elite: mind. '+VERERBER_ELITE_MIN_PREISE+' Preise, ≥'+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote, mind. '+VERERBER_ELITE_MIN_TOPAS+' über '+VERERBER_ELITE_AS_SCHWELLE+' AS">★</span>':'')+'</td>'
+      +'</tr>';
+  }).join('');
+
+  return '<div class="card">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:2px">'
+    +'<div class="card-title" style="margin-bottom:0;display:flex;align-items:center;gap:8px">📋 Erfolgs-Score-Liste <span onclick="showScoreSettingsModal()" title="Score-Einstellungen" style="cursor:pointer;color:var(--text3);font-size:14px;font-weight:400">⚙️</span></div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    +'<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">'
+    +'<input type="checkbox" '+(ESLIST.onlyElite?'checked':'')+' onchange="toggleESListElite()"> ⭐ Nur Elite</label>'
+    +'<button class="btn btn-outline btn-sm" onclick="exportErfolgsScoreCSV()">⬇️ CSV</button>'
+    +'</div></div>'
+    +'<div style="font-size:11px;color:var(--text3);margin:6px 0 10px">Jede Bestandstaube mit individuellem Erfolgs-Score (Eigenleistung + Vererbung, einstellbar über ⚙) und eigenen Flugkennzahlen. Spalten anklicken zum Sortieren, Zeile anklicken öffnet die Taube. ⭐ Elite = eigene Preise/Preisquote/Top-AS erfüllen die Elite-Kriterien (mind. '+VERERBER_ELITE_MIN_PREISE+' Preise, ≥'+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote, mind. '+VERERBER_ELITE_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten, ohne Status).</div>'
+    +(list.length?'<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+      +'<thead><tr>'+th('Ring','ring')+th('Name','name')+th('Jg.','jahrgang')+th('Score','score')+th('Eigen','own')+th('Vererbung','ver')+th('Erfolgsq.','erfolgsquote')+th('Flüge','gesetzt')+th('Preisq.','preisquote')+th('Top&gt;90','topas90')+th('Top&gt;80','topas80')+'<th>⭐</th></tr></thead>'
+      +'<tbody>'+rows+'</tbody></table></div>'
+      : '<div style="color:var(--text3);font-size:13px;padding:8px 0">Keine Tauben erfüllen den aktuellen Filter.</div>')
+    +'</div>';
+}
+function exportErfolgsScoreCSV(){
+  if(!ESLIST.results || !ESLIST.results.length){ alert('Noch keine Daten geladen — bitte Liste erst anzeigen lassen.'); return; }
+  var list = ESLIST.onlyElite ? ESLIST.results.filter(function(x){ return x.eliteOwn; }) : ESLIST.results;
+  var header = ['Ring','Name','Geschlecht','Jahrgang','Erfolgs-Score','Eigenleistung','Vererbung','Erfolgsquote %','Flüge (eigen)','Preisquote % (eigen)','Top>90 AS (eigen)','Top>80 AS (eigen)','Elite'];
+  var rows = list.map(function(x){
+    var sx=sex_(x.p);
+    return [
+      ring(x.p)||'', x.p.name||'', sx==='M'?'Täuber':sx==='F'?'Täubin':'',
+      x.p.date_year||'',
+      x.er.score!=null?x.er.score:'',
+      (x.own.ready&&!x.own.noFlights)?x.own.score:'',
+      (x.ver.ready&&x.ver.score!=null)?x.ver.score:'',
+      (x.ver.ready&&x.ver.erfolgsquote!=null)?x.ver.erfolgsquote.toFixed(1):'',
+      (x.own.ready&&!x.own.noFlights)?x.own.gesetzt:'',
+      (x.own.ready&&!x.own.noFlights)?x.own.preisquote.toFixed(1):'',
+      (x.own.ready&&!x.own.noFlights)?x.own.topAS:'',
+      (x.own.ready&&!x.own.noFlights)?x.own.topAS80:'',
+      x.eliteOwn?'Ja':''
+    ];
+  });
+  var csv = [header,...rows].map(function(r){ return r.map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(';'); }).join('\n');
+  var blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href=url; a.download='erfolgs-score-liste'+(ESLIST.onlyElite?'-elite':'')+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); },5000);
+}
+
 const VER_LOADING = new Set();
 function ensureVererbungLoaded(pigeonid){
   if(VER_LOADING.has(pigeonid)) return;
@@ -6562,11 +6717,12 @@ function computeEigenleistung(pigeonid){
   const rows = PT_CACHE[pigeonid];
   if(!rows) return {ready:false};
   if(!rows.length) return {ready:true, noFlights:true};
-  let gesetzt=rows.length, preise=0, topAS=0;
+  let gesetzt=rows.length, preise=0, topAS=0, topAS80=0;
   rows.forEach(r=>{
     if(hasPrizeRow(r)) preise++;
     const as=getFlightAS(r);
     if(as!=null && as>90) topAS++;
+    if(as!=null && as>VERERBER_ELITE_AS_SCHWELLE) topAS80++;
   });
   // Zu wenige Flüge -> Quote statistisch nicht belastbar, wird wie "keine
   // eigenen Flugdaten" behandelt (der Erfolgs-Score stützt sich dann allein
@@ -6575,7 +6731,7 @@ function computeEigenleistung(pigeonid){
   const preisquote = preise/gesetzt*100;
   const topASquote = topAS/gesetzt*100;
   const score = Math.round(computeQuoteScore(preisquote, topASquote));
-  return {ready:true, gesetzt, preise, topAS, preisquote, topASquote, score};
+  return {ready:true, gesetzt, preise, topAS, topAS80, preisquote, topASquote, score};
 }
 
 // Erfolgs-Score EINER Taube: gewichteter Mix aus Eigenleistung (eigene
@@ -7043,6 +7199,7 @@ function showVererbungDetail(pigeonid){
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px">'
       +'<div class="card-title" style="margin:0">🧬 Erfolgs-Score — '+escH(ring(p))+(p.name?' · '+escH(p.name):'')+'</div>'
       +'<div style="display:flex;align-items:center;gap:10px">'
+      +'<span onclick="closeVererbungDetail();S.tab=\'tauben\';S.selected=null;S.taubenView=\'statistik\';render();window.scrollTo(0,0)" title="Vollständige, exportierbare Tabelle aller Bestandstauben in der Statistik" style="cursor:pointer;color:var(--text3);font-size:16px">📋</span>'
       +'<span onclick="showScoreSettingsModal()" title="Score-Einstellungen" style="cursor:pointer;color:var(--text3);font-size:16px">⚙️</span>'
       +'<span onclick="closeVererbungDetail()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>'
       +'</div>'
@@ -10101,7 +10258,8 @@ function renderStats(){
       <div class="card-title">${t('stats_top20')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_top20_sub')}</span></div>
       ${topVererber.length?topVererber.map(x=>`<div class="bar-row clickable" onclick="showNachkommen('${x.p.pigeonid}')" title="${t('stats_title_offspring')} ${escH(ring(x.p))}"><span class="bar-label" style="width:auto;min-width:90px;text-align:left;padding-right:8px">${escH(ring(x.p))}${x.p.name?` · ${escH(x.p.name)}`:''}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(x.n/maxV*100)}%"><span>${x.n}</span></div></div></div>`).join(''):`<div style="color:var(--text3);font-size:13px;padding:8px 0">${t('stats_no_top_vererber')}</div>`}
     </div>
-    ${renderVererberRanking()}`;
+    <div style="margin-top:16px">${renderErfolgsScoreListe()}</div>
+    <div style="margin-top:16px">${renderVererberRanking()}</div>`;
 }
 
 // ── AUTOCOMPLETE ───────────────────────────────────────────────
