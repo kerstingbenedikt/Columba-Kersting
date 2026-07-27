@@ -1243,29 +1243,83 @@ function calcInbreedingPair(male, female, depth=5){
 }
 
 // ── API ────────────────────────────────────────────────────────
+// Erkennt eine abgelaufene Sitzung (PostgREST-Code PGRST303 "JWT expired",
+// oder allgemein HTTP 401) an der Fehlerantwort.
+function isJwtExpiredResponse(status, bodyText){
+  if(status===401) return true;
+  if(!bodyText) return false;
+  try{
+    const j = JSON.parse(bodyText);
+    if(j && (j.code==='PGRST303' || /jwt expired/i.test(j.message||j.msg||''))) return true;
+  }catch(e){
+    if(/jwt expired/i.test(bodyText)) return true;
+  }
+  return false;
+}
+// Verhindert, dass mehrere gleichzeitig fehlschlagende Requests parallel
+// je einen eigenen Refresh auslösen — alle warten auf denselben Versuch.
+let AUTH_REFRESH_PROMISE = null;
+async function ensureFreshToken(){
+  if(AUTH_REFRESH_PROMISE) return AUTH_REFRESH_PROMISE;
+  AUTH_REFRESH_PROMISE = (async()=>{
+    try{
+      const raw = localStorage.getItem('bv_session');
+      if(!raw) return false;
+      const s = JSON.parse(raw);
+      if(!s.refresh) return false;
+      return await refreshSession(s.refresh);
+    }catch(e){ return false; }
+  })();
+  const result = await AUTH_REFRESH_PROMISE;
+  AUTH_REFRESH_PROMISE = null;
+  return result;
+}
+// Zentraler fetch-Wrapper für alle Supabase/PostgREST-Aufrufe: läuft die
+// Sitzung während der Nutzung ab (z.B. nach längerer Zeit im geöffneten
+// Tab), wird automatisch EINMAL mit dem Refresh-Token erneuert und der
+// ursprüngliche Request transparent wiederholt — ohne dass Speichern
+// fehlschlägt oder die Person sich neu anmelden muss. Schlägt auch das
+// fehl (Refresh-Token selbst abgelaufen), wird sauber zum Login geleitet
+// statt einer kryptischen Fehlermeldung.
+async function apiFetch(url, options){
+  let r = await fetch(url, options);
+  if(!r.ok){
+    const t = await r.text();
+    if(isJwtExpiredResponse(r.status, t)){
+      const refreshed = await ensureFreshToken();
+      if(refreshed){
+        const retryOptions = Object.assign({}, options, {headers: Object.assign({}, options&&options.headers, H())});
+        r = await fetch(url, retryOptions);
+        if(!r.ok){ const t2=await r.text(); throw new Error(t2); }
+        return r;
+      }
+      AUTH = {token:null, user:null};
+      localStorage.removeItem('bv_session');
+      renderLogin('Deine Sitzung ist abgelaufen. Bitte erneut anmelden.');
+      throw new Error('Sitzung abgelaufen — bitte neu anmelden.');
+    }
+    throw new Error(t);
+  }
+  return r;
+}
 async function apiGet(path){
-  const r = await fetch(SUPA_URL+path,{headers:H()});
-  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  const r = await apiFetch(SUPA_URL+path,{headers:H()});
   return r.json();
 }
 async function apiPost(table, body){
-  const r = await fetch(SUPA_URL+'/'+table,{method:'POST',headers:H(),body:JSON.stringify(body)});
-  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  const r = await apiFetch(SUPA_URL+'/'+table,{method:'POST',headers:H(),body:JSON.stringify(body)});
   return r.json();
 }
 async function apiPatch(table, id, body){
-  const r = await fetch(SUPA_URL+'/'+table+'?pigeonid=eq.'+id,{method:'PATCH',headers:H(),body:JSON.stringify(body)});
-  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  const r = await apiFetch(SUPA_URL+'/'+table+'?pigeonid=eq.'+id,{method:'PATCH',headers:H(),body:JSON.stringify(body)});
   return r.json();
 }
 async function apiPatchBy(table, filter, body){
-  const r = await fetch(SUPA_URL+'/'+table+'?'+filter,{method:'PATCH',headers:H(),body:JSON.stringify(body)});
-  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  const r = await apiFetch(SUPA_URL+'/'+table+'?'+filter,{method:'PATCH',headers:H(),body:JSON.stringify(body)});
   return r.json();
 }
 async function apiDelete(table, id){
-  const r = await fetch(SUPA_URL+'/'+table+'?pigeonid=eq.'+id,{method:'DELETE',headers:H()});
-  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  await apiFetch(SUPA_URL+'/'+table+'?pigeonid=eq.'+id,{method:'DELETE',headers:H()});
   return true;
 }
 // ── Quick-Edit (Bestand-/Reisetauben-Schalter, Status-Auswahl) ──────────
@@ -1327,8 +1381,7 @@ function qeStatusSelectHtml(p){
 }
 
 async function apiDeleteBy(table, filter){
-  const r = await fetch(SUPA_URL+'/'+table+'?'+filter,{method:'DELETE',headers:H()});
-  if(!r.ok){ const t=await r.text(); throw new Error(t); }
+  const r = await apiFetch(SUPA_URL+'/'+table+'?'+filter,{method:'DELETE',headers:H()});
   // H() setzt "Prefer: return=representation" — Supabase liefert dann die
   // tatsächlich gelöschten Zeilen zurück. Wichtig: ohne diese Prüfung meldet
   // apiDeleteBy fälschlich "Erfolg", auch wenn RLS den Zugriff auf die Zeilen
@@ -10317,6 +10370,15 @@ function bindNachSearch(){
   const ok = await restoreSession();
   if(ok){
     startApp();
+    // Zusätzliche Absicherung neben dem Retry-in-apiFetch: Token proaktiv alle
+    // 20 Minuten erneuern, damit ein Supabase-Zugriffstoken (üblich: 1h
+    // gültig) bei einem lange geöffneten Tab möglichst nie mitten in einer
+    // Aktion abläuft.
+    setInterval(function(){
+      const raw = localStorage.getItem('bv_session');
+      if(!raw) return;
+      try{ const s = JSON.parse(raw); if(s.refresh) refreshSession(s.refresh); }catch(e){}
+    }, 20*60*1000);
   } else {
     renderLogin();
   }
