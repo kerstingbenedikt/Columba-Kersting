@@ -1124,6 +1124,56 @@ function findMother(p){
   if(!target) return null;
   return S.pigeons.find(x=>normRing(x.ringnumber)===target || normRing(x.ringnumberold||'')===target) || null;
 }
+// Prüft, ob targetId irgendwo in der Ahnenlinie von `pigeon` auftaucht (über
+// BEIDE Elternlinien, rekursiv) — Grundlage für die Stammbaum-Bereinigung
+// (findPedigreeProblems). `visited` verhindert eine Endlosschleife, falls in
+// den Daten bereits ein Zyklus existiert, der nicht über targetId läuft.
+function ancestorLineContains(pigeon, targetId, visited){
+  if(!pigeon || visited.has(pigeon.pigeonid)) return false;
+  visited.add(pigeon.pigeonid);
+  const f=findFather(pigeon), m=findMother(pigeon);
+  if(f && f.pigeonid===targetId) return true;
+  if(m && m.pigeonid===targetId) return true;
+  return ancestorLineContains(f,targetId,visited) || ancestorLineContains(m,targetId,visited);
+}
+// Scannt die gesamte Datenbank auf offensichtlich unlogische Eltern-Verknüpfungen:
+// – Taube als eigener Vater/eigene Mutter verknüpft
+// – Taube taucht (über Vater- oder Mutterlinie, beliebig viele Generationen
+//   tief) in ihrer eigenen Ahnenreihe wieder auf — genau das Problem aus dem
+//   Stammbaum-Export, wo Taube "72" gleichzeitig Proband UND eigener Vorfahre war
+// – Vater/Mutter laut Jahrgang jünger oder gleich alt wie das Kind (kann nicht
+//   stimmen, wird aber nur als Hinweis markiert, kein Hard-Fehler)
+function findPedigreeProblems(){
+  const problems=[];
+  S.pigeons.forEach(p=>{
+    const father=findFather(p), mother=findMother(p);
+    if(father && father.pigeonid===p.pigeonid){
+      problems.push({pigeon:p, side:'father', kind:'self', detail:'Ist als eigener Vater verknüpft.'});
+    } else if(father && ancestorLineContains(father, p.pigeonid, new Set([p.pigeonid]))){
+      problems.push({pigeon:p, side:'father', kind:'cycle', detail:'Taucht in der eigenen väterlichen Ahnenlinie wieder auf (Zyklus).'});
+    } else if(father && p.date_year && father.date_year && Number(father.date_year)>=Number(p.date_year)){
+      problems.push({pigeon:p, side:'father', kind:'age', detail:'Vater (Jg. '+father.date_year+') ist nicht älter als das Kind (Jg. '+p.date_year+').'});
+    }
+    if(mother && mother.pigeonid===p.pigeonid){
+      problems.push({pigeon:p, side:'mother', kind:'self', detail:'Ist als eigene Mutter verknüpft.'});
+    } else if(mother && ancestorLineContains(mother, p.pigeonid, new Set([p.pigeonid]))){
+      problems.push({pigeon:p, side:'mother', kind:'cycle', detail:'Taucht in der eigenen mütterlichen Ahnenlinie wieder auf (Zyklus).'});
+    } else if(mother && p.date_year && mother.date_year && Number(mother.date_year)>=Number(p.date_year)){
+      problems.push({pigeon:p, side:'mother', kind:'age', detail:'Mutter (Jg. '+mother.date_year+') ist nicht älter als das Kind (Jg. '+p.date_year+').'});
+    }
+  });
+  return problems;
+}
+// Entfernt Vater- oder Mutter-Verknüpfung EINER Taube komplett (ID- und
+// Ringnummer-Textfeld) — genutzt sowohl vom Bereinigungs-Dialog als auch für
+// Einzelfälle. Aktualisiert lokalen State + DB.
+async function clearPigeonParent(pigeonid, side){
+  const upd = side==='father' ? {fatherid:null, ringnumberfather:null} : {motherid:null, ringnumbermother:null};
+  await apiPatch('pigeons', pigeonid, upd);
+  const idx=S.pigeons.findIndex(x=>x.pigeonid===pigeonid);
+  if(idx!==-1) S.pigeons[idx]=Object.assign({},S.pigeons[idx],upd);
+  invalidatePedigreeCache();
+}
 // Für den Paarungscheck: ein virtueller (noch nicht existierender) Nachkomme,
 // damit der normale Stammbaum-Renderer (inkl. Druck/Export) unverändert
 // wiederverwendet werden kann. findById() löst diese ID zusätzlich zu echten
@@ -2329,6 +2379,7 @@ function renderList(){
             ${renderColumnPicker()}
             <button class="btn ${S.bulkMode?'':'btn-outline'} btn-sm" onclick="toggleBulkMode()">${S.bulkMode?t('bulk_stop'):t('bulk_start')}</button>
             <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben einheitlich formatieren und Duplikate zusammenführen">${t('cleanup_btn')}</button>
+            <button class="btn btn-outline btn-sm" onclick="showPedigreeProblemsModal()" title="Findet Tauben, die als eigener Vater/eigene Mutter oder in ihrer eigenen Ahnenlinie verknüpft sind, und erlaubt das direkte Entfernen dieser Verknüpfung">🧬 Stammbaum prüfen</button>
             <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">${t('export_csv')}</button>
             <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">${t('export_pdf')}</button>
           </div>
@@ -2547,6 +2598,17 @@ function clearDateField(id){
   if(el){ el.value=''; el.dispatchEvent(new Event('change')); }
 }
 
+// Leert das Vater-/Mutter-Ringfeld UND die versteckte ID im Bearbeiten-Formular
+// in einem Klick — damit eine falsche Eltern-Verknüpfung sich zuverlässig
+// entfernen lässt (reines Leeren des Textfelds allein reicht nicht, siehe
+// saveEdit: ohne dies bliebe die alte fatherid/motherid sonst unbemerkt bestehen).
+function clearParentField(which){
+  const inp=document.getElementById('e_'+which+'_inp');
+  const hid=document.getElementById('e_'+which+'_id');
+  if(inp) inp.value='';
+  if(hid) hid.value='';
+}
+
 function renderDetailEdit(p){
   const f=findFather(p),mo=findMother(p);
   const fR=f?ring(f):(p.ringnumberfather||'');
@@ -2638,17 +2700,19 @@ function renderDetailEdit(p){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-field">
           <label>${t('fld_father_ring')}</label>
-          <div style="position:relative">
-            <input id="e_father_inp" value="${escH(fR)}" autocomplete="off" placeholder="${t('ph_ring_input')}">
+          <div style="position:relative;display:flex;gap:6px;align-items:center">
+            <input id="e_father_inp" value="${escH(fR)}" autocomplete="off" placeholder="${t('ph_ring_input')}" style="flex:1">
             <input type="hidden" id="e_father_id" value="${escH(p.fatherid||'')}">
+            <span onclick="clearParentField('father')" title="Vater-Verknüpfung entfernen" style="cursor:pointer;color:var(--text3);font-size:15px;padding:0 4px" onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--text3)'">✕</span>
             <div id="e_father_drop" class="ac-drop"></div>
           </div>
         </div>
         <div class="form-field">
           <label>${t('fld_mother_ring')}</label>
-          <div style="position:relative">
-            <input id="e_mother_inp" value="${escH(mR)}" autocomplete="off" placeholder="${t('ph_ring_input')}">
+          <div style="position:relative;display:flex;gap:6px;align-items:center">
+            <input id="e_mother_inp" value="${escH(mR)}" autocomplete="off" placeholder="${t('ph_ring_input')}" style="flex:1">
             <input type="hidden" id="e_mother_id" value="${escH(p.motherid||'')}">
+            <span onclick="clearParentField('mother')" title="Mutter-Verknüpfung entfernen" style="cursor:pointer;color:var(--text3);font-size:15px;padding:0 4px" onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--text3)'">✕</span>
             <div id="e_mother_drop" class="ac-drop"></div>
           </div>
         </div>
@@ -2712,9 +2776,29 @@ async function saveEdit(id){
     pigeonstateid:  (()=>{ const el=document.getElementById('e_pigeonstateid'); return el&&el.value?el.value:null; })(),
     info:           val('e_info'),
     internalinfo:   val('e_internalinfo'),
-    fatherid:       g('e_father_id')&&g('e_father_id').value ? g('e_father_id').value : null,
-    motherid:       g('e_mother_id')&&g('e_mother_id').value ? g('e_mother_id').value : null,
   };
+  // Vater/Mutter: NICHT nur das versteckte e_father_id/e_mother_id übernehmen
+  // (das wird nur gesetzt, wenn tatsächlich ein Vorschlag aus dem Autocomplete
+  // angeklickt wurde) — sonst bleibt beim Löschen/Ändern des sichtbaren
+  // Textfelds die alte Verknüpfung unbemerkt bestehen. Stattdessen wie beim
+  // Anlegen einer neuen Taube (submitNeu) IMMER aus dem sichtbaren Textfeld
+  // ableiten: leer → Verknüpfung wirklich entfernen (fatherid/motherid UND
+  // ringnumberfather/-mother auf null); Text vorhanden + aus Dropdown gewählt
+  // → Ring-ID verwenden; Text vorhanden ohne Auswahl → per Ringnummer in der
+  // DB suchen, sonst als reinen Text-Fallback speichern.
+  const fInp=val('e_father_inp'), fId=g('e_father_id')&&g('e_father_id').value?g('e_father_id').value:null;
+  if(!fInp){ row.fatherid=null; row.ringnumberfather=null; }
+  else if(fId){ row.fatherid=fId; row.ringnumberfather=fInp; }
+  else { const fp=findInDb(fInp); if(fp){ row.fatherid=fp.pigeonid; row.ringnumberfather=ring(fp); } else { row.fatherid=null; row.ringnumberfather=fmtRingnumber(fInp)||fInp; } }
+  const mInp=val('e_mother_inp'), mId=g('e_mother_id')&&g('e_mother_id').value?g('e_mother_id').value:null;
+  if(!mInp){ row.motherid=null; row.ringnumbermother=null; }
+  else if(mId){ row.motherid=mId; row.ringnumbermother=mInp; }
+  else { const mp=findInDb(mInp); if(mp){ row.motherid=mp.pigeonid; row.ringnumbermother=ring(mp); } else { row.motherid=null; row.ringnumbermother=fmtRingnumber(mInp)||mInp; } }
+  // Eine Taube kann nicht ihr eigener Vater/ihre eigene Mutter sein — direkt
+  // beim Speichern abfangen, statt eine offensichtlich falsche Verknüpfung
+  // erst nachträglich über die Stammbaum-Prüfung bereinigen zu müssen.
+  if(row.fatherid===id){ alert('Eine Taube kann nicht als ihr eigener Vater verknüpft werden.'); return; }
+  if(row.motherid===id){ alert('Eine Taube kann nicht als ihre eigene Mutter verknüpft werden.'); return; }
   // Leere Strings als null
   Object.keys(row).forEach(k=>{ if(row[k]==='') row[k]=null; });
   if(msg){ msg.style.display='block'; msg.style.background='var(--bg3)'; msg.style.color='var(--text2)'; msg.textContent='Speichern…'; }
@@ -9053,6 +9137,56 @@ function renderDupeModalBody(){
 function updateDupeModal(){
   var body = document.getElementById('dupe-modal-body');
   if(body) body.innerHTML = renderDupeModalBody();
+}
+
+// ── Stammbaum-Verknüpfungen prüfen/bereinigen ─────────────────────────
+// Zeigt alle über findPedigreeProblems() gefundenen Fälle (Selbstverknüpfung,
+// zirkuläre Ahnenlinie, unplausibler Jahrgang) mit einer direkten
+// "Vater/Mutter entfernen"-Aktion je Fall.
+function renderPedigreeProblemsModalBody(){
+  const problems = findPedigreeProblems();
+  if(!problems.length){
+    return '<div style="color:var(--text3);font-size:13px;padding:8px 0">✓ Keine unlogischen Eltern-Verknüpfungen gefunden.</div>';
+  }
+  const kindLabel = {self:'⚠ Selbstverknüpfung', cycle:'⚠ Zirkuläre Ahnenlinie', age:'ℹ Jahrgang unplausibel'};
+  const rows = problems.map(pr=>{
+    const p=pr.pigeon;
+    const label = (ring(p)||p.pigeonid) + (p.name?' · '+escH(p.name):'');
+    const sideLabel = pr.side==='father' ? 'Vater' : 'Mutter';
+    return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
+      <div style="font-size:12px;color:${pr.kind==='age'?'var(--text3)':'var(--amber)'}">${kindLabel[pr.kind]}</div>
+      <div style="font-size:13px;margin:4px 0;cursor:pointer" onclick="document.querySelectorAll('.pedigree-problems-overlay').forEach(o=>o.remove());selectPigeon('${p.pigeonid}')">
+        <strong>${label}</strong> — ${sideLabel}: ${escH(pr.detail)}
+      </div>
+      ${pr.kind!=='age' ? `<button class="btn btn-outline btn-sm" onclick="resolvePedigreeProblem('${p.pigeonid}','${pr.side}')">🗑 ${sideLabel} entfernen</button>` : ''}
+    </div>`;
+  }).join('');
+  return `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">${problems.length} Fall/Fälle gefunden. "Selbstverknüpfung" und "Zirkuläre Ahnenlinie" sind logisch unmöglich und sollten bereinigt werden; "Jahrgang unplausibel" ist nur ein Hinweis zur manuellen Prüfung.</div>${rows}`;
+}
+async function resolvePedigreeProblem(pigeonid, side){
+  try{
+    await clearPigeonParent(pigeonid, side);
+    const body=document.getElementById('pedigree-problems-body');
+    if(body) body.innerHTML=renderPedigreeProblemsModalBody();
+    applyFilter(); render();
+  }catch(e){ alert('Fehler beim Entfernen: '+e.message); }
+}
+function showPedigreeProblemsModal(){
+  var overlay=document.createElement('div');
+  overlay.className='lightbox-overlay pedigree-problems-overlay';
+  overlay.style.cursor='default';
+  overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
+  var panel=document.createElement('div');
+  panel.style.cssText='background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:600px;width:92vw;max-height:86vh;overflow-y:auto;padding:20px;cursor:default';
+  panel.onclick=function(e){ e.stopPropagation(); };
+  panel.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px">'
+      +'<div class="card-title" style="margin:0">🧬 Stammbaum-Verknüpfungen prüfen</div>'
+      +'<span onclick="this.closest(\'.pedigree-problems-overlay\').remove()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>'
+    +'</div>'
+    +'<div id="pedigree-problems-body">'+renderPedigreeProblemsModalBody()+'</div>';
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
 }
 
 function showDuplicateTripsModal(){
