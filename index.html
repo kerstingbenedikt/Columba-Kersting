@@ -1143,26 +1143,62 @@ function ancestorLineContains(pigeon, targetId, visited){
 //   Stammbaum-Export, wo Taube "72" gleichzeitig Proband UND eigener Vorfahre war
 // – Vater/Mutter laut Jahrgang jünger oder gleich alt wie das Kind (kann nicht
 //   stimmen, wird aber nur als Hinweis markiert, kein Hard-Fehler)
-function findPedigreeProblems(){
+// Prüft EINE Taube auf unlogische Eltern-Verknüpfungen (siehe oben). Wird von
+// runPedigreeScan häppchenweise für viele Tauben aufgerufen.
+function checkPigeonPedigreeProblems(p){
   const problems=[];
-  S.pigeons.forEach(p=>{
-    const father=findFather(p), mother=findMother(p);
-    if(father && father.pigeonid===p.pigeonid){
-      problems.push({pigeon:p, side:'father', kind:'self', detail:'Ist als eigener Vater verknüpft.'});
-    } else if(father && ancestorLineContains(father, p.pigeonid, new Set([p.pigeonid]))){
-      problems.push({pigeon:p, side:'father', kind:'cycle', detail:'Taucht in der eigenen väterlichen Ahnenlinie wieder auf (Zyklus).'});
-    } else if(father && p.date_year && father.date_year && Number(father.date_year)>=Number(p.date_year)){
-      problems.push({pigeon:p, side:'father', kind:'age', detail:'Vater (Jg. '+father.date_year+') ist nicht älter als das Kind (Jg. '+p.date_year+').'});
-    }
-    if(mother && mother.pigeonid===p.pigeonid){
-      problems.push({pigeon:p, side:'mother', kind:'self', detail:'Ist als eigene Mutter verknüpft.'});
-    } else if(mother && ancestorLineContains(mother, p.pigeonid, new Set([p.pigeonid]))){
-      problems.push({pigeon:p, side:'mother', kind:'cycle', detail:'Taucht in der eigenen mütterlichen Ahnenlinie wieder auf (Zyklus).'});
-    } else if(mother && p.date_year && mother.date_year && Number(mother.date_year)>=Number(p.date_year)){
-      problems.push({pigeon:p, side:'mother', kind:'age', detail:'Mutter (Jg. '+mother.date_year+') ist nicht älter als das Kind (Jg. '+p.date_year+').'});
-    }
-  });
+  const father=findFather(p), mother=findMother(p);
+  if(father && father.pigeonid===p.pigeonid){
+    problems.push({pigeon:p, side:'father', kind:'self', detail:'Ist als eigener Vater verknüpft.'});
+  } else if(father && ancestorLineContains(father, p.pigeonid, new Set([p.pigeonid]))){
+    problems.push({pigeon:p, side:'father', kind:'cycle', detail:'Taucht in der eigenen väterlichen Ahnenlinie wieder auf (Zyklus).'});
+  } else if(father && p.date_year && father.date_year && Number(father.date_year)>=Number(p.date_year)){
+    problems.push({pigeon:p, side:'father', kind:'age', detail:'Vater (Jg. '+father.date_year+') ist nicht älter als das Kind (Jg. '+p.date_year+').'});
+  }
+  if(mother && mother.pigeonid===p.pigeonid){
+    problems.push({pigeon:p, side:'mother', kind:'self', detail:'Ist als eigene Mutter verknüpft.'});
+  } else if(mother && ancestorLineContains(mother, p.pigeonid, new Set([p.pigeonid]))){
+    problems.push({pigeon:p, side:'mother', kind:'cycle', detail:'Taucht in der eigenen mütterlichen Ahnenlinie wieder auf (Zyklus).'});
+  } else if(mother && p.date_year && mother.date_year && Number(mother.date_year)>=Number(p.date_year)){
+    problems.push({pigeon:p, side:'mother', kind:'age', detail:'Mutter (Jg. '+mother.date_year+') ist nicht älter als das Kind (Jg. '+p.date_year+').'});
+  }
   return problems;
+}
+// Laufender/letzter Scan-Zustand — bleibt bestehen, solange die Seite offen
+// ist, damit ein erneutes Öffnen des Dialogs NICHT jedes Mal neu scannt
+// (das dauerte bei der kompletten Datenbank spürbar/minutenlang).
+let PEDIGREE_SCAN = { problems:null, scanning:false, done:0, total:0, yearFilter:'all', scannedYearFilter:null };
+// Scannt in Häppchen von 250 Tauben und gibt die Kontrolle zwischendurch an
+// den Browser zurück (setTimeout 0) — dadurch bleibt die Seite bedienbar und
+// der "Seite reagiert nicht"-Dialog tritt nicht mehr auf, egal wie groß die
+// Datenbank ist. Über yearFilter kann man zusätzlich gezielt nur einen
+// Jahrgang prüfen, abarbeiten und danach den nächsten — spürbar schneller,
+// als jedes Mal die komplette Datenbank neu zu scannen.
+async function runPedigreeScan(yearFilter){
+  PEDIGREE_SCAN.scanning=true;
+  PEDIGREE_SCAN.yearFilter=yearFilter;
+  PEDIGREE_SCAN.done=0;
+  const pigeons = (yearFilter && yearFilter!=='all')
+    ? S.pigeons.filter(p=>String(p.date_year)===String(yearFilter))
+    : S.pigeons;
+  PEDIGREE_SCAN.total=pigeons.length;
+  const problems=[];
+  const chunkSize=250;
+  const updateProgressUI=()=>{
+    const body=document.getElementById('pedigree-problems-body');
+    if(body) body.innerHTML=renderPedigreeProblemsModalBody();
+  };
+  updateProgressUI();
+  for(let i=0;i<pigeons.length;i+=chunkSize){
+    pigeons.slice(i,i+chunkSize).forEach(p=>{ problems.push(...checkPigeonPedigreeProblems(p)); });
+    PEDIGREE_SCAN.done=Math.min(i+chunkSize,pigeons.length);
+    updateProgressUI();
+    await new Promise(r=>setTimeout(r,0)); // Browser zwischendurch "atmen" lassen
+  }
+  PEDIGREE_SCAN.problems=problems;
+  PEDIGREE_SCAN.scanning=false;
+  PEDIGREE_SCAN.scannedYearFilter=yearFilter;
+  updateProgressUI();
 }
 // Entfernt Vater- oder Mutter-Verknüpfung EINER Taube komplett (ID- und
 // Ringnummer-Textfeld) — genutzt sowohl vom Bereinigungs-Dialog als auch für
@@ -9387,13 +9423,32 @@ function updateDupeModal(){
 }
 
 // ── Stammbaum-Verknüpfungen prüfen/bereinigen ─────────────────────────
-// Zeigt alle über findPedigreeProblems() gefundenen Fälle (Selbstverknüpfung,
+// Zeigt alle über runPedigreeScan() gefundenen Fälle (Selbstverknüpfung,
 // zirkuläre Ahnenlinie, unplausibler Jahrgang) mit einer direkten
-// "Vater/Mutter entfernen"-Aktion je Fall.
+// "Vater/Mutter entfernen"-Aktion je Fall. Scannt NICHT automatisch beim
+// Öffnen — zeigt stattdessen das letzte Ergebnis (falls vorhanden) sofort an,
+// damit man den Dialog zum Abarbeiten der Liste beliebig oft öffnen/
+// schließen kann, ohne jedes Mal neu zu scannen.
 function renderPedigreeProblemsModalBody(){
-  const problems = findPedigreeProblems();
+  const years=[...new Set(S.pigeons.map(p=>p.date_year).filter(Boolean))].sort((a,b)=>Number(b)-Number(a));
+  const yearOptions = `<option value="all"${PEDIGREE_SCAN.yearFilter==='all'?' selected':''}>Alle Jahrgänge (kann dauern)</option>`
+    + years.map(y=>`<option value="${y}"${String(PEDIGREE_SCAN.yearFilter)===String(y)?' selected':''}>Nur Jahrgang ${y}</option>`).join('');
+  const picker = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+    <select id="pedigree-scan-year" style="min-width:200px" ${PEDIGREE_SCAN.scanning?'disabled':''}>${yearOptions}</select>
+    <button class="btn btn-sm" ${PEDIGREE_SCAN.scanning?'disabled':''} onclick="runPedigreeScan(document.getElementById('pedigree-scan-year').value)">🔍 ${PEDIGREE_SCAN.problems?'Neu scannen':'Scannen'}</button>
+  </div>`;
+  if(PEDIGREE_SCAN.scanning){
+    const pct = PEDIGREE_SCAN.total ? Math.round(PEDIGREE_SCAN.done/PEDIGREE_SCAN.total*100) : 0;
+    return picker + `<div class="imp-progress" style="margin-bottom:8px"><div class="imp-progress-bar" style="width:${pct}%"></div></div>
+    <div style="font-size:12px;color:var(--text3)">Prüfe … ${PEDIGREE_SCAN.done} von ${PEDIGREE_SCAN.total}</div>`;
+  }
+  if(!PEDIGREE_SCAN.problems){
+    return picker + `<div style="color:var(--text3);font-size:13px">Noch nicht gescannt. Tipp: einzelne Jahrgänge nacheinander zu prüfen und abzuarbeiten geht spürbar schneller als "Alle Jahrgänge" auf einmal — die Seite bleibt in jedem Fall bedienbar, der Fortschritt wird angezeigt.</div>`;
+  }
+  const problems=PEDIGREE_SCAN.problems;
+  const scannedLabel = PEDIGREE_SCAN.scannedYearFilter==='all' ? 'alle Jahrgänge' : 'Jahrgang '+PEDIGREE_SCAN.scannedYearFilter;
   if(!problems.length){
-    return '<div style="color:var(--text3);font-size:13px;padding:8px 0">✓ Keine unlogischen Eltern-Verknüpfungen gefunden.</div>';
+    return picker + `<div style="color:var(--text3);font-size:13px">✓ Keine unlogischen Eltern-Verknüpfungen gefunden (geprüft: ${scannedLabel}).</div>`;
   }
   const kindLabel = {self:'⚠ Selbstverknüpfung', cycle:'⚠ Zirkuläre Ahnenlinie', age:'ℹ Jahrgang unplausibel'};
   const rows = problems.map(pr=>{
@@ -9408,11 +9463,14 @@ function renderPedigreeProblemsModalBody(){
       ${pr.kind!=='age' ? `<button class="btn btn-outline btn-sm" onclick="resolvePedigreeProblem('${p.pigeonid}','${pr.side}')">🗑 ${sideLabel} entfernen</button>` : ''}
     </div>`;
   }).join('');
-  return `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">${problems.length} Fall/Fälle gefunden. "Selbstverknüpfung" und "Zirkuläre Ahnenlinie" sind logisch unmöglich und sollten bereinigt werden; "Jahrgang unplausibel" ist nur ein Hinweis zur manuellen Prüfung.</div>${rows}`;
+  return picker + `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">${problems.length} Fall/Fälle gefunden (geprüft: ${scannedLabel}). "Selbstverknüpfung" und "Zirkuläre Ahnenlinie" sind logisch unmöglich und sollten bereinigt werden; "Jahrgang unplausibel" ist nur ein Hinweis zur manuellen Prüfung.</div>${rows}`;
 }
 async function resolvePedigreeProblem(pigeonid, side){
   try{
     await clearPigeonParent(pigeonid, side);
+    // Nur den soeben behobenen Fall aus dem Cache entfernen statt komplett neu
+    // zu scannen — bei ~9.500 Tauben würde ein Rescan nach jedem Klick spürbar dauern.
+    if(PEDIGREE_SCAN.problems) PEDIGREE_SCAN.problems = PEDIGREE_SCAN.problems.filter(pr=>!(pr.pigeon.pigeonid===pigeonid && pr.side===side));
     const body=document.getElementById('pedigree-problems-body');
     if(body) body.innerHTML=renderPedigreeProblemsModalBody();
     applyFilter(); render();
