@@ -9391,7 +9391,7 @@ function renderZuechterDetail(key){
 // zeigt zusätzlich auch Tauben mit unbekanntem Geschlecht; deren Jahrgang wird bei
 // fehlender DB-Zuordnung direkt aus der Ringnummer abgeleitet (mittleres Segment,
 // z.B. DE 6559-23-3535 → Jahrgang 2023).
-let BL = { breeder:'ALL', rv:null, cat:'gesamt', ass:'all', expanded:new Set(), collapsedSeasons:new Set() };
+let BL = { breeder:'ALL', rv:null, cat:'gesamt', ass:'all', expanded:new Set(), collapsedSeasons:new Set(), sortKey:null, sortDir:'desc' };
 
 const BL_COLUMN_DEFS = [
   { key:'ring',     label:'Ringnummer' },
@@ -9534,7 +9534,19 @@ function bestenliste(breederFilter, rvFilter){
   });
 
   const years=[...new Set(entries.map(e=>e.year))].sort((a,b)=>Number(b)-Number(a));
-  const sortFn=(a,b)=> b.prizes-a.prizes || b.asSum-a.asSum;
+  // Standard-Sortierung (wie bisher): Anzahl Preise, bei Gleichstand Σ AS.
+  const defaultSortFn=(a,b)=> b.prizes-a.prizes || b.asSum-a.asSum;
+  // Klickt der Nutzer auf eine der Spalten "Preise"/"Σ AS"/"Σ km" (siehe
+  // setBLSort), wird stattdessen danach sortiert — Gleichstände fallen weiter
+  // auf die Standard-Sortierung zurück, damit die Reihenfolge stabil bleibt.
+  const BL_SORT_FIELD = { prizes:e=>e.prizes, sumas:e=>e.asSum, kmsum:e=>e.kmSum||0 };
+  const sortFn = (BL.sortKey && BL_SORT_FIELD[BL.sortKey])
+    ? (a,b)=>{
+        const f=BL_SORT_FIELD[BL.sortKey];
+        const diff = f(b)-f(a); // absteigend als Basis
+        return (BL.sortDir==='asc' ? -diff : diff) || defaultSortFn(a,b);
+      }
+    : defaultSortFn;
   const build=(filterFn)=> years.map(yr=>({
     year:yr,
     rows: entries.filter(e=>e.year===yr && filterFn(e,yr)).sort(sortFn)
@@ -9579,6 +9591,15 @@ function renderBestenliste(){
   window.toggleBL = toggleBL;
   function toggleBLSeason(yr){ const k=String(yr); if(BL.collapsedSeasons.has(k)) BL.collapsedSeasons.delete(k); else BL.collapsedSeasons.add(k); render(); }
   window.toggleBLSeason = toggleBLSeason;
+  // Sortierbare Spalten in der Bestenliste: Preise, Σ AS, Σ km. Erster Klick
+  // sortiert absteigend, ein weiterer Klick auf dieselbe Spalte kehrt die
+  // Richtung um; Klick auf eine andere Spalte startet dort wieder absteigend.
+  function setBLSort(key){
+    if(BL.sortKey===key) BL.sortDir = (BL.sortDir==='asc'?'desc':'asc');
+    else { BL.sortKey=key; BL.sortDir='desc'; }
+    render();
+  }
+  window.setBLSort = setBLSort;
 
   const renderFlights=(e)=>{
     if(!e.flights.length) return '<div style="padding:10px;color:var(--text3);font-size:12px">'+t('bl_no_flight_data')+'</div>';
@@ -9634,6 +9655,21 @@ function renderBestenliste(){
 
   const BL_TH = { ring:t('th_ring'), name:t('th_name'), jahrgang:t('year_abbr'), breeder:t('th_breeder'), ass:'Ass', prizes:t('col_prizes'), sumas:t('col_sum_as'), kmsum:'Σ km' };
   const BL_TH_CENTER = new Set(['ass','prizes','sumas','kmsum']);
+  // Spalten, die per Klick auf die Kopfzeile sortiert werden können.
+  const BL_SORTABLE = new Set(['prizes','sumas','kmsum']);
+  const blHeaderCell=(c)=>{
+    const center = BL_TH_CENTER.has(c.key) ? 'text-align:center;' : '';
+    if(!BL_SORTABLE.has(c.key)){
+      const titleAttr = c.key==='ass' ? ' title="Ass-Kategorien"' : '';
+      return `<th style="${center}"${titleAttr}>${BL_TH[c.key]}</th>`;
+    }
+    const active = BL.sortKey===c.key;
+    const arrow = active ? (BL.sortDir==='asc' ? ' ▲' : ' ▼') : '';
+    const titleAttr = c.key==='kmsum'
+      ? ' title="Summe der mittleren Flugdistanz über alle Preisflüge dieser Taube — Klick zum Sortieren"'
+      : ' title="Klick zum Sortieren"';
+    return `<th style="${center}cursor:pointer;user-select:none;${active?'color:var(--text)':''}" onclick="setBLSort('${c.key}')"${titleAttr}>${BL_TH[c.key]}${arrow}</th>`;
+  };
   const yearBlocks = groups.length ? groups.map(g=>{
     const collapsed = BL.collapsedSeasons.has(String(g.year));
     return `
@@ -9644,7 +9680,7 @@ function renderBestenliste(){
         <span style="font-size:11px;color:var(--text3)">(${g.rows.length})</span>
       </div>
       ${collapsed?'':`<div class="card"><div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr><th>#</th><th></th>${activeBLCols.map(c=>`<th${BL_TH_CENTER.has(c.key)?' style="text-align:center"':''}${c.key==='ass'?' title="Ass-Kategorien"':''}${c.key==='kmsum'?' title="Summe der mittleren Flugdistanz über alle Preisflüge dieser Taube"':''}>${BL_TH[c.key]}</th>`).join('')}</tr></thead>
+        <thead><tr><th>#</th><th></th>${activeBLCols.map(blHeaderCell).join('')}</tr></thead>
         <tbody>${g.rows.map((e,i)=>renderRow(e,i,g.year)).join('')}</tbody>
       </table></div></div>`}
     </div>`;
