@@ -1301,6 +1301,23 @@ async function apiGetAll(path){
   }
   return all;
 }
+// Führt worker(item) für jedes Element aus items aus, dabei maximal `limit`
+// Aufrufe gleichzeitig "in der Luft" — bei Netzwerk-Requests (Supabase/
+// PostgREST) dominiert meist die Latenz pro Request, nicht die Serverlast,
+// daher bringt paralleles statt strikt sequenzielles Abarbeiten hier ein
+// Vielfaches an Geschwindigkeit (z.B. beim Reise-Import), ohne die DB mit
+// hunderten gleichzeitigen Requests auf einmal zu überfluten.
+async function runWithConcurrency(items, limit, worker){
+  let idx=0;
+  const n=Math.min(limit, items.length)||1;
+  const runners=new Array(n).fill(0).map(async()=>{
+    while(idx<items.length){
+      const i=idx++;
+      await worker(items[i], i);
+    }
+  });
+  await Promise.all(runners);
+}
 // Upsert in Batches (500 Zeilen), damit auch große Tabellen (Tauben,
 // Flugergebnisse) beim Wiederherstellen nicht an Request-Limits scheitern.
 // Gibt fehlgeschlagene Chunks zurück, statt beim ersten Fehler abzubrechen —
@@ -7684,6 +7701,11 @@ async function handleTripsFiles(fileList){
 
   RT.imp.rows = combined;
   RT.imp.breeders = breeders;
+  // Vollständige Reisenliste (nicht die auf 500 gedeckelte RT.trips) laden,
+  // damit die "bereits vorhanden"-Markierung in der Vorschau auch ältere
+  // Flüge zuverlässig erkennt und nicht fälschlich als "neu" anzeigt.
+  try{ RT.imp.allTrips = await apiGetAll('/trips?select=tripid,vintage,location,tripdate'); }
+  catch(e){ RT.imp.allTrips = null; }
   RT.imp.step='preview';
   if(errors.length) alert('Einige Dateien konnten nicht gelesen werden:\n'+errors.join('\n'));
   render();
@@ -8301,11 +8323,34 @@ async function parseXlsxRows(file){
   return {rows, breedername:null};
 }
 
+// Prüft, ob zu einer geparsten Reise (Jahrgang+Ort+Datum, wie beim eigentlichen
+// Import) schon ein Eintrag in RT.trips existiert. Grundlage für die
+// "bereits vorhanden"-Markierung und "Nur neue Reisen auswählen" in der
+// Import-Vorschau, damit man gezielt nur fehlende/neue Flüge importieren kann,
+// statt jedes Mal die komplette Datei erneut durchlaufen zu lassen.
+function findExistingTripFor(item){
+  const normL=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
+  const list = RT.imp.allTrips || RT.trips || [];
+  return list.find(x=>
+    x.vintage===item.trip.vintage && normL(x.location)===normL(item.trip.location) &&
+    (x.tripdate||'')===(item.trip.tripdate||'')
+  );
+}
+function tripsPreviewSelectAll(sel){ RT.imp.rows.forEach(r=>r.selected=sel); render(); }
+function tripsPreviewSelectOnlyNew(){ RT.imp.rows.forEach(r=>{ r.selected = !findExistingTripFor(r); }); render(); }
 function renderTripsPreview(){
   const rows=RT.imp.rows;
-  const totalR=rows.reduce((s,r)=>s+r.results.length,0);
-  const foundR=rows.reduce((s,r)=>s+r.results.filter(x=>x.found).length,0);
-  const tRows=rows.map(item=>`<tr>
+  rows.forEach(item=>{
+    if(item.selected===undefined) item.selected=true; // Default: alles ausgewählt
+    item._existing=!!findExistingTripFor(item);
+  });
+  const selRows=rows.filter(r=>r.selected);
+  const totalR=selRows.reduce((s,r)=>s+r.results.length,0);
+  const foundR=selRows.reduce((s,r)=>s+r.results.filter(x=>x.found).length,0);
+  const existingCount=rows.filter(r=>r._existing).length;
+  const tRows=rows.map((item,i)=>`<tr style="${item.selected?'':'opacity:.4'}">
+    <td style="text-align:center"><input type="checkbox" ${item.selected?'checked':''}
+      onchange="RT.imp.rows[${i}].selected=this.checked;render()"></td>
     <td style="font-weight:500">${item.trip.number}</td>
     <td>${escH(item.trip.location)}</td>
     <td>${item.trip.tripdate||'—'}</td>
@@ -8314,6 +8359,9 @@ function renderTripsPreview(){
     <td style="text-align:center;color:var(--green)">${item.results.filter(r=>r.found).length}</td>
     <td style="text-align:center;color:${item.results.filter(r=>!r.found).length?'#e07070':'var(--text3)'}">
       ${item.results.filter(r=>!r.found).length||'—'}</td>
+    <td style="text-align:center;font-size:11px">${item._existing
+      ?'<span style="color:var(--amber)" title="Reise mit gleichem Jahrgang/Ort/Datum ist schon in der DB">⚠ vorhanden</span>'
+      :'<span style="color:var(--green)">neu</span>'}</td>
   </tr>`).join('');
   const breeders = RT.imp.breeders && RT.imp.breeders.length ? RT.imp.breeders : [];
   return `<div class="card">
@@ -8322,34 +8370,40 @@ function renderTripsPreview(){
     ${breeders.length?`<div style="margin-bottom:14px;display:flex;flex-wrap:wrap;gap:6px">
       ${breeders.map(b=>`<span class="badge badge-u">🧑‍🌾 ${escH(b)}</span>`).join('')}
     </div>`:''}
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <div style="background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
-        <strong style="color:#7ab3e0">${rows.length}</strong> <span style="color:var(--text2)">Reisen</span></div>
+        <strong style="color:#7ab3e0">${selRows.length}</strong> <span style="color:var(--text2)">von ${rows.length} Reisen ausgewählt</span></div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
-        <strong style="color:var(--text)">${totalR}</strong> <span style="color:var(--text2)">Ergebnisse</span></div>
+        <strong style="color:var(--text)">${totalR}</strong> <span style="color:var(--text2)">Ergebnisse (ausgewählt)</span></div>
       <div style="background:rgba(91,134,89,.12);border:1px solid rgba(91,134,89,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
         <strong style="color:var(--green)">${foundR}</strong> <span style="color:var(--text2)">Tauben gefunden</span></div>
-      ${totalR-foundR>0?`<div style="background:rgba(212,168,67,.1);border:1px solid rgba(212,168,67,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
-        <strong style="color:var(--amber)">${totalR-foundR}</strong> <span style="color:var(--text2)">nicht in DB</span></div>`:''}
+      ${existingCount?`<div style="background:rgba(212,168,67,.1);border:1px solid rgba(212,168,67,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
+        <strong style="color:var(--amber)">${existingCount}</strong> <span style="color:var(--text2)">bereits vorhanden</span></div>`:''}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="tripsPreviewSelectAll(true)">Alle auswählen</button>
+      <button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="tripsPreviewSelectAll(false)">Alle abwählen</button>
+      <button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="tripsPreviewSelectOnlyNew()">Nur neue Reisen auswählen</button>
     </div>
     <div class="table-wrap" style="margin-bottom:14px">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr><th>Nr.</th><th>Ort</th><th>Datum</th><th>Saison</th>
+        <thead><tr><th></th><th>Nr.</th><th>Ort</th><th>Datum</th><th>Saison</th>
           <th style="text-align:center">Tauben</th>
           <th style="text-align:center">Gefunden</th>
-          <th style="text-align:center">Fehlen</th></tr></thead>
+          <th style="text-align:center">Fehlen</th>
+          <th style="text-align:center">Status</th></tr></thead>
         <tbody>${tRows}</tbody>
       </table>
     </div>
     <div class="form-actions">
       <button class="btn btn-outline" onclick="RT.step='list';render()">Abbrechen</button>
-      <button class="btn" onclick="runTripsImport()">🏁 Import starten (${rows.length} Reisen · ${totalR} Ergebnisse)</button>
+      <button class="btn" ${selRows.length?'':'disabled'} onclick="runTripsImport()">🏁 Import starten (${selRows.length} Reisen · ${totalR} Ergebnisse)</button>
     </div>
   </div>`;
 }
 
 function renderTripsProgress(){
-  const total=RT.imp.rows.reduce((s,r)=>s+r.results.length,0);
+  const total=RT.imp.rows.filter(r=>r.selected!==false).reduce((s,r)=>s+r.results.length,0);
   const pct=total?Math.round(RT.imp.stats.results/total*100):0;
   return `<div class="card" style="text-align:center;padding:40px">
     <div class="imp-progress" style="max-width:400px;margin:0 auto 12px">
@@ -8390,10 +8444,14 @@ function renderTripsDone(){
 
 async function runTripsImport(){
   RT.imp.stats={trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0};
+  // Nur die in der Vorschau angehakten Reisen werden tatsächlich importiert —
+  // abgewählte (z.B. bereits vorhandene) Reisen werden komplett übersprungen,
+  // damit ein Re-Import nicht jedes Mal wieder von vorne durch die ganze Datei läuft.
+  const selectedRows = RT.imp.rows.filter(r=>r.selected!==false);
   RT.imp.step='importing'; render();
   const setS=t=>{const el=document.getElementById('trips-status');if(el)el.textContent=t;};
   const updP=()=>{
-    const total=RT.imp.rows.reduce((s,r)=>s+r.results.length,0);
+    const total=selectedRows.reduce((s,r)=>s+r.results.length,0);
     const pct=total?Math.round(RT.imp.stats.results/total*100):0;
     const bar=document.getElementById('trips-bar');
     if(bar)bar.style.width=pct+'%';
@@ -8416,7 +8474,7 @@ async function runTripsImport(){
   // gesetzt. Sie werden am Flug-Ergebnis (pigeontrips) gespeichert, damit
   // sie auch für Tauben ohne Zuordnung zur eigenen DB verfügbar sind.
 
-  for(const item of RT.imp.rows){
+  for(const item of selectedRows){
     const t=item.trip;
     setS('Reise '+t.number+' — '+t.location+'…');
     const normL=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
@@ -8492,7 +8550,7 @@ async function runTripsImport(){
       existingByKey[key]=r.id;
     });
 
-    for(const res of item.results){
+    await runWithConcurrency(item.results, 8, async(res)=>{
       try{
         const key=normRing(res.ringnumber)+'|'+(res.breedername||'');
         const existingId=existingByKey[key];
@@ -8557,7 +8615,7 @@ async function runTripsImport(){
         RT.imp.stats.results++;
       } catch(e){ RT.imp.stats.err++; }
       if(RT.imp.stats.results%25===0) updP();
-    }
+    });
 
     // Gesamtreihenfolge ("Pl.") über ALLE Züchter dieser Reise neu berechnen —
     // nicht nur über die gerade importierte Sitzung. Sonst bekommt jede
@@ -8572,12 +8630,10 @@ async function runTripsImport(){
         if(b.speed!=null) return 1;
         return 0;
       });
-      for(let i=0;i<ranked.length;i++){
-        const newPl=i+1;
-        if(ranked[i].placement!==newPl){
-          try{ await apiPatchBy('pigeontrips','id=eq.'+ranked[i].id,{placement:newPl}); }catch(e2){}
-        }
-      }
+      const toUpdate = ranked.map((r,i)=>({id:r.id,newPl:i+1})).filter((r,i)=>r.newPl!==ranked[i].placement);
+      await runWithConcurrency(toUpdate, 8, async(u)=>{
+        try{ await apiPatchBy('pigeontrips','id=eq.'+u.id,{placement:u.newPl}); }catch(e2){}
+      });
     }catch(e){ console.error('Gesamtplatzierung neu berechnen fehlgeschlagen:',e.message); }
   }
   updP();
