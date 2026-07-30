@@ -3896,6 +3896,7 @@ function renderPaarung(){
         ${sharedAnc.map(p=>`<div class="tag">${escH(ring(p))}${p.name?`<strong>${escH(p.name)}</strong>`:''}</div>`).join('')}
       </div>`:'<div style="margin-top:12px;font-size:13px;color:var(--text3)">Keine gemeinsamen Vorfahren in 4 Generationen gefunden.</div>'}
     </div>
+    <div style="margin-top:12px">${renderExistingMatingCard()}</div>
     <div class="section-label" style="margin-top:18px">🌳 Stammbaum des virtuellen Nachkommen (druckbar)</div>
     ${(() => {
       VIRTUAL_PROBAND = {
@@ -3912,6 +3913,95 @@ function renderPaarung(){
     <div style="margin-top:18px">${renderMatingsList()}</div>`;
 }
 
+
+// Prüft, ob die im Paarungscheck gewählten Eltern in der Datenbank bereits
+// gemeinsame Nachzucht haben (Ring-/ID-Abgleich analog zu buildChildrenIndex()).
+function getExistingOffspring(father, mother){
+  if(!father || !mother) return [];
+  const motherRing = ring(mother), fatherRing = ring(father);
+  return findChildren(father.pigeonid).filter(c=>{
+    if(c.motherid) return c.motherid===mother.pigeonid;
+    if(c.ringnumbermother) return c.ringnumbermother===motherRing;
+    return false;
+  }).concat(
+    // Falls ein Nachkomme nur über die Mutter indiziert ist (z.B. Vater nur
+    // per Ringnummer hinterlegt, ohne fatherid) — Duplikate unten entfernt.
+    findChildren(mother.pigeonid).filter(c=>{
+      if(c.fatherid) return c.fatherid===father.pigeonid;
+      if(c.ringnumberfather) return c.ringnumberfather===fatherRing;
+      return false;
+    })
+  ).filter((p,i,arr)=>arr.findIndex(x=>x.pigeonid===p.pigeonid)===i);
+}
+
+const MATING_OFFSPRING_LOADING = new Set();
+function ensureMatingOffspringLoaded(ids){
+  const missing = ids.filter(id=>!PT_CACHE[id]);
+  if(!missing.length) return;
+  const key = missing.slice().sort().join(',');
+  if(MATING_OFFSPRING_LOADING.has(key)) return;
+  MATING_OFFSPRING_LOADING.add(key);
+  loadPigeonTripsBatchChunked(missing)
+    .then(()=>{ MATING_OFFSPRING_LOADING.delete(key); render(); })
+    .catch(()=>{ MATING_OFFSPRING_LOADING.delete(key); render(); });
+}
+
+// Erfolgsbewertung eines einzelnen Nachkommen — dieselben Schwellwerte wie
+// im Vererber-Ranking (VERERBER_ERFOLG_MIN_PREISQUOTE/-TOPAS), aber auf die
+// Eigenleistung dieser einen Taube angewendet.
+function offspringSuccessInfo(p){
+  const er = computeEigenleistung(p.pigeonid);
+  if(!er.ready) return {loading:true};
+  if(er.noFlights) return {ready:true, hasFlights:false, tooFewFlights:!!er.tooFewFlights, gesetzt:er.gesetzt||0};
+  const erfolgreich = er.preisquote>=VERERBER_ERFOLG_MIN_PREISQUOTE && er.topAS80>=VERERBER_ERFOLG_MIN_TOPAS;
+  return {ready:true, hasFlights:true, er, erfolgreich};
+}
+
+function renderExistingMatingCard(){
+  if(!S.paarungM || !S.paarungF) return '';
+  const offspring = getExistingOffspring(S.paarungM, S.paarungF);
+  if(!offspring.length){
+    return `<div class="card">
+      <div class="card-title">🐣 Bereits verpaart?</div>
+      <div style="font-size:13px;color:var(--text3)">Für diese Paarung ist noch keine gemeinsame Nachzucht in der Datenbank hinterlegt.</div>
+    </div>`;
+  }
+  ensureMatingOffspringLoaded(offspring.map(p=>p.pigeonid));
+  let loadingAny=false, successCount=0, evaluatedCount=0;
+  const rows = offspring.map(p=>{
+    const info = offspringSuccessInfo(p);
+    let statusHtml, perfHtml='';
+    if(info.loading){ loadingAny=true; statusHtml='<span style="color:var(--text3)">lädt…</span>'; }
+    else if(!info.hasFlights){
+      statusHtml = `<span style="color:var(--text3)">${info.tooFewFlights?'zu wenige Flüge ('+info.gesetzt+'/'+SCORE_CFG.minFluegePreisquote+')':'keine Flugdaten'}</span>`;
+    } else {
+      evaluatedCount++;
+      if(info.erfolgreich) successCount++;
+      statusHtml = info.erfolgreich
+        ? '<span style="color:var(--green);font-weight:600">✅ erfolgreich</span>'
+        : '<span style="color:var(--text3)">nicht erfolgreich</span>';
+      perfHtml = `${info.er.gesetzt} Flüge · ${info.er.preisquote.toFixed(1)}% Preisquote · ${info.er.topAS80} Top-AS (&gt;${VERERBER_ELITE_AS_SCHWELLE})`;
+    }
+    return `<tr style="cursor:pointer" onclick="selectPigeon('${p.pigeonid}')">
+      <td style="font-family:monospace;font-size:12px">${escH(ring(p))}</td>
+      <td>${escH(p.name||'–')}</td>
+      <td>${p.date_year||''}</td>
+      <td style="font-size:12px;color:var(--text3)">${perfHtml}</td>
+      <td>${statusHtml}</td>
+    </tr>`;
+  }).join('');
+  const summary = loadingAny
+    ? '<div class="loading" style="margin-bottom:8px"><div class="spinner"></div>Lade Flugdaten der Nachkommen…</div>'
+    : `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">${successCount} von ${evaluatedCount} bewertbaren Nachkommen gelten als erfolgreich (Preisquote ≥${VERERBER_ERFOLG_MIN_PREISQUOTE}%, davon mind. ${VERERBER_ERFOLG_MIN_TOPAS} Preise über ${VERERBER_ELITE_AS_SCHWELLE} AS-Punkten, mind. ${SCORE_CFG.minFluegePreisquote} Flüge)${offspring.length>evaluatedCount?', übrige ohne ausreichende Flugdaten':''}.</div>`;
+  return `<div class="card">
+    <div class="card-title">🐣 Bereits verpaart — ${offspring.length} Nachkomme${offspring.length===1?'':'n'} in der Datenbank</div>
+    ${summary}
+    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr><th>Ring</th><th>Name</th><th>Jahr</th><th>Eigenleistung</th><th>Status</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  </div>`;
+}
 
 // ── SCAN-MODUL v3 ──────────────────────────────────────────────
 const EDGE_SCAN_URL = 'https://vwdqqdmtjztduzqrdbpc.supabase.co/functions/v1/scan-pedigree';
