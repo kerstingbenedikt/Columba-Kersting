@@ -6391,7 +6391,7 @@ function getVererbungDescendants(pigeonid){
   DESC_CACHE.set(pigeonid, out);
   return out;
 }
-const VER_RANK = { loading:false, error:null, total:0 };
+const VER_RANK = { loading:false, error:null, total:0, expandBestand:false, expandNichtBestand:false };
 function withTimeout(promise, ms){
   return Promise.race([
     promise,
@@ -6404,9 +6404,16 @@ function retryVererberRanking(){ VER_RANK.error=null; render(); }
 // ohnehin nie erfüllen. Die genaue Prüfung passiert erst in
 // computeVererbungsstaerke(), sobald die Flugdaten da sind.
 const VERERBER_MIN_NACHKOMMEN = 2;
-function renderVererberTable(results){
+// Für die Übersicht wird nur eine kurze Top-Liste gezeigt (die Tabelle ist
+// bereits nach Score sortiert) — bei Bedarf über "Alle anzeigen" ausklappbar,
+// damit man beim Scrollen durch die Statistik nicht an langen Tabellen
+// vorbeiscrollen muss, aber trotzdem sieht, dass mehr Daten vorhanden sind.
+const VERERBER_OVERVIEW_LIMIT = 10;
+function renderVererberTable(results, expandKey){
   if(!results.length) return '<div style="color:var(--text3);font-size:13px;padding:8px 0 4px">Keine Tauben mit Flugergebnissen bei den Nachkommen gefunden.</div>';
-  var rows = results.map(function(r,i){
+  var expanded = !!(expandKey && VER_RANK[expandKey]);
+  var shown = (expanded || results.length<=VERERBER_OVERVIEW_LIMIT) ? results : results.slice(0,VERERBER_OVERVIEW_LIMIT);
+  var rows = shown.map(function(r,i){
     var p=r.pigeon, sx=sex_(p);
     return '<tr onclick="selectPigeon(\''+p.pigeonid+'\')" style="cursor:pointer">'
       +'<td style="text-align:center;font-weight:600;color:'+(i<3?'var(--green)':'var(--text3)')+'">'+(i+1)+'</td>'
@@ -6420,9 +6427,16 @@ function renderVererberTable(results){
       +'<td style="text-align:center;font-weight:'+(r.eliteCount>0?'700':'400')+';color:'+(r.eliteCount>0?'var(--green)':'var(--text3)')+'">'+(r.eliteCount||0)+'</td>'
       +'</tr>';
   }).join('');
-  return '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+  var toggle = (!expandKey || results.length<=VERERBER_OVERVIEW_LIMIT) ? '' :
+    '<div style="text-align:center;padding:8px 0 2px">'
+    +'<button class="btn btn-outline btn-sm" onclick="VER_RANK.'+expandKey+'='+(!expanded)+';render()">'
+    +(expanded ? '▴ Weniger anzeigen' : '▾ Alle '+results.length+' anzeigen')
+    +'</button></div>';
+  return (expandKey && results.length>VERERBER_OVERVIEW_LIMIT && !expanded
+      ? '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Top '+VERERBER_OVERVIEW_LIMIT+' von '+results.length+', sortiert nach Score.</div>' : '')
+    +'<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
     +'<thead><tr><th>#</th><th>Ring</th><th>Name</th><th>Score</th><th>Erfolgsquote</th><th>Preisquote</th><th>Top (&gt;90 AS)</th><th>Nachk. geflogen</th><th>Elite-Nachk.</th></tr></thead>'
-    +'<tbody>'+rows+'</tbody></table></div>';
+    +'<tbody>'+rows+'</tbody></table></div>'+toggle;
 }
 function renderVererberRanking(){
   // Nur Tauben mit mind. VERERBER_MIN_NACHKOMMEN Nachkommen (Kinder+Enkel) gelten
@@ -6468,9 +6482,9 @@ function renderVererberRanking(){
     +'<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Diese Liste bewertet reine Vererbung (nur Nachkommen). Der Erfolgs-Score einer einzelnen Taube (Details/Stammbaum, Paarungscheck) mischt zusätzlich die Eigenleistung mit ein.</div>'
     +'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Bewertet Tauben, deren Nachkommen (Kinder + Enkel) geflogen sind — mind. '+VERERBER_MIN_ERFOLGREICHE+' davon müssen "erfolgreich" (Preisquote ≥'+VERERBER_ERFOLG_MIN_PREISQUOTE+'%, davon mind. '+VERERBER_ERFOLG_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten, mind. '+SCORE_CFG.minFluegePreisquote+' Flüge) und noch im Bestand sein. Wichtigster Faktor ist die Erfolgsquote (Anteil der geflogenen Nachkommen, die "erfolgreich" sind) — wenige erfolgreiche Nachkommen unter vielen geflogenen drücken den Score deutlich. Hinzu kommen der einstellbare Beständigkeits-/Schnelligkeits-Teilscore der erfolgreichen Nachkommen, ein kleiner Bonus für den Anteil überhaupt geflogener Nachkommen sowie ein Bonus für Nachkommen im eigenen Bestand ohne Status mit mind. '+VERERBER_ELITE_MIN_PREISE+' Preisen, mind. '+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote und mind. '+VERERBER_ELITE_MIN_TOPAS+' Preisen über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten. Höherer Score = stärkere Vererbung. Auf den Score klicken zeigt die Details.</div>'
     +'<div style="font-size:12px;font-weight:600;color:var(--text2);margin:14px 0 6px">Bestandstauben</div>'
-    +renderVererberTable(bestand)
+    +renderVererberTable(bestand,'expandBestand')
     +'<div style="font-size:12px;font-weight:600;color:var(--text2);margin:18px 0 6px">Nicht im Bestand</div>'
-    +renderVererberTable(nichtBestand)
+    +renderVererberTable(nichtBestand,'expandNichtBestand')
     +'</div>';
 }
 // ── Erfolgs-Score-Liste (alle Bestandstauben, sortierbar & exportierbar) ──
@@ -6479,7 +6493,7 @@ function renderVererberRanking(){
 // mit ihrem individuellen Erfolgs-Score (Eigenleistung + Vererbung, siehe
 // computeErfolgsScore) sowie den eigenen Flugkennzahlen — als breite,
 // vollständige Tabelle zum Sortieren, Filtern (nur Elite) und CSV-Export.
-let ESLIST = { loading:false, error:null, results:null, onlyElite:false, sortKey:'score', sortDir:'desc' };
+let ESLIST = { loading:false, error:null, results:null, onlyElite:false, sortKey:'score', sortDir:'desc', expanded:false };
 function invalidateESList(){ ESLIST.results=null; ESLIST.error=null; }
 function setESListSort(key){
   if(ESLIST.sortKey===key) ESLIST.sortDir = ESLIST.sortDir==='desc'?'asc':'desc';
@@ -6550,13 +6564,18 @@ function renderErfolgsScoreListe(){
     if(typeof va==='string') return dir*va.localeCompare(vb);
     return dir*((va>vb)?1:(va<vb?-1:0));
   });
+  // Übersicht: standardmäßig nur die Top-Zeilen der aktuellen Sortierung
+  // zeigen, damit man in der Statistik nicht an einer langen Tabelle
+  // vorbeiscrollen muss — komplette Liste über "Alle anzeigen" oder CSV.
+  var ESLIST_OVERVIEW_LIMIT = 15;
+  var shownList = (ESLIST.expanded || list.length<=ESLIST_OVERVIEW_LIMIT) ? list : list.slice(0,ESLIST_OVERVIEW_LIMIT);
 
   var th = function(label, k){
     var active = ESLIST.sortKey===k;
     var arrow = active?(ESLIST.sortDir==='desc'?' ▾':' ▴'):'';
     return '<th style="cursor:pointer;user-select:none'+(active?';color:var(--text)':'')+'" onclick="setESListSort(\''+k+'\')" title="Klick zum Sortieren">'+label+arrow+'</th>';
   };
-  var rows = list.map(function(x){
+  var rows = shownList.map(function(x){
     var scoreCol = x.er.score!=null?x.er.score:'—';
     var scoreColor = x.er.score==null?'var(--text3)':x.er.score>=60?'var(--green)':x.er.score>=35?'var(--orange)':'#e07070';
     var ownCol = (x.own.ready&&!x.own.noFlights)?x.own.score:'—';
@@ -6592,9 +6611,14 @@ function renderErfolgsScoreListe(){
     +'<button class="btn btn-outline btn-sm" onclick="exportErfolgsScoreCSV()">⬇️ CSV</button>'
     +'</div></div>'
     +'<div style="font-size:11px;color:var(--text3);margin:6px 0 10px">Jede Bestandstaube mit individuellem Erfolgs-Score (Eigenleistung + Vererbung, einstellbar über ⚙) und eigenen Flugkennzahlen. Spalten anklicken zum Sortieren, Zeile anklicken öffnet die Taube. ⭐ Elite = eigene Preise/Preisquote/Top-AS erfüllen die Elite-Kriterien (mind. '+VERERBER_ELITE_MIN_PREISE+' Preise, ≥'+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote, mind. '+VERERBER_ELITE_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten, ohne Status).</div>'
+    +(list.length>ESLIST_OVERVIEW_LIMIT && !ESLIST.expanded ? '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Top '+ESLIST_OVERVIEW_LIMIT+' von '+list.length+' (aktuelle Sortierung). Komplette Liste über "Alle anzeigen" oder CSV-Export.</div>' : '')
     +(list.length?'<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
       +'<thead><tr>'+th('Ring','ring')+th('Name','name')+th('Jg.','jahrgang')+th('Score','score')+th('Eigen','own')+th('Vererbung','ver')+th('Erfolgsq.','erfolgsquote')+th('Flüge','gesetzt')+th('Preisq.','preisquote')+th('Top&gt;90','topas90')+th('Top&gt;80','topas80')+'<th>⭐</th></tr></thead>'
       +'<tbody>'+rows+'</tbody></table></div>'
+      +(list.length>ESLIST_OVERVIEW_LIMIT ? '<div style="text-align:center;padding:8px 0 2px">'
+        +'<button class="btn btn-outline btn-sm" onclick="ESLIST.expanded='+(!ESLIST.expanded)+';render()">'
+        +(ESLIST.expanded ? '▴ Weniger anzeigen' : '▾ Alle '+list.length+' anzeigen')
+        +'</button></div>' : '')
       : '<div style="color:var(--text3);font-size:13px;padding:8px 0">Keine Tauben erfüllen den aktuellen Filter.</div>')
     +'</div>';
 }
@@ -7163,15 +7187,15 @@ function renderPairingRecommendations(){
 }
 
 // ── Detail-Overlay: zeigt die Formel und pro Nachkomme, wie gut geflogen wurde ──
-function closeVererbungDetail(){
-  var el=document.querySelector('.veret-detail-overlay');
-  if(el) el.remove();
-}
-function showVererbungDetail(pigeonid){
-  var p = findById(pigeonid); if(!p) return;
+// Baut den eigentlichen Inhalt (Erklärung + Score-Aufschlüsselung + Nachkommen-
+// Tabelle) OHNE Modal-Rahmen — wird sowohl vom Modal (showVererbungDetail, für
+// die Statistik-Tabelle und den Paarungscheck) als auch von der aufklappbaren
+// Inline-Ansicht in der Tauben-Detailseite (renderVererbungCard) genutzt.
+function renderVererbungDetailBody(pigeonid){
+  var p = findById(pigeonid); if(!p) return '';
   var er = computeErfolgsScore(pigeonid);
   var r = er.ver;
-  if(!er.ready){ return; } // wird beim nächsten render() automatisch neu versucht, sobald Daten da sind
+  if(!er.ready){ return '<div style="color:var(--text3);font-size:13px">Lade Flugdaten…</div>'; }
 
   var body, banner='';
   if(r.noDescendants){
@@ -7224,6 +7248,18 @@ function showVererbungDetail(pigeonid){
       ? '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">Eigenleistung: zu wenige Flüge ('+er.own.gesetzt+'/'+SCORE_CFG.minFluegePreisquote+') für eine belastbare Preisquote.</div>'
       : '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">Eigenleistung: keine eigenen Flugdaten erfasst.</div>';
 
+  return '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Derselbe Erfolgs-Score wie im Paarungscheck: ein einstellbarer Mix aus Eigenleistung (eigene Flüge) und Vererbung (Flugleistung von Kindern + Enkeln). Gewichtung über das ⚙-Symbol einstellbar. Erfolgsquote (größter Faktor der Vererbung) = Anteil der geflogenen Nachkommen, die "erfolgreich" sind (Preisquote ≥'+VERERBER_ERFOLG_MIN_PREISQUOTE+'%, davon mind. '+VERERBER_ERFOLG_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten, mind. '+SCORE_CFG.minFluegePreisquote+' Flüge, noch im Bestand) — bringt eine Taube z.B. 19 fliegende Nachkommen hervor, von denen nur 1-2 wirklich erfolgreich sind, bleibt der Score trotz dieser guten Einzeltiere niedrig. Elite-Nachkommen (★) = im Bestand, ohne Status, mind. '+VERERBER_ELITE_MIN_PREISE+' Preise bei mind. '+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote, davon mind. '+VERERBER_ELITE_MIN_TOPAS+' über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten.</div>'
+    + combinedLine + ownLine + verScoreLine + body;
+}
+function closeVererbungDetail(){
+  var el=document.querySelector('.veret-detail-overlay');
+  if(el) el.remove();
+}
+function showVererbungDetail(pigeonid){
+  var p = findById(pigeonid); if(!p) return;
+  var er = computeErfolgsScore(pigeonid);
+  if(!er.ready){ return; } // wird beim nächsten render() automatisch neu versucht, sobald Daten da sind
+
   var overlay=document.createElement('div');
   overlay.className='lightbox-overlay veret-detail-overlay';
   overlay.style.cursor='default';
@@ -7240,11 +7276,7 @@ function showVererbungDetail(pigeonid){
       +'<span onclick="closeVererbungDetail()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>'
       +'</div>'
     +'</div>'
-    +'<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Derselbe Erfolgs-Score wie im Paarungscheck: ein einstellbarer Mix aus Eigenleistung (eigene Flüge) und Vererbung (Flugleistung von Kindern + Enkeln). Gewichtung über das ⚙-Symbol einstellbar. Erfolgsquote (größter Faktor der Vererbung) = Anteil der geflogenen Nachkommen, die "erfolgreich" sind (Preisquote ≥'+VERERBER_ERFOLG_MIN_PREISQUOTE+'%, davon mind. '+VERERBER_ERFOLG_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten, mind. '+SCORE_CFG.minFluegePreisquote+' Flüge, noch im Bestand) — bringt eine Taube z.B. 19 fliegende Nachkommen hervor, von denen nur 1-2 wirklich erfolgreich sind, bleibt der Score trotz dieser guten Einzeltiere niedrig. Elite-Nachkommen (★) = im Bestand, ohne Status, mind. '+VERERBER_ELITE_MIN_PREISE+' Preise bei mind. '+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote, davon mind. '+VERERBER_ELITE_MIN_TOPAS+' über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten.</div>'
-    + combinedLine
-    + ownLine
-    + verScoreLine
-    + body;
+    + renderVererbungDetailBody(pigeonid);
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
 }
@@ -7252,21 +7284,42 @@ function showVererbungDetail(pigeonid){
 // Zeigt denselben Erfolgs-Score wie der Paarungscheck (Eigenleistung + Vererbung,
 // nach SCORE_CFG gewichtet) — Details/Stammbaum und Paarungscheck sind damit
 // konsistent.
+// Zeigt bei Bedarf inline (statt als Modal) auf, welche Tauben aktuell
+// aufgeklappt sind — pigeonid-basiert, damit z.B. im Paarungscheck zwei
+// Karten (Vater-/Mutter-Kandidat) unabhängig voneinander aufklappbar sind.
+let VERET_EXPANDED_IDS = new Set();
+function toggleVererbungDetail(pigeonid){
+  if(VERET_EXPANDED_IDS.has(pigeonid)) VERET_EXPANDED_IDS.delete(pigeonid);
+  else VERET_EXPANDED_IDS.add(pigeonid);
+  render();
+}
 function renderVererbungCard(pigeonid){
   var er = computeErfolgsScore(pigeonid);
   var label = '<div class="section-label" style="margin-top:14px;display:flex;align-items:center;gap:8px">'
-    +'<span class="clickable" style="cursor:pointer" onclick="showVererbungDetail(\''+pigeonid+'\')" title="Details zur Berechnung anzeigen">🧬 Erfolgs-Score (Eigenleistung + Vererbung)</span>'
+    +'<span class="clickable" style="cursor:pointer" onclick="toggleVererbungDetail(\''+pigeonid+'\')" title="Details zur Berechnung anzeigen">🧬 Erfolgs-Score (Eigenleistung + Vererbung)</span>'
     +'<span onclick="showScoreSettingsModal()" title="Score-Einstellungen" style="cursor:pointer;color:var(--text3);font-size:13px">⚙️</span>'
     +'</div>';
   if(!er.ready){
     return label + `<div style="color:var(--text3);font-size:13px;padding:8px 0">Lade Flugdaten…</div>`;
   }
+  var expanded = VERET_EXPANDED_IDS.has(pigeonid);
+  // Aufklappbarer Detailbereich unterhalb der Score-Box — dieselben Inhalte
+  // wie zuvor im Modal, jetzt direkt in der Seite statt in einem separaten
+  // Overlay-Fenster.
+  var detailSection = expanded
+    ? '<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-top:8px">'
+      + '<div style="display:flex;justify-content:flex-end;margin-bottom:8px">'
+      + '<span onclick="toggleVererbungDetail(\''+pigeonid+'\')" style="cursor:pointer;color:var(--text3);font-size:12px">▴ Details ausblenden</span>'
+      + '</div>'
+      + renderVererbungDetailBody(pigeonid)
+      + '</div>'
+    : '';
   if(er.score==null){
     var ver=er.ver;
     var msg = ver.noDescendants ? 'Keine Nachkommen (Kinder/Enkel) vorhanden und keine eigenen Flugdaten.'
       : ver.notEnough ? ver.flownCount+' Nachkommen geflogen, '+ver.erfolgreicheCount+' davon erfolgreich (mind. '+VERERBER_MIN_ERFOLGREICHE+' nötig) — und keine eigenen Flugdaten.'
       : 'Keine ausreichende Datenbasis (weder eigene Flüge noch bewertete Nachkommen).';
-    return label + `<div style="color:var(--text3);font-size:13px;padding:8px 0;cursor:pointer" onclick="showVererbungDetail('${pigeonid}')">${msg} Details anzeigen →</div>`;
+    return label + `<div style="color:var(--text3);font-size:13px;padding:8px 0;cursor:pointer" onclick="toggleVererbungDetail('${pigeonid}')">${msg} ${expanded?'Details ausblenden ▴':'Details anzeigen →'}</div>` + detailSection;
   }
   var col = er.score>=60?'var(--green)':er.score>=35?'var(--orange)':'#e07070';
   var own=er.own, ver=er.ver;
@@ -7280,7 +7333,7 @@ function renderVererbungCard(pigeonid){
       : ver.noFlights ? '<span style="color:var(--text3)">Nachkommen noch ohne Flugdaten</span>'
       : '<span style="color:var(--text3)">keine ausreichende Datenbasis</span>');
   return label
-    +`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;cursor:pointer" onclick="showVererbungDetail('${pigeonid}')" title="Details zur Berechnung anzeigen">
+    +`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;cursor:pointer" onclick="toggleVererbungDetail('${pigeonid}')" title="Details zur Berechnung anzeigen">
       <div style="text-align:center">
         <div style="font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:${col}">${er.score}</div>
         <div style="font-size:10px;color:var(--text3)">Erfolgs-Score / 100</div>
@@ -7290,7 +7343,9 @@ function renderVererbungCard(pigeonid){
         <div><span style="color:var(--text3)">Vererbung (${100-SCORE_CFG.eigenAnteil}%):</span> <strong>${verBadge}</strong></div>
         ${er.note?`<div style="color:var(--text3);font-size:11px">${er.note}</div>`:''}
       </div>
-    </div>`;
+      <div style="margin-left:auto;color:var(--text3);font-size:12px">${expanded?'▴':'▾'}</div>
+    </div>`
+    + detailSection;
 }
 
 function renderPigeonTripsSection(p){
