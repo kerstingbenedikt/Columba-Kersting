@@ -764,7 +764,7 @@ const S = {
   _archiveLoaded: false, _archiveLoading: false,
   // Paarungsliste (Tabelle "matings" in Supabase) — null = noch nicht geladen
   matings: null, matingsLoading: false, matingsError: null,
-  paarungM: null, paarungF: null, selectedNach: null, nachStatusFilter: null, nachGenFilter: null, nachExpanded: {},
+  paarungM: null, paarungF: null, selectedNach: null, nachStatusFilter: null, nachGenFilter: null, nachPerfFilter: null, nachExpanded: {},
   // Automatische Paarungsempfehlungen (Empfehlungsliste im Paarungscheck)
   pairRecOpen: false, pairRecTopN: 15, pairRecMaxInzucht: 6.5, pairRecMinScore: 0, pairRecIncludeReise: false,
   neuMode: 'full',
@@ -7210,13 +7210,16 @@ function renderVererbungDetailBody(pigeonid){
       banner = '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">'
         +r.totalDescendants+' Nachkommen (Kinder+Enkel), aber noch keine Flugergebnisse erfasst.</div>';
     }
+    var directChildIds = new Set(findChildren(pigeonid).map(function(c){return c.pigeonid;}));
     var rowsHtml = r.perDescendant.slice().sort(function(a,b){
       return (b.elite-a.elite) || (b.flown-a.flown) || (b.topAS-a.topAS) || (b.preise-a.preise);
     }).map(function(d){
       var dp=d.pigeon, sx=sex_(dp);
+      var gen = directChildIds.has(dp.pigeonid) ? 'Kind' : 'Enkel';
       return '<tr onclick="closeVererbungDetail();selectPigeon(\''+dp.pigeonid+'\')" style="cursor:pointer">'
         +'<td style="font-family:monospace;font-size:12px">'+escH(ring(dp))+' '+(sx==='M'?'♂':sx==='F'?'♀':'')+'</td>'
         +'<td>'+escH(dp.name||'—')+'</td>'
+        +'<td style="text-align:center;color:var(--text3);font-size:12px">'+gen+'</td>'
         +'<td style="text-align:center">'+(d.flown?d.gesetzt:'—')+'</td>'
         +'<td style="text-align:center">'+(d.flown?d.preise:'—')+'</td>'
         +'<td style="text-align:center">'+(d.flown?d.topAS:'—')+'</td>'
@@ -7226,7 +7229,7 @@ function renderVererbungDetailBody(pigeonid){
         +'</tr>';
     }).join('');
     body = '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-      +'<thead><tr><th>Ring</th><th>Name</th><th>Flüge</th><th>Preise</th><th>Top (&gt;90 AS)</th><th>Top (&gt;'+VERERBER_ELITE_AS_SCHWELLE+' AS)</th><th>Status</th><th>Elite</th></tr></thead>'
+      +'<thead><tr><th>Ring</th><th>Name</th><th>Generation</th><th>Flüge</th><th>Preise</th><th>Top (&gt;90 AS)</th><th>Top (&gt;'+VERERBER_ELITE_AS_SCHWELLE+' AS)</th><th>Status</th><th>Elite</th></tr></thead>'
       +'<tbody>'+rowsHtml+'</tbody></table></div>';
   }
 
@@ -7293,8 +7296,8 @@ function toggleVererbungDetail(pigeonid){
   else VERET_EXPANDED_IDS.add(pigeonid);
   render();
 }
-function renderVererbungCard(pigeonid){
-  var er = computeErfolgsScore(pigeonid);
+function renderVererbungCard(pigeonid, erArg){
+  var er = erArg || computeErfolgsScore(pigeonid);
   var label = '<div class="section-label" style="margin-top:14px;display:flex;align-items:center;gap:8px">'
     +'<span class="clickable" style="cursor:pointer" onclick="toggleVererbungDetail(\''+pigeonid+'\')" title="Details zur Berechnung anzeigen">🧬 Erfolgs-Score (Eigenleistung + Vererbung)</span>'
     +'<span onclick="showScoreSettingsModal()" title="Score-Einstellungen" style="cursor:pointer;color:var(--text3);font-size:13px">⚙️</span>'
@@ -10456,7 +10459,7 @@ function escH(s){ if(s===null||s===undefined)return''; return String(s).replace(
 // ── NACHKOMMEN ────────────────────────────────────────────────
 function showNachkommen(id){
   pushPigeonNavIfNeeded();
-  if(S.selectedNach!==id){ S.nachStatusFilter=null; S.nachGenFilter=null; }
+  if(S.selectedNach!==id){ S.nachStatusFilter=null; S.nachGenFilter=null; S.nachPerfFilter=null; }
   S.selectedNach=id; S.tab='nachkommen';
   setActiveNav('nachkommen');
   render(); window.scrollTo(0,0);
@@ -10472,6 +10475,10 @@ function toggleNachStatusFilter(key){
 }
 function toggleNachGenFilter(key){
   S.nachGenFilter = (S.nachGenFilter===key) ? null : key;
+  render();
+}
+function toggleNachPerfFilter(key){
+  S.nachPerfFilter = (S.nachPerfFilter===key) ? null : key;
   render();
 }
 function toggleNachExpand(key){
@@ -10603,6 +10610,7 @@ function renderGen(arr,gen,emptyMsg,groupKey){
 // Verpaarung die Taube stammt.
 function renderGenTable(birds, genKey, rootId, emptyMsg){
   if(!birds.length) return '<div style="color:var(--text3);font-size:13px;padding:8px 0">'+(emptyMsg||'Keine Ergebnisse.')+'</div>';
+  var genLabel = genKey==='children'?'Kind':genKey==='gc'?'Enkel':'Urenkel';
   var order=['instock','not_instock','died','sold'];
   var sorted=birds.slice().sort(function(a,b){
     var sa=statusStyle(a), sb=statusStyle(b);
@@ -10623,6 +10631,7 @@ function renderGenTable(birds, genKey, rootId, emptyMsg){
     return '<tr style="cursor:pointer" onclick="selectPigeon(\''+p.pigeonid+'\')">'
       +'<td style="font-family:monospace;font-size:12px;color:var(--green);white-space:nowrap">'+escH(ring(p))+' '+(sx==='M'?'♂':sx==='F'?'♀':'')+'</td>'
       +'<td>'+(p.name?escH(p.name):'<span style="color:var(--text3)">—</span>')+'</td>'
+      +'<td style="text-align:center;color:var(--text3);font-size:12px;white-space:nowrap">'+genLabel+'</td>'
       +'<td style="text-align:center">'+(p.date_year||'—')+'</td>'
       +'<td>'+(tColor(p.color)?escH(tColor(p.color)):'<span style="color:var(--text3)">—</span>')+'</td>'
       +'<td>'+partnerHtml+'</td>'
@@ -10633,7 +10642,7 @@ function renderGenTable(birds, genKey, rootId, emptyMsg){
       +'</td></tr>';
   }).join('');
   return '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-    +'<thead><tr><th>Ring</th><th>Name</th><th>Jg.</th><th>Farbe</th><th>Partner</th><th>Status</th><th></th></tr></thead>'
+    +'<thead><tr><th>Ring</th><th>Name</th><th>Generation</th><th>Jg.</th><th>Farbe</th><th>Partner</th><th>Status</th><th></th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table></div>';
 }
 
@@ -10651,9 +10660,23 @@ function renderNachkommen(pid){
   var sold=allDesc.filter(function(p){return p.sold;}).length;
   var sx=sex_(root);
 
-  // KPI-Kacheln: 'Nachkommen' setzt beide Filter zurück, die Status-Kacheln
-  // (Im Bestand/Verstorben/Verkauft) und die Generations-Kacheln (Kinder/Enkel/
-  // Urenkel) sind einzeln anklickbar und togglen den jeweiligen Filter.
+  // Erfolgreich/Elite-Kennzahlen stammen aus derselben Berechnung wie der
+  // Erfolgs-Score unten (computeErfolgsScore -> Vererbungsstärke), damit die
+  // Zahlen konsistent sind. Erfasst nur Kinder+Enkel (siehe
+  // getVererbungDescendants) — für Urenkel gibt es keine Vererbungs-Bewertung.
+  var er = computeErfolgsScore(pid);
+  var perDescendant = (er.ver && er.ver.perDescendant) || [];
+  var perfMap = {};
+  perDescendant.forEach(function(d){
+    perfMap[d.pigeon.pigeonid] = { erfolgreich: !!(d.erfolgreich && d.pigeon.instock), elite: !!d.elite };
+  });
+  var erfolgreichCount = perDescendant.filter(function(d){ return d.erfolgreich && d.pigeon.instock; }).length;
+  var eliteCount = perDescendant.filter(function(d){ return d.elite; }).length;
+
+  // KPI-Kacheln: 'Nachkommen' setzt alle Filter zurück, die Status-Kacheln
+  // (Im Bestand/Verstorben/Verkauft), die Generations-Kacheln (Kinder/Enkel/
+  // Urenkel) und die Erfolgs-Kacheln (Erfolgreich/Elite) sind einzeln
+  // anklickbar und togglen den jeweiligen Filter.
   var kpis=[
     ['Nachkommen',total,'var(--green)',null,null],
     ['Kinder',children.length,'var(--blue)','gen','children'],
@@ -10661,47 +10684,57 @@ function renderNachkommen(pid){
     ['Urenkel',ggc.length,'var(--text2)','gen','ggc'],
     ['Im Bestand',active,'var(--green)','status','instock'],
     ['Verstorben',died,'#e07070','status','died'],
-    ['Verkauft',sold,'var(--orange)','status','sold']
+    ['Verkauft',sold,'var(--orange)','status','sold'],
+    ['Erfolgreich',erfolgreichCount,'var(--green)','perf','erfolgreich'],
+    ['Elite',eliteCount,'#f0c419','perf','elite']
   ];
   var kpiHtml=kpis.map(function(k){
-    var isActive = k[3]==='status' ? S.nachStatusFilter===k[4] : (k[3]==='gen' ? S.nachGenFilter===k[4] : (!S.nachStatusFilter&&!S.nachGenFilter));
-    var onclick = k[3]===null ? "S.nachStatusFilter=null;S.nachGenFilter=null;render();"
-      : (k[3]==='status' ? "toggleNachStatusFilter('"+k[4]+"')" : "toggleNachGenFilter('"+k[4]+"')");
-    var tip = k[3]===null ? 'Alle Filter zurücksetzen' : (isActive ? 'Filter "'+k[0]+'" entfernen' : 'Nach "'+k[0]+'" filtern');
+    var isActive = k[3]==='status' ? S.nachStatusFilter===k[4] : (k[3]==='gen' ? S.nachGenFilter===k[4] : (k[3]==='perf' ? S.nachPerfFilter===k[4] : (!S.nachStatusFilter&&!S.nachGenFilter&&!S.nachPerfFilter)));
+    var onclick = k[3]===null ? "S.nachStatusFilter=null;S.nachGenFilter=null;S.nachPerfFilter=null;render();"
+      : (k[3]==='status' ? "toggleNachStatusFilter('"+k[4]+"')" : (k[3]==='gen' ? "toggleNachGenFilter('"+k[4]+"')" : "toggleNachPerfFilter('"+k[4]+"')"));
+    var tip = k[3]===null ? 'Alle Filter zurücksetzen'
+      : k[3]==='perf' ? (k[4]==='erfolgreich' ? 'Nachkommen mit erfolgreicher Preisquote (Kinder+Enkel im Bestand)' : 'Elite-Nachkommen (Kinder+Enkel)')
+      : (isActive ? 'Filter "'+k[0]+'" entfernen' : 'Nach "'+k[0]+'" filtern');
     return '<div onclick="'+onclick+'" title="'+tip+'" style="cursor:pointer;background:var(--bg3);border:1px solid '+(isActive?k[2]:'var(--border)')+';border-radius:var(--radius-sm);padding:12px;text-align:center;transition:border-color .15s'+(isActive?';box-shadow:0 0 0 1px '+k[2]+' inset':'')+'">'
       +'<div style="font-family:\'Playfair Display\',serif;font-size:24px;color:'+k[2]+';font-weight:600">'+k[1]+'</div>'
       +'<div style="font-size:11px;color:'+(isActive?'var(--text)':'var(--text3)')+';margin-top:3px">'+k[0]+'</div></div>';
   }).join('');
 
   // Priorität beim Filtern: zuerst Bestandsstatus (Im Bestand/Verstorben/Verkauft),
-  // danach Generation (Kinder/Enkel/Urenkel). Innerhalb der Ergebnisliste
-  // gruppiert renderGen() zusätzlich nach Status/Geschlecht (Täuber/Täubin aktiv).
+  // dann Erfolg (Erfolgreich/Elite), dann Generation (Kinder/Enkel/Urenkel).
+  // Innerhalb der Ergebnisliste gruppiert renderGen() zusätzlich nach
+  // Status/Geschlecht (Täuber/Täubin aktiv).
   function applyStatusFilter(arr){
-    if(S.nachStatusFilter==='instock') return arr.filter(function(p){return p.instock;});
-    if(S.nachStatusFilter==='died') return arr.filter(function(p){return p.died;});
-    if(S.nachStatusFilter==='sold') return arr.filter(function(p){return p.sold;});
-    return arr;
+    var out=arr;
+    if(S.nachStatusFilter==='instock') out=out.filter(function(p){return p.instock;});
+    if(S.nachStatusFilter==='died') out=out.filter(function(p){return p.died;});
+    if(S.nachStatusFilter==='sold') out=out.filter(function(p){return p.sold;});
+    if(S.nachPerfFilter==='erfolgreich') out=out.filter(function(p){return perfMap[p.pigeonid]&&perfMap[p.pigeonid].erfolgreich;});
+    if(S.nachPerfFilter==='elite') out=out.filter(function(p){return perfMap[p.pigeonid]&&perfMap[p.pigeonid].elite;});
+    return out;
   }
   var statusLabel = S.nachStatusFilter==='instock'?'Im Bestand':S.nachStatusFilter==='died'?'Verstorben':S.nachStatusFilter==='sold'?'Verkauft':null;
+  var perfLabel = S.nachPerfFilter==='erfolgreich'?'Erfolgreich':S.nachPerfFilter==='elite'?'Elite':null;
+  var filterLabel = [statusLabel,perfLabel].filter(Boolean).join(' + ');
 
-  // Sobald gefiltert wird (Status und/oder Generation), klappen die betroffenen
-  // Abschnitte automatisch auf und werden als Tabelle (inkl. Partner-Spalte)
-  // statt als Karten-Raster dargestellt — manuelles Zuklappen bleibt weiterhin
-  // per Klick möglich und wird dann respektiert (S.nachExpanded überschreibt
-  // den Auto-Expand-Default).
-  var isFiltering = !!(S.nachStatusFilter || S.nachGenFilter);
+  // Sobald gefiltert wird (Status, Erfolg und/oder Generation), klappen die
+  // betroffenen Abschnitte automatisch auf und werden als Tabelle (inkl.
+  // Partner- und Generations-Spalte) statt als Karten-Raster dargestellt —
+  // manuelles Zuklappen bleibt weiterhin per Klick möglich und wird dann
+  // respektiert (S.nachExpanded überschreibt den Auto-Expand-Default).
+  var isFiltering = !!(S.nachStatusFilter || S.nachGenFilter || S.nachPerfFilter);
   var gens=[['🐣 Kinder (1. Generation)',children,'Kinder','children'],['🐓 Enkel (2. Generation)',gc,'Enkel','gc'],['🥚 Urenkel (3. Generation)',ggc,'Urenkel','ggc']];
   if(S.nachGenFilter) gens=gens.filter(function(g){return g[3]===S.nachGenFilter;});
   var genHtml=gens.map(function(g){
     var birds=applyStatusFilter(g[1]);
-    var emptyMsg = statusLabel ? 'Keine '+g[2]+' mit Status "'+statusLabel+'".' : null;
+    var emptyMsg = filterLabel ? 'Keine '+g[2]+' mit Status "'+filterLabel+'".' : null;
     var genKey='gen:'+g[3];
     var genCollapsed = S.nachExpanded[genKey]===undefined ? !isFiltering : !S.nachExpanded[genKey];
     var body = genCollapsed ? '' : (isFiltering ? renderGenTable(birds,g[3],pid,emptyMsg) : renderGen(birds,g[2],emptyMsg,genKey));
     return '<div class="card" style="margin-bottom:12px">'
       +'<div class="card-title" onclick="toggleNachExpand(\''+genKey+'\')" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">'
       +'<span style="color:var(--text3);font-size:11px">'+(genCollapsed?'▸':'▾')+'</span>'
-      +g[0]+' <span style="color:var(--text3);font-weight:400">('+birds.length+(statusLabel?' von '+g[1].length:'')+')</span></div>'
+      +g[0]+' <span style="color:var(--text3);font-weight:400">('+birds.length+(filterLabel?' von '+g[1].length:'')+')</span></div>'
       +body+'</div>';
   }).join('');
 
@@ -10714,7 +10747,7 @@ function renderNachkommen(pid){
     +'</div></div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">'+kpiHtml+'</div>'
-    +renderVererbungCard(pid)
+    +renderVererbungCard(pid, er)
     +'</div>'+genHtml;
 }
 
