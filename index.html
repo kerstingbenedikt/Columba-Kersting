@@ -10519,6 +10519,25 @@ function findChildren(pigeonId){
   return CHILDREN_INDEX[pigeonId]||[];
 }
 
+// Ermittelt den Partner (den jeweils anderen Elternteil) einer Taube relativ
+// zu einem bekannten Elternteil (Wurzel-Taube bzw. "via"-Taube bei Enkeln/
+// Urenkeln). Wird in der gefilterten Nachkommen-Tabelle angezeigt, damit man
+// sieht, mit wem der Nachkomme gezüchtet wurde.
+function findPartner(p, knownParentId){
+  var ids=[p.fatherid,p.motherid].filter(Boolean);
+  var otherId=ids.filter(function(id){return id!==knownParentId;})[0];
+  var other = otherId ? findById(otherId) : null;
+  if(!other && p.ringnumberfather){
+    var f=S.pigeons.find(function(x){return x.ringnumber===p.ringnumberfather;});
+    if(f && f.pigeonid!==knownParentId) other=f;
+  }
+  if(!other && p.ringnumbermother){
+    var m=S.pigeons.find(function(x){return x.ringnumber===p.ringnumbermother;});
+    if(m && m.pigeonid!==knownParentId) other=m;
+  }
+  return other||null;
+}
+
 function statusStyle(p){
   if(p.died) return {key:'died',label:t('status_died')+(p.sold?' · zuvor verkauft':''),color:'#e07070',bg:'#1e0f0f'};
   if(p.sold) return {key:'sold',label:t('status_sold'),color:'var(--orange)',bg:'#2a1a0a'};
@@ -10578,6 +10597,46 @@ function renderGen(arr,gen,emptyMsg,groupKey){
   }).join('');
 }
 
+// Tabellarische Ansicht für die gefilterte Nachkommen-Liste (Bestandsstatus
+// und/oder Generation gefiltert). Zeigt zusätzlich den Partner (den jeweils
+// anderen Elternteil) je Nachkomme an, damit man direkt sieht, aus welcher
+// Verpaarung die Taube stammt.
+function renderGenTable(birds, genKey, rootId, emptyMsg){
+  if(!birds.length) return '<div style="color:var(--text3);font-size:13px;padding:8px 0">'+(emptyMsg||'Keine Ergebnisse.')+'</div>';
+  var order=['instock','not_instock','died','sold'];
+  var sorted=birds.slice().sort(function(a,b){
+    var sa=statusStyle(a), sb=statusStyle(b);
+    var ia=order.indexOf(sa.key); if(ia<0) ia=order.length;
+    var ib=order.indexOf(sb.key); if(ib<0) ib=order.length;
+    if(ia!==ib) return ia-ib;
+    return ring(a).localeCompare(ring(b));
+  });
+  var rows=sorted.map(function(p){
+    var st=statusStyle(p), sx=sex_(p);
+    var knownParentId = genKey==='children' ? rootId : p._via;
+    var partner = findPartner(p, knownParentId);
+    var partnerHtml = partner
+      ? '<span style="cursor:pointer" onclick="event.stopPropagation();selectPigeon(\''+partner.pigeonid+'\')" title="Partner anzeigen">'
+        +'<span style="font-family:monospace;color:var(--blue)">'+escH(ring(partner))+'</span>'
+        +(partner.name?' <span style="color:var(--text2)">· '+escH(partner.name)+'</span>':'')+'</span>'
+      : '<span style="color:var(--text3)">—</span>';
+    return '<tr style="cursor:pointer" onclick="selectPigeon(\''+p.pigeonid+'\')">'
+      +'<td style="font-family:monospace;font-size:12px;color:var(--green);white-space:nowrap">'+escH(ring(p))+' '+(sx==='M'?'♂':sx==='F'?'♀':'')+'</td>'
+      +'<td>'+(p.name?escH(p.name):'<span style="color:var(--text3)">—</span>')+'</td>'
+      +'<td style="text-align:center">'+(p.date_year||'—')+'</td>'
+      +'<td>'+(tColor(p.color)?escH(tColor(p.color)):'<span style="color:var(--text3)">—</span>')+'</td>'
+      +'<td>'+partnerHtml+'</td>'
+      +'<td><span style="background:'+st.bg+';color:'+st.color+';padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap">'+st.label+'</span></td>'
+      +'<td style="text-align:right;white-space:nowrap">'
+      +'<span onclick="event.stopPropagation();showPedigree(\''+p.pigeonid+'\')" title="Stammbaum" style="font-size:11px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px" onmouseover="this.style.color=\'var(--green)\'" onmouseout="this.style.color=\'var(--text3)\'">🌳</span> '
+      +'<span onclick="event.stopPropagation();showNachkommen(\''+p.pigeonid+'\')" title="Nachkommen" style="font-size:11px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px" onmouseover="this.style.color=\'var(--green)\'" onmouseout="this.style.color=\'var(--text3)\'">🐣</span>'
+      +'</td></tr>';
+  }).join('');
+  return '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+    +'<thead><tr><th>Ring</th><th>Name</th><th>Jg.</th><th>Farbe</th><th>Partner</th><th>Status</th><th></th></tr></thead>'
+    +'<tbody>'+rows+'</tbody></table></div>';
+}
+
 function renderNachkommen(pid){
   var root=findById(pid);
   if(!root) return '<div style="padding:20px;color:var(--text3)">Taube nicht gefunden.</div>';
@@ -10625,18 +10684,25 @@ function renderNachkommen(pid){
   }
   var statusLabel = S.nachStatusFilter==='instock'?'Im Bestand':S.nachStatusFilter==='died'?'Verstorben':S.nachStatusFilter==='sold'?'Verkauft':null;
 
+  // Sobald gefiltert wird (Status und/oder Generation), klappen die betroffenen
+  // Abschnitte automatisch auf und werden als Tabelle (inkl. Partner-Spalte)
+  // statt als Karten-Raster dargestellt — manuelles Zuklappen bleibt weiterhin
+  // per Klick möglich und wird dann respektiert (S.nachExpanded überschreibt
+  // den Auto-Expand-Default).
+  var isFiltering = !!(S.nachStatusFilter || S.nachGenFilter);
   var gens=[['🐣 Kinder (1. Generation)',children,'Kinder','children'],['🐓 Enkel (2. Generation)',gc,'Enkel','gc'],['🥚 Urenkel (3. Generation)',ggc,'Urenkel','ggc']];
   if(S.nachGenFilter) gens=gens.filter(function(g){return g[3]===S.nachGenFilter;});
   var genHtml=gens.map(function(g){
     var birds=applyStatusFilter(g[1]);
     var emptyMsg = statusLabel ? 'Keine '+g[2]+' mit Status "'+statusLabel+'".' : null;
     var genKey='gen:'+g[3];
-    var genCollapsed=!S.nachExpanded[genKey];
+    var genCollapsed = S.nachExpanded[genKey]===undefined ? !isFiltering : !S.nachExpanded[genKey];
+    var body = genCollapsed ? '' : (isFiltering ? renderGenTable(birds,g[3],pid,emptyMsg) : renderGen(birds,g[2],emptyMsg,genKey));
     return '<div class="card" style="margin-bottom:12px">'
       +'<div class="card-title" onclick="toggleNachExpand(\''+genKey+'\')" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">'
       +'<span style="color:var(--text3);font-size:11px">'+(genCollapsed?'▸':'▾')+'</span>'
       +g[0]+' <span style="color:var(--text3);font-weight:400">('+birds.length+(statusLabel?' von '+g[1].length:'')+')</span></div>'
-      +(genCollapsed?'':renderGen(birds,g[2],emptyMsg,genKey))+'</div>';
+      +body+'</div>';
   }).join('');
 
   return '<div class="card" style="margin-bottom:12px">'
