@@ -8185,7 +8185,7 @@ function renderTripsList(){
     </div>`;
   }).join('');
 
-  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" title="Findet Reisen, die versehentlich mehrfach angelegt wurden (gleicher Jahrgang/Ort/Datum) und führt sie zusammen." onclick="showDuplicateTripsModal()">🧹 Duplikate bereinigen</button><button class="btn btn-outline" title="Für alle bereits importierten Flüge ohne eigene RV-Liste (zu wenig Tauben) die RV-Rangliste selbst berechnen und speichern — einmalig nötig für Altbestand, neue Importe machen das automatisch." onclick="runBackfillRVFallbackAll(event)">🧮 RV-Ranglisten nachrechnen</button><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div></div>'
+  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" title="Findet Reisen, die versehentlich mehrfach angelegt wurden (gleicher Jahrgang/Ort/Datum) und führt sie zusammen." onclick="showDuplicateTripsModal()">🧹 Duplikate bereinigen</button><button class="btn btn-outline" title="Findet Tauben, die innerhalb derselben Reise versehentlich doppelt platziert wurden (z.B. durch eine fehlerhafte Quelldatei) und entfernt die Duplikate." onclick="runCleanupDuplicateResults(event)">🧹 Doppelte Ergebnisse bereinigen</button><button class="btn btn-outline" title="Für alle bereits importierten Flüge ohne eigene RV-Liste (zu wenig Tauben) die RV-Rangliste selbst berechnen und speichern — einmalig nötig für Altbestand, neue Importe machen das automatisch." onclick="runBackfillRVFallbackAll(event)">🧮 RV-Ranglisten nachrechnen</button><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div></div>'
     +(anyComputedRV?'<div style="font-size:11px;color:var(--text3);margin:-8px 0 12px">* RV-Taubenzahl selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene).</div>':'')
     +(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
 }
@@ -8478,6 +8478,21 @@ async function handleTripsFiles(fileList){
   // durchnummerieren — wichtig, sobald mehrere Züchter-Dateien für dieselbe
   // Reise zusammengeführt wurden (sonst würde jeder Züchter bei Platz 1 starten).
   combined.forEach(item=>{
+    // Doppelte Ergebniszeilen innerhalb derselben Reise entfernen (gleiche
+    // Ringnummer + Züchter) — kann vorkommen, wenn eine Quelldatei denselben
+    // Tauben-Eintrag versehentlich zweimal enthält (z.B. doppelte 2xx-Zeile
+    // in der EDV-Kraus-Datei). Ohne diese Bereinigung würde dieselbe Taube
+    // zweimal platziert und beim Import auch zweimal gespeichert, weil der
+    // spätere Abgleich mit der DB (existingByKey) nur gegen bereits
+    // gespeicherte Zeilen prüft, nicht gegen Duplikate innerhalb derselben
+    // Importsitzung.
+    const seenInFile=new Set();
+    item.results = item.results.filter(r=>{
+      const key=normRing(r.ringnumber)+'|'+(r.breedername||'');
+      if(seenInFile.has(key)) return false;
+      seenInFile.add(key);
+      return true;
+    });
     item.results.sort((a,b)=>{
       if(a.speed!=null && b.speed!=null) return b.speed-a.speed;
       if(a.speed!=null) return -1;
@@ -8716,6 +8731,68 @@ async function backfillRVFallbackAll(){
   }
   stats.firstError=firstError;
   return stats;
+}
+// Findet und entfernt bereits gespeicherte Ergebnis-Duplikate (gleiche
+// Ringnummer + Züchter innerhalb derselben Reise) — für Altbestand, der vor
+// der Dedup-Korrektur beim Import entstanden ist (siehe handleTripsFiles).
+// Behält je Duplikats-Gruppe den Eintrag mit der besseren (kleineren)
+// Platzierung, löscht den/die Rest(e) und berechnet danach die Platzierung
+// der betroffenen Reise(n) neu (schließt entstandene Lücken).
+async function cleanupDuplicateResults(){
+  const all = await apiGetAll('/pigeontrips?select=id,tripid,ringnumber,breedername,placement,speed');
+  const groups={};
+  (all||[]).forEach(r=>{
+    if(!r.tripid || !r.ringnumber) return;
+    const key=r.tripid+'|'+normRing(r.ringnumber)+'|'+(r.breedername||'');
+    (groups[key]=groups[key]||[]).push(r);
+  });
+  const toDelete=[];
+  const affectedTrips=new Set();
+  Object.values(groups).forEach(list=>{
+    if(list.length<2) return;
+    list.sort((a,b)=>{
+      const pa=a.placement==null?Infinity:a.placement, pb=b.placement==null?Infinity:b.placement;
+      if(pa!==pb) return pa-pb;
+      if((a.speed!=null)!==(b.speed!=null)) return a.speed!=null?-1:1;
+      return 0;
+    });
+    list.slice(1).forEach(r=>toDelete.push(r.id));
+    affectedTrips.add(list[0].tripid);
+  });
+  if(!toDelete.length) return {removed:0, trips:0};
+  let removed=0;
+  await runWithConcurrency(toDelete, 8, async(id)=>{
+    try{ await apiDeleteBy('pigeontrips','id=eq.'+id); removed++; }catch(e){}
+  });
+  for(const tripid of affectedTrips){
+    try{
+      const allForTrip = await apiGet('/pigeontrips?tripid=eq.'+tripid+'&select=id,speed,placement&limit=2000') || [];
+      const ranked = allForTrip.slice().sort((a,b)=>{
+        if(a.speed!=null && b.speed!=null) return b.speed-a.speed;
+        if(a.speed!=null) return -1;
+        if(b.speed!=null) return 1;
+        return 0;
+      });
+      const toUpdate = ranked.map((r,i)=>({id:r.id,newPl:i+1})).filter((r,i)=>r.newPl!==ranked[i].placement);
+      await runWithConcurrency(toUpdate, 8, async(u)=>{
+        try{ await apiPatchBy('pigeontrips','id=eq.'+u.id,{placement:u.newPl}); }catch(e2){}
+      });
+    }catch(e){ console.error('Platzierung nach Duplikat-Bereinigung neu berechnen fehlgeschlagen:', e.message); }
+  }
+  return {removed, trips:affectedTrips.size};
+}
+async function runCleanupDuplicateResults(ev){
+  const btn = ev && ev.target;
+  if(!confirm('Alle Flüge nach doppelt gespeicherten Ergebnissen durchsuchen (gleiche Taube + Züchter innerhalb derselben Reise) und Duplikate entfernen?\n\nEs wird jeweils der Eintrag mit der besseren Platzierung behalten, der Rest gelöscht. Die Platzierungen betroffener Flüge werden danach neu berechnet.')) return;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Suche…'; }
+  try{
+    const r = await cleanupDuplicateResults();
+    clearPTCache();
+    RT.results=[];
+    if(!r.removed) alert('Keine doppelten Ergebnisse gefunden.');
+    else alert('✅ '+r.removed+' doppelte(s) Ergebnis(se) in '+r.trips+' Flug/Flügen entfernt und Platzierungen neu berechnet.');
+  }catch(e){ alert('Fehler: '+e.message); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='🧹 Doppelte Ergebnisse bereinigen'; } render(); }
 }
 async function runBackfillRVFallbackAll(ev){
   const btn = ev && ev.target;
