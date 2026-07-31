@@ -1544,6 +1544,17 @@ async function loadData(){
   S.loading=true; S._loadingMore=false; S._archiveLoaded=false; S._archiveLoading=false; render();
   // Status-Tabelle laden
   try{ const ps=await apiGet('/pigeonstates?order=name.asc'); S.pigeonStates=ps||[]; } catch(e){ S.pigeonStates=[]; }
+  // Manuell erfasste Jahresleistungen — eine Abfrage für den ganzen Bestand,
+  // damit computeEigenleistung() sie später ohne Extra-Roundtrip pro Taube
+  // nutzen kann. Tabelle evtl. noch nicht angelegt -> Feature bleibt inaktiv.
+  try{
+    const ms = await apiGetAll('/pigeon_manual_seasons?select=*');
+    MANUAL_SEASONS_BY_PIGEON = {};
+    (ms||[]).forEach(row=>{
+      if(!row.pigeonid) return;
+      (MANUAL_SEASONS_BY_PIGEON[row.pigeonid] = MANUAL_SEASONS_BY_PIGEON[row.pigeonid]||[]).push(row);
+    });
+  }catch(e){ MANUAL_SEASONS_BY_PIGEON = {}; }
   const BATCH=500;
   LOADED_PIGEON_IDS.clear();
   S.pigeons=[];
@@ -6115,6 +6126,10 @@ async function loadTripResults(tripid){
 
 // ── Reiseleistung je Taube (Detailseite) ─────────────────────────
 const PT_CACHE={}; // pigeonid -> array of pigeontrips rows (enriched with vintage/tripnumber/location)
+// Manuell erfasste Jahresleistungen (Ergänzung für Saisons ohne importierte
+// Einzelflüge, siehe Tabelle pigeon_manual_seasons) — komplett im Voraus
+// geladen (kleine Tabelle) und nach pigeonid gruppiert, siehe loadData().
+let MANUAL_SEASONS_BY_PIGEON={};
 // PT_CACHE hält pro Taube die geladenen Reise-Ergebnisse im Speicher (für die Dauer
 // der Sitzung), damit nicht jede Ansicht neu vom Server lädt. Nach Änderungen, die
 // diese Daten betreffen (RV-Zuordnung eines Züchters, RV-Ranglisten neu berechnen),
@@ -6189,6 +6204,10 @@ async function loadPigeonTripsBatchChunked(pigeonids, chunkSize=150, concurrency
 
 // Kompakte Reiseleistungs-Kennzahlen einer Taube für die Tauben-Übersicht.
 // Gibt null zurück, solange die Daten noch nicht geladen sind (Aufrufer zeigt "Lade…").
+// Anzeigename der Listenkategorie eines manuell erfassten Einzelfluges.
+const MANUAL_CATEGORY_LABELS={rv:'RV', regional:'Regional', reggr:'RegGr', zone:'Zone', national:'National', fg:'FG'};
+function manualCategoryLabel(cat){ return MANUAL_CATEGORY_LABELS[cat]||cat||'—'; }
+
 function pigeonReiseSummary(pigeonid){
   const rows=PT_CACHE[pigeonid];
   if(!rows) return null;
@@ -6196,9 +6215,9 @@ function pigeonReiseSummary(pigeonid){
   let gesetzt=0,preise=0,asSum=0;
   rows.forEach(r=>{
     gesetzt++;
-    const hasPreis=rvField(r,'prize_rv')!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
+    const hasPreis=rvField(r,'prize_rv')!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null || r.manual_prize!=null;
     if(hasPreis) preise++;
-    const asVals=[rvField(r,'as_rv'),r.as_reg,r.as_nat].filter(v=>v!=null && v!=='');
+    const asVals=[rvField(r,'as_rv'),r.as_reg,r.as_nat,r.manual_as].filter(v=>v!=null && v!=='');
     if(asVals.length) asSum+=Math.max(...asVals.map(Number));
   });
   return {gesetzt, preise, asSum, top10:getTop10Placements(rows).length};
@@ -6210,12 +6229,12 @@ function groupPigeonTripsByYear(rows){
     const yr=r.vintage||'—';
     if(!byYear[yr]) byYear[yr]={gesetzt:0,preise:0,asSum:0,top10:[]};
     byYear[yr].gesetzt++;
-    const hasPreis = rvField(r,'prize_rv')!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null;
+    const hasPreis = rvField(r,'prize_rv')!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null || r.manual_prize!=null;
     if(hasPreis) byYear[yr].preise++;
-    const asVals=[rvField(r,'as_rv'),r.as_reg,r.as_nat].filter(v=>v!=null && v!=='');
+    const asVals=[rvField(r,'as_rv'),r.as_reg,r.as_nat,r.manual_as].filter(v=>v!=null && v!=='');
     if(asVals.length) byYear[yr].asSum += Math.max(...asVals.map(Number));
-    // Top10 je Flug nur einmal zählen (bester Platz der 3 Kategorien)
-    const platzVals=[rvField(r,'prize_rv'),r.prize_reggr,r.prize_reg].filter(v=>v!=null && v>0 && v<=10);
+    // Top10 je Flug nur einmal zählen (bester Platz der 3 Kategorien + manuell)
+    const platzVals=[rvField(r,'prize_rv'),r.prize_reggr,r.prize_reg,r.manual_prize].filter(v=>v!=null && v>0 && v<=10);
     if(platzVals.length) byYear[yr].top10.push(Math.min(...platzVals));
   });
   return Object.keys(byYear).sort((a,b)=>b-a).map(yr=>({yr, ...byYear[yr],
@@ -6266,6 +6285,10 @@ function getTop10Placements(rows){
           distance:r.distance});
       }
     });
+    if(r.manual_prize!=null && r.manual_prize>0 && r.manual_prize<=10){
+      out.push({platz:r.manual_prize, kategorie:manualCategoryLabel(r.manual_category)+' (manuell)', tripnumber:r.tripnumber, location:r.location,
+        tripdate:r.tripdate, vintage:r.vintage, gesetzt:r.manual_participants!=null?r.manual_participants:r.pigeonsset, distance:r.distance});
+    }
   });
   return out.sort((a,b)=> a.platz-b.platz || String(b.tripdate).localeCompare(String(a.tripdate)));
 }
@@ -6291,6 +6314,9 @@ function getTopPlacementsDeduped(rows, n){
         candidates.push({platz, kategorie, gesetzt: field==='prize_rv' ? rvGesetzt(r) : (rvField(r,gesetztField)!=null?rvField(r,gesetztField):r.pigeonsset)});
       }
     });
+    if(r.manual_prize!=null && r.manual_prize>0){
+      candidates.push({platz:r.manual_prize, kategorie:manualCategoryLabel(r.manual_category)+' (manuell)', gesetzt:r.manual_participants!=null?r.manual_participants:r.pigeonsset});
+    }
     if(!candidates.length) return;
     const top10=candidates.filter(c=>c.platz<=10);
     // Innerhalb der Top10 gewinnt die höchste Taubenzahl (bei Gleichstand die
@@ -6780,13 +6806,14 @@ function ensureVererbungLoaded(pigeonid){
     .then(function(){ VER_LOADING.delete(pigeonid); render(); })
     .catch(function(){ VER_LOADING.delete(pigeonid); ids.forEach(function(id){ if(!PT_CACHE[id]) PT_CACHE[id]=[]; }); render(); });
 }
-function hasPrizeRow(r){ return r.prize_rv!=null||r.prize_reggr!=null||r.prize_reg!=null||r.prize_fg!=null; }
+function hasPrizeRow(r){ return r.prize_rv!=null||r.prize_reggr!=null||r.prize_reg!=null||r.prize_fg!=null||r.manual_prize!=null; }
 // Bestes AS (Ass-Punkte) eines einzelnen Fluges über die drei Listen
-// (Verein/RV, Regionalgruppe, Region) — dieselbe "ein Flug = ein Wert"-Logik
-// wie an anderer Stelle in der App (Rekordflüge), damit ein Flug nicht
-// mehrfach gezählt wird, nur weil er in mehreren Listen platziert war.
+// (Verein/RV, Regionalgruppe, Region) sowie ein evtl. manuell erfasstes
+// Ergebnis — dieselbe "ein Flug = ein Wert"-Logik wie an anderer Stelle in
+// der App (Rekordflüge), damit ein Flug nicht mehrfach gezählt wird, nur
+// weil er in mehreren Listen platziert war.
 function getFlightAS(r){
-  var vals=[r.as_rv,r.as_nat,r.as_reg].filter(function(v){ return v!=null && v!==''; }).map(Number).filter(function(v){ return !isNaN(v); });
+  var vals=[r.as_rv,r.as_nat,r.as_reg,r.manual_as].filter(function(v){ return v!=null && v!==''; }).map(Number).filter(function(v){ return !isNaN(v); });
   return vals.length ? Math.max.apply(null, vals) : null;
 }
 // Mindestanzahl "erfolgreicher" Nachkommen (siehe VERERBER_ERFOLG_* unten),
@@ -6898,7 +6925,6 @@ const OWN_TRIPS_LOADING = new Set();
 function computeEigenleistung(pigeonid){
   const rows = PT_CACHE[pigeonid];
   if(!rows) return {ready:false};
-  if(!rows.length) return {ready:true, noFlights:true};
   let gesetzt=rows.length, preise=0, topAS=0, topAS80=0, asSum=0, asCount=0;
   rows.forEach(r=>{
     if(hasPrizeRow(r)) preise++;
@@ -6909,6 +6935,23 @@ function computeEigenleistung(pigeonid){
       if(as>VERERBER_ELITE_AS_SCHWELLE) topAS80++;
     }
   });
+  // Manuell erfasste Jahresleistungen (siehe pigeon_manual_seasons) ergänzen
+  // die Statistik NUR für Saisons, für die keine echten Einzelflüge in
+  // pigeontrips vorliegen — sonst würde dieselbe Saison doppelt gezählt. Da
+  // nur die AS-Summe (nicht die Verteilung je Flug) bekannt ist, fließen
+  // manuelle Jahre in Flüge/Preise/Ø-AS/Σ-AS ein, aber NICHT in die
+  // Top-AS-Quote (topAS/topAS80 bleiben unverändert — dadurch verwässert
+  // sich diese Quote automatisch etwas, statt Daten vorzutäuschen, die wir
+  // nicht haben).
+  const coveredVintages = new Set(rows.map(r=>String(r.vintage||'')));
+  const manualSeasons = MANUAL_SEASONS_BY_PIGEON[pigeonid]||[];
+  manualSeasons.forEach(ms=>{
+    if(coveredVintages.has(String(ms.vintage))) return; // Jahr schon durch echte Flüge abgedeckt
+    gesetzt += ms.gesetzt||0;
+    preise += ms.preise||0;
+    if(ms.as_sum!=null){ asSum += Number(ms.as_sum)||0; asCount += ms.gesetzt||0; }
+  });
+  if(!gesetzt) return {ready:true, noFlights:true};
   // Zu wenige Flüge -> Quote statistisch nicht belastbar, wird wie "keine
   // eigenen Flugdaten" behandelt (der Erfolgs-Score stützt sich dann allein
   // auf die Vererbung, sofern dafür genug Nachkommen-Daten vorliegen).
@@ -7490,7 +7533,24 @@ function renderPigeonTripsSection(p){
     return `<div class="section-label" style="margin-top:14px">Reiseleistung</div>
       <div style="color:var(--text3);font-size:13px;padding:8px 0">Lade Reiseleistung…</div>`;
   }
-  if(cached.length===0) return '';
+  const manualSeasons=(MANUAL_SEASONS_BY_PIGEON[p.pigeonid]||[]).slice().sort((a,b)=>(b.vintage||0)-(a.vintage||0));
+  const addButtonsHtml = `<div style="display:flex;gap:8px;margin:8px 0 12px">
+      <button class="btn btn-outline" style="font-size:12px;padding:6px 10px" onclick="showManualSeasonModal('${p.pigeonid}')">+ Jahresleistung</button>
+      <button class="btn btn-outline" style="font-size:12px;padding:6px 10px" onclick="showManualFlightModal('${p.pigeonid}')">+ Einzelflug</button>
+    </div>`;
+  const manualSeasonsHtml = manualSeasons.length ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+      ${manualSeasons.map(s=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg3);border:1px dashed var(--border);border-radius:var(--radius-sm);padding:9px 14px;font-size:13px">
+          <span style="font-weight:600">${escH(String(s.vintage))} <span style="font-weight:400;color:var(--text3);font-size:11px">(manuell)</span></span>
+          <span style="color:var(--text2)">${s.gesetzt??0}/${s.preise??0} Preise</span>
+          <span style="color:var(--text3)">Σ AS ${s.as_sum!=null?Number(s.as_sum).toFixed(2):'—'}</span>
+          <span style="color:var(--text3)">Σ ${s.km_sum!=null?Number(s.km_sum).toFixed(0)+' km':'—'}</span>
+          <span style="display:flex;gap:10px">
+            <span style="cursor:pointer;color:var(--green)" title="Bearbeiten" onclick="showManualSeasonModal('${p.pigeonid}','${s.id}')">✎</span>
+            <span style="cursor:pointer;color:var(--text3)" title="Löschen" onclick="deleteManualSeason('${p.pigeonid}','${s.id}')">🗑</span>
+          </span>
+        </div>`).join('')}
+    </div>` : '';
 
   // Jahresdetail-Ansicht (nach Klick auf ein Jahr)
   if(S.pigeonTripYear!==null){
@@ -7499,17 +7559,19 @@ function renderPigeonTripsSection(p){
       .sort((a,b)=>String(a.tripdate||'').localeCompare(String(b.tripdate||'')));
     let anyCalcRV=false;
     const trRows=rows.map(r=>{
-      const asVals=[r.as_rv,r.as_reg,r.as_nat].filter(v=>v!=null && v!=='');
+      const asVals=[r.as_rv,r.as_reg,r.as_nat,r.manual_as].filter(v=>v!=null && v!=='');
       const bestAS=asVals.length?Math.max(...asVals.map(Number)):null;
       const rvVal=rvField(r,'prize_rv');
       const rvCalc=rvVal!=null && r.prize_rv==null;
       if(rvCalc) anyCalcRV=true;
+      const manualStr = r.is_manual ? (manualCategoryLabel(r.manual_category)+(r.manual_prize!=null?' '+r.manual_prize+'.':'')) : '';
       return `<tr>
-        <td style="font-size:12px">${escH(r.tripdate||'—')}</td>
+        <td style="font-size:12px">${escH(r.tripdate||'—')}${r.is_manual?' <span title="Manuell erfasst" style="color:var(--text3)">✎</span>':''}</td>
         <td style="font-size:12px">${escH(r.location||'—')}</td>
         <td style="font-size:12px;text-align:center">${rvVal??'—'}${rvCalc?' *':''}</td>
         <td style="font-size:12px;text-align:center">${r.prize_reggr??'—'}</td>
         <td style="font-size:12px;text-align:center">${r.prize_reg??'—'}</td>
+        <td style="font-size:12px;text-align:center">${escH(manualStr||'—')}</td>
         <td style="font-size:12px;text-align:center;color:var(--green)">${bestAS!=null?bestAS.toFixed(2):'—'}</td>
       </tr>`;
     }).join('');
@@ -7521,16 +7583,24 @@ function renderPigeonTripsSection(p){
         <thead><tr>
           <th style="font-size:11px">Datum</th><th style="font-size:11px">Ort</th>
           <th style="font-size:11px;text-align:center">Pr.RV</th><th style="font-size:11px;text-align:center">Pr.RegGr</th>
-          <th style="font-size:11px;text-align:center">Pr.Reg</th><th style="font-size:11px;text-align:center">AS</th>
+          <th style="font-size:11px;text-align:center">Pr.Reg</th><th style="font-size:11px;text-align:center">Manuell</th><th style="font-size:11px;text-align:center">AS</th>
         </tr></thead>
         <tbody>${trRows}</tbody>
       </table></div>
       ${anyCalcRV?'<div style="font-size:11px;color:var(--text3);margin-top:8px">* RV-Platz selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (unter 200 gesetzte Tauben).</div>':''}`;
   }
 
+  if(cached.length===0 && !manualSeasons.length){
+    return `<div class="section-label" style="margin-top:14px">Reiseleistung</div>
+      ${addButtonsHtml}
+      <div style="color:var(--text3);font-size:13px;padding:4px 0">Noch keine Flugdaten vorhanden.</div>`;
+  }
+
   const years=groupPigeonTripsByYear(cached);
   const top10=getTop10Placements(cached);
   return `<div class="section-label" style="margin-top:14px">Reiseleistung</div>
+    ${addButtonsHtml}
+    ${manualSeasonsHtml}
     <div style="display:flex;flex-direction:column;gap:6px">
       ${years.map(y=>`
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg3);border-radius:var(--radius-sm);padding:9px 14px;font-size:13px;cursor:pointer" onclick="openPigeonTripYear('${escH(String(y.yr))}')">
@@ -7559,6 +7629,195 @@ function renderPigeonTripsSection(p){
       </tr>`).join('')}</tbody>
     </table></div>
     ${top10.some(t=>t.kategorie.endsWith(' *'))?'<div style="font-size:11px;color:var(--text3);margin-top:8px">* RV-Platz selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (unter 200 gesetzte Tauben).</div>':''}`:''}`;
+}
+
+// ── Manuelle Reiseleistungs-Erfassung (Jahresleistung + Einzelflug) ──────
+// Ergänzt Tauben, für die keine (oder nur unvollständige) importierte
+// Flugdaten vorliegen. Zwei Wege:
+//  1) Jahresleistung: Saison-Summenwerte ohne Einzelflug-Details, gespeichert
+//     in der eigenen Tabelle pigeon_manual_seasons (siehe MANUAL_SEASONS_BY_PIGEON).
+//  2) Einzelflug: ein konkreter Flug als Ergänzung zu den importierten Flügen
+//     der Saison — landet wie importierte Flüge in trips/pigeontrips, markiert
+//     über pigeontrips.is_manual + manual_*-Felder (siehe hasPrizeRow/getFlightAS).
+// HINWEIS: Beide Wege benötigen zusätzliche Supabase-Spalten/Tabellen, siehe
+// Kommentar bei showManualFlightModal().
+function showManualSeasonModal(pigeonid, existingId){
+  const existing = existingId ? (MANUAL_SEASONS_BY_PIGEON[pigeonid]||[]).find(s=>s.id===existingId) : null;
+  const overlay=document.createElement('div');
+  overlay.className='lightbox-overlay manual-season-overlay';
+  overlay.style.cursor='default';
+  overlay.onclick=e=>{ if(e.target===overlay) overlay.remove(); };
+  const panel=document.createElement('div');
+  panel.style.cssText='background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:420px;width:92vw;max-height:86vh;overflow-y:auto;padding:20px;cursor:default';
+  panel.onclick=e=>e.stopPropagation();
+  const field=(label,id,type,val,extra)=>`<div style="margin-bottom:12px">
+      <label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px">${label}</label>
+      <input type="${type}" id="${id}" value="${val!=null?val:''}" ${extra||''} style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text1);font-size:14px;box-sizing:border-box">
+    </div>`;
+  const e=existing||{};
+  panel.innerHTML =
+    `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px">
+      <div class="card-title" style="margin:0">📅 Jahresleistung ${existing?'bearbeiten':'erfassen'}</div>
+      <span onclick="this.closest('.manual-season-overlay').remove()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px">Für Saisons ohne importierte Einzelflüge. Die Werte fließen (Flüge, Preise, Ø-/Σ-AS-Punkte) in die Eigenleistung ein — aber nur für Jahre, für die keine echten Einzelflüge vorliegen (sonst Doppelzählung).</div>
+    ${field('Reisejahr','ms-vintage','number', e.vintage, 'min="1990" max="2100"'+(existing?' readonly':''))}
+    ${field('Anzahl Flüge','ms-gesetzt','number', e.gesetzt, 'min="0"')}
+    ${field('Anzahl errungener Preise','ms-preise','number', e.preise, 'min="0"')}
+    ${field('Summe AS-Punkte','ms-assum','number', e.as_sum, 'step="0.01" min="0"')}
+    ${field('Summe Kilometer','ms-kmsum','number', e.km_sum, 'step="0.1" min="0"')}
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn" id="ms-save-btn" style="flex:1" onclick="saveManualSeason('${pigeonid}',${existingId?`'${existingId}'`:'null'})">Speichern</button>
+      <button class="btn btn-outline" onclick="this.closest('.manual-season-overlay').remove()">Abbrechen</button>
+    </div>`;
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
+
+async function saveManualSeason(pigeonid, existingId){
+  const val=id=>{ const el=document.getElementById(id); return el?el.value.trim():''; };
+  const vintage=parseInt(val('ms-vintage'));
+  const gesetzt=parseInt(val('ms-gesetzt'))||0;
+  const preise=parseInt(val('ms-preise'))||0;
+  const asSum=val('ms-assum')?parseFloat(val('ms-assum')):null;
+  const kmSum=val('ms-kmsum')?parseFloat(val('ms-kmsum')):null;
+  if(!vintage){ alert('Bitte ein gültiges Reisejahr angeben.'); return; }
+  if(preise>gesetzt){ alert('Die Anzahl Preise kann nicht größer als die Anzahl Flüge sein.'); return; }
+  const btn=document.getElementById('ms-save-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Speichere…'; }
+  try{
+    const row={pigeonid, vintage, gesetzt, preise, as_sum:asSum, km_sum:kmSum};
+    let saved;
+    const already = existingId ? null : (MANUAL_SEASONS_BY_PIGEON[pigeonid]||[]).find(s=>String(s.vintage)===String(vintage));
+    const targetId = existingId || (already?already.id:null);
+    if(targetId){
+      await apiPatchBy('pigeon_manual_seasons','id=eq.'+targetId, row);
+      saved = {...row, id:targetId};
+    } else {
+      saved = {...row, id:crypto.randomUUID()};
+      await apiPost('pigeon_manual_seasons', saved);
+    }
+    MANUAL_SEASONS_BY_PIGEON[pigeonid] = (MANUAL_SEASONS_BY_PIGEON[pigeonid]||[]).filter(s=>s.id!==saved.id).concat([saved]);
+    document.querySelectorAll('.manual-season-overlay').forEach(o=>o.remove());
+    render();
+  }catch(e){
+    alert('Speichern fehlgeschlagen: '+e.message+'\n\nHinweis: Dafür muss in Supabase die Tabelle "pigeon_manual_seasons" angelegt sein (siehe Dokumentation).');
+    if(btn){ btn.disabled=false; btn.textContent='Speichern'; }
+  }
+}
+
+async function deleteManualSeason(pigeonid, id){
+  if(!confirm('Diese manuell erfasste Jahresleistung wirklich löschen?')) return;
+  try{
+    await apiDeleteBy('pigeon_manual_seasons','id=eq.'+id);
+    MANUAL_SEASONS_BY_PIGEON[pigeonid] = (MANUAL_SEASONS_BY_PIGEON[pigeonid]||[]).filter(s=>s.id!==id);
+    render();
+  }catch(e){ alert('Löschen fehlgeschlagen: '+e.message); }
+}
+
+// Einzelflug manuell erfassen — ergänzt einen konkreten Flug, der (noch)
+// nicht importiert wurde. Benötigt in Supabase: trips.flighttype (text) sowie
+// pigeontrips.is_manual (bool), .manual_category (text), .manual_prize (int),
+// .manual_as (numeric), .manual_participants (int) — siehe Migrations-SQL in
+// der Doku/Antwort, mit der dieses Feature eingeführt wurde.
+function showManualFlightModal(pigeonid){
+  const overlay=document.createElement('div');
+  overlay.className='lightbox-overlay manual-flight-overlay';
+  overlay.style.cursor='default';
+  overlay.onclick=e=>{ if(e.target===overlay) overlay.remove(); };
+  const panel=document.createElement('div');
+  panel.style.cssText='background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:480px;width:92vw;max-height:86vh;overflow-y:auto;padding:20px;cursor:default';
+  panel.onclick=e=>e.stopPropagation();
+  const field=(label,id,type,extra)=>`<div style="margin-bottom:12px">
+      <label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px">${label}</label>
+      <input type="${type}" id="${id}" ${extra||''} style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text1);font-size:14px;box-sizing:border-box">
+    </div>`;
+  panel.innerHTML =
+    `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px">
+      <div class="card-title" style="margin:0">✍️ Einzelflug manuell erfassen</div>
+      <span onclick="this.closest('.manual-flight-overlay').remove()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px">Ergänzt die importierten Flüge der Saison um einen einzelnen, von Hand erfassten Flug.</div>
+    ${field('Datum','mf-date','date')}
+    ${field('Flugnummer','mf-number','number','min="0"')}
+    ${field('Auflassort','mf-location','text')}
+    ${field('Flug-Typ (z.B. Nationalflug, Car Race)','mf-type','text')}
+    ${field('Entfernung (km)','mf-distance','number','step="0.1" min="0"')}
+    <div style="display:flex;gap:10px">
+      <div style="flex:1">${field('Erzielter Preis (Platz)','mf-prize','number','min="1"')}</div>
+      <div style="flex:1">${field('AS-Punkte','mf-as','number','step="0.01"')}</div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <div style="flex:1">${field('Gesamtteilnehmerzahl','mf-participants','number','min="1"')}</div>
+      <div style="flex:1">
+        <label style="display:block;font-size:12px;color:var(--text3);margin-bottom:4px">Listenkategorie</label>
+        <select id="mf-category" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text1);font-size:14px;box-sizing:border-box">
+          <option value="national">National</option>
+          <option value="regional">Regional</option>
+          <option value="reggr">RegGr</option>
+          <option value="zone">Zone</option>
+          <option value="rv">RV</option>
+          <option value="fg">FG</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn" id="mf-save-btn" style="flex:1" onclick="saveManualFlight('${pigeonid}')">Speichern</button>
+      <button class="btn btn-outline" onclick="this.closest('.manual-flight-overlay').remove()">Abbrechen</button>
+    </div>`;
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
+
+async function saveManualFlight(pigeonid){
+  const val=id=>{ const el=document.getElementById(id); return el?el.value.trim():''; };
+  const datum=val('mf-date'), flugnr=val('mf-number'), ort=val('mf-location'), flugtyp=val('mf-type'),
+    entfernung=val('mf-distance'), preis=val('mf-prize'), asPkt=val('mf-as'), teilnehmer=val('mf-participants'),
+    kategorie=val('mf-category');
+  if(!datum || !ort){ alert('Bitte mindestens Datum und Auflassort angeben.'); return; }
+  const vintage=parseInt(datum.substring(0,4));
+  const tripNumber=flugnr?parseInt(flugnr):null;
+  const tripDistance=entfernung?parseFloat(entfernung):null;
+  const btn=document.getElementById('mf-save-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Speichere…'; }
+  try{
+    if(!RT.trips.length) await loadTrips();
+    let match = RT.trips.find(t=>normL(t.location)===normL(ort) && t.tripdate===datum);
+    let tripid;
+    if(match){
+      tripid=match.tripid;
+    } else {
+      // RT.trips ist auf die letzten 500 Reisen begrenzt — zur Sicherheit
+      // zusätzlich live prüfen, um doppelte Reise-Datensätze zu vermeiden.
+      const existing = await apiGet('/trips?location=eq.'+encodeURIComponent(ort)+'&tripdate=eq.'+datum+'&limit=1');
+      if(existing && existing.length){ match=existing[0]; tripid=match.tripid; RT.trips.push(match); }
+      else{
+        tripid=crypto.randomUUID();
+        match={tripid, vintage, number:tripNumber, location:ort, tripdate:datum, flighttype:flugtyp||null, averagedistance3:tripDistance};
+        await apiPost('trips', match);
+        RT.trips.push(match);
+      }
+    }
+    const p=findById(pigeonid);
+    const newRow={
+      id:crypto.randomUUID(), tripid, pigeonid,
+      ringnumber:p?p.ringnumber:null, sex:sex_(p)||null,
+      is_manual:true, manual_category:kategorie||null,
+      manual_prize:preis?parseInt(preis):null,
+      manual_as:asPkt?parseFloat(asPkt):null,
+      manual_participants:teilnehmer?parseInt(teilnehmer):null
+    };
+    await apiPost('pigeontrips', newRow);
+    const enriched={...newRow, vintage:match.vintage||vintage, tripnumber:match.number||tripNumber,
+      location:match.location||ort, tripdate:match.tripdate||datum, pigeonsset:match.pigeonsset||null,
+      distance:match.averagedistance3!=null?Number(match.averagedistance3):tripDistance};
+    PT_CACHE[pigeonid] = (PT_CACHE[pigeonid]||[]).concat([enriched]);
+    document.querySelectorAll('.manual-flight-overlay').forEach(o=>o.remove());
+    render();
+  }catch(e){
+    alert('Speichern fehlgeschlagen: '+e.message+'\n\nHinweis: Dafür müssen in Supabase die Spalten trips.flighttype sowie pigeontrips.is_manual/manual_category/manual_prize/manual_as/manual_participants angelegt sein (siehe Dokumentation).');
+    if(btn){ btn.disabled=false; btn.textContent='Speichern'; }
+  }
 }
 
 // ── Datensicherung: Logik ─────────────────────────────────────────
