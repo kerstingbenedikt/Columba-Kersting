@@ -6378,16 +6378,45 @@ function saveScoreCfg(cfg){
 }
 function resetScoreCfg(){ saveScoreCfg(Object.assign({}, SCORE_CFG_DEFAULT)); }
 
-// Rechnet Preisquote (Beständigkeit) + Top-AS-Quote (Schnelligkeit) nach den
-// aktuell eingestellten Gewichten in einen Teilscore von 0-100 um. Wird
-// identisch für die Eigenleistung EINER Taube und für die gepoolten Werte
-// ihrer Nachkommen verwendet, damit beide Seiten vergleichbar bleiben.
-function computeQuoteScore(preisquote, topASquote){
+// Sättigungs-Schwellen für die "Gesamt"-Boni in computeQuoteScore: ab dieser
+// absoluten Summe gilt der jeweilige Bonus als ausgereizt (100 Punkte). Die
+// sqrt-Skalierung sorgt für spürbaren Anstieg schon bei kleineren Werten,
+// statt (wie zuvor bei der Top-AS-Quote) hart bei einem winzigen Prozentwert
+// zu sättigen.
+const SCORE_PREISE_SAETTIGUNG = 20;    // Gesamtzahl Preise für vollen Beständigkeits-Bonus
+const SCORE_AS_SUM_SAETTIGUNG = 800;   // Summe AS-Punkte für vollen Schnelligkeits-Bonus
+
+// Rechnet Beständigkeit (Preisquote + Gesamtzahl Preise) und Schnelligkeit
+// (Top-AS-Quote + durchschnittliche AS-Punkte + Summe AS-Punkte) nach den
+// aktuell eingestellten Gewichten (SCORE_CFG.gewichtBestaendigkeit/
+// -Schnelligkeit) in einen Teilscore von 0-100 um. Wird identisch für die
+// Eigenleistung EINER Taube und für die gepoolten Werte ihrer Nachkommen
+// verwendet, damit beide Seiten vergleichbar bleiben.
+// stats = {preisquote, topASquote, preise, gesetzt, asSum, asCount}
+function computeQuoteScore(stats){
   var wB = SCORE_CFG.gewichtBestaendigkeit, wS = SCORE_CFG.gewichtSchnelligkeit;
   var sum = wB+wS; if(!(sum>0)) sum=100;
   var wBn = wB/sum*100, wSn = wS/sum*100; // auf 100 normalisiert, falls Nutzer nicht exakt 100 einstellt
-  var bestPunkte = preisquote/100 * wBn;
-  var schnellPunkte = Math.min(topASquote * (wSn/10), wSn); // Sättigung bei Top-AS-Quote = 1/10 des Gewichts
+
+  // Beständigkeit: Preisquote bleibt der Hauptfaktor, zusätzlich ein Bonus
+  // für die absolute Anzahl Preise — eine Taube mit 15 Preisen aus 25 Flügen
+  // ist beständiger belegt als eine mit 2 von 3 Flügen, auch wenn beide eine
+  // ähnliche oder höhere Preisquote haben.
+  var preiseBonus = Math.min(100, Math.sqrt((stats.preise||0)/SCORE_PREISE_SAETTIGUNG)*100);
+  var bestRaw = (stats.preisquote||0)*0.7 + preiseBonus*0.3;
+
+  // Schnelligkeit: Anteil Flüge >90 AS-Punkte OHNE die frühere harte Deckelung
+  // bei nur 10% Quote, ergänzt um die durchschnittliche AS-Punktzahl und die
+  // aufsummierten AS-Punkte über alle Flüge — eine Taube mit vielen UND hohen
+  // AS-Ergebnissen hebt sich so klar von einer ab, die nur knapp über der
+  // Schwelle liegt.
+  var quoteComp = Math.min(100, (stats.topASquote||0)*3);
+  var avgComp = Math.min(100, stats.asCount ? (stats.asSum/stats.asCount) : 0);
+  var totalComp = Math.min(100, Math.sqrt((stats.asSum||0)/SCORE_AS_SUM_SAETTIGUNG)*100);
+  var schnellRaw = quoteComp*0.5 + avgComp*0.3 + totalComp*0.2;
+
+  var bestPunkte = bestRaw/100 * wBn;
+  var schnellPunkte = schnellRaw/100 * wSn;
   return Math.min(100, bestPunkte + schnellPunkte);
 }
 
@@ -6412,10 +6441,10 @@ function showScoreSettingsModal(){
       +'<div class="card-title" style="margin:0">⚙️ Score-Einstellungen</div>'
       +'<span onclick="this.closest(\'.score-cfg-overlay\').remove()" style="cursor:pointer;color:var(--text3);font-size:20px;line-height:1;padding:2px 6px">×</span>'
     +'</div>'
-    +'<div style="font-size:12px;color:var(--text3);margin-bottom:16px">Steuert einheitlich Eigenleistung, Vererbungsstärke, Erfolgs-Score und Paarungsempfehlungen.</div>'
-    +row('Eigenleistung vs. Nachkommen', 'sc-eigen', c.eigenAnteil, 0, 100, 5, '% Eigenleistung', 'Wie stark die eigene Flugleistung im Vergleich zur Vererbungsstärke (Nachkommen) in den Erfolgs-Score einer Taube einfließt.')
-    +row('Gewichtung Beständigkeit', 'sc-best', c.gewichtBestaendigkeit, 0, 100, 5, '', 'Preisquote — Anteil Flüge mit Preis.')
-    +row('Gewichtung Schnelligkeit', 'sc-schnell', c.gewichtSchnelligkeit, 0, 100, 5, '', 'Anteil Flüge mit mehr als 90 AS-Punkten.')
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:16px">Steuert einheitlich Eigenleistung, Vererbungsstärke, Erfolgs-Score und Paarungsempfehlungen. Fehlt eine Seite (z.B. keine Nachzucht), geht sie mit 0 in ihren Gewichtsanteil ein — die Einstellung wirkt sich also immer aus.</div>'
+    +row('Eigenleistung vs. Nachkommen', 'sc-eigen', c.eigenAnteil, 0, 100, 5, '% Eigenleistung', 'Wie stark die eigene Flugleistung im Vergleich zur Vererbungsstärke (Nachkommen) in den Erfolgs-Score einer Taube einfließt. Ist eine Seite ohne Datenbasis, zählt sie als 0 — nicht als "ignorieren".')
+    +row('Gewichtung Beständigkeit', 'sc-best', c.gewichtBestaendigkeit, 0, 100, 5, '', 'Preisquote (Anteil Flüge mit Preis) plus Bonus für die absolute Anzahl Preise.')
+    +row('Gewichtung Schnelligkeit', 'sc-schnell', c.gewichtSchnelligkeit, 0, 100, 5, '', 'Anteil Flüge mit mehr als 90 AS-Punkten, plus durchschnittliche und aufsummierte AS-Punkte.')
     +row('Mindestflüge für Preisquote', 'sc-minflug', c.minFluegePreisquote, 0, 30, 1, ' Flüge', 'Unter dieser Flugzahl wird die Preisquote (eigene Taube oder einzelner Nachkomme) als statistisch nicht belastbar ignoriert.')
     +'<div style="display:flex;gap:8px;margin-top:6px">'
     +'<button class="btn" style="flex:1" onclick="'
@@ -6788,12 +6817,15 @@ function computeVererbungsstaerke(pigeonid){
 
   var perDescendant = desc.map(function(d){
     var rows = PT_CACHE[d.pigeonid]||[];
-    var gesetzt=rows.length, preise=0, topAS=0, topAS80=0;
+    var gesetzt=rows.length, preise=0, topAS=0, topAS80=0, asSum=0, asCount=0;
     rows.forEach(function(r){
       if(hasPrizeRow(r)) preise++;
       var as=getFlightAS(r);
-      if(as!=null && as>90) topAS++; // ein Flug zählt max. 1x (bestes AS über RV/RegGr/Reg)
-      if(as!=null && as>VERERBER_ELITE_AS_SCHWELLE) topAS80++;
+      if(as!=null){
+        asSum+=as; asCount++; // für Durchschnitt/Summe im Schnelligkeits-Teilscore
+        if(as>90) topAS++; // ein Flug zählt max. 1x (bestes AS über RV/RegGr/Reg)
+        if(as>VERERBER_ELITE_AS_SCHWELLE) topAS80++;
+      }
     });
     var preisquoteD = gesetzt>0 ? preise/gesetzt*100 : 0;
     // Zu wenige Flüge -> Preisquote dieses Nachkommen statistisch nicht
@@ -6805,7 +6837,7 @@ function computeVererbungsstaerke(pigeonid){
       && preisquoteD>=VERERBER_ELITE_MIN_PREISQUOTE
       && topAS80>=VERERBER_ELITE_MIN_TOPAS;
     var erfolgreich = qualifiziert && preisquoteD>=VERERBER_ERFOLG_MIN_PREISQUOTE && topAS80>=VERERBER_ERFOLG_MIN_TOPAS;
-    return {pigeon:d, gesetzt:gesetzt, preise:preise, topAS:topAS, topAS80:topAS80,
+    return {pigeon:d, gesetzt:gesetzt, preise:preise, topAS:topAS, topAS80:topAS80, asSum:asSum, asCount:asCount,
       preisquoteD:preisquoteD, flown:gesetzt>0, erfolgreich:erfolgreich, elite:elite};
   });
 
@@ -6818,8 +6850,8 @@ function computeVererbungsstaerke(pigeonid){
   if(erfolgreicheCount<VERERBER_MIN_ERFOLGREICHE) return {ready:true, notEnough:true, totalDescendants:desc.length,
     flownCount:flown.length, erfolgreicheCount:erfolgreicheCount, perDescendant:perDescendant};
 
-  var totalGesetzt=0, totalPreise=0, totalTopAS=0;
-  flown.forEach(function(d){ totalGesetzt+=d.gesetzt; totalPreise+=d.preise; totalTopAS+=d.topAS; });
+  var totalGesetzt=0, totalPreise=0, totalTopAS=0, totalAsSum=0, totalAsCount=0;
+  flown.forEach(function(d){ totalGesetzt+=d.gesetzt; totalPreise+=d.preise; totalTopAS+=d.topAS; totalAsSum+=d.asSum; totalAsCount+=d.asCount; });
   var preisquote = totalPreise/totalGesetzt*100;
   var topASquote = totalTopAS/totalGesetzt*100;
   var aktivenanteil = flown.length/desc.length*100;
@@ -6839,7 +6871,7 @@ function computeVererbungsstaerke(pigeonid){
   // nach den einstellbaren Gewichten SCORE_CFG.gewichtBestaendigkeit/-Schnelligkeit,
   // auf ein Budget von max. 37 Punkten skaliert), ein kleiner Aktivenanteil-Bonus
   // (nur Teilnahme, kein Erfolg) und der bestandsgebundene Elite-Bonus.
-  var qualityScore = computeQuoteScore(preisquote, topASquote); // 0-100
+  var qualityScore = computeQuoteScore({preisquote:preisquote, topASquote:topASquote, preise:totalPreise, gesetzt:totalGesetzt, asSum:totalAsSum, asCount:totalAsCount}); // 0-100
   var score = Math.round(Math.min(100,
     erfolgsquote*0.45
     + qualityScore*0.37
@@ -6867,12 +6899,15 @@ function computeEigenleistung(pigeonid){
   const rows = PT_CACHE[pigeonid];
   if(!rows) return {ready:false};
   if(!rows.length) return {ready:true, noFlights:true};
-  let gesetzt=rows.length, preise=0, topAS=0, topAS80=0;
+  let gesetzt=rows.length, preise=0, topAS=0, topAS80=0, asSum=0, asCount=0;
   rows.forEach(r=>{
     if(hasPrizeRow(r)) preise++;
     const as=getFlightAS(r);
-    if(as!=null && as>90) topAS++;
-    if(as!=null && as>VERERBER_ELITE_AS_SCHWELLE) topAS80++;
+    if(as!=null){
+      asSum+=as; asCount++;
+      if(as>90) topAS++;
+      if(as>VERERBER_ELITE_AS_SCHWELLE) topAS80++;
+    }
   });
   // Zu wenige Flüge -> Quote statistisch nicht belastbar, wird wie "keine
   // eigenen Flugdaten" behandelt (der Erfolgs-Score stützt sich dann allein
@@ -6880,8 +6915,8 @@ function computeEigenleistung(pigeonid){
   if(gesetzt<SCORE_CFG.minFluegePreisquote) return {ready:true, noFlights:true, gesetzt, tooFewFlights:true};
   const preisquote = preise/gesetzt*100;
   const topASquote = topAS/gesetzt*100;
-  const score = Math.round(computeQuoteScore(preisquote, topASquote));
-  return {ready:true, gesetzt, preise, topAS, topAS80, preisquote, topASquote, score};
+  const score = Math.round(computeQuoteScore({preisquote, topASquote, preise, gesetzt, asSum, asCount}));
+  return {ready:true, gesetzt, preise, topAS, topAS80, asSum, asCount, preisquote, topASquote, score};
 }
 
 // Erfolgs-Score EINER Taube: gewichteter Mix aus Eigenleistung (eigene
@@ -6903,12 +6938,19 @@ function computeErfolgsScore(pigeonid){
   const ownScore = (own.ready && !own.noFlights) ? own.score : null;
   const verScore = (ver.ready && ver.score!=null) ? ver.score : null;
   let score=null, note='';
-  if(ownScore!=null && verScore!=null){
-    const wEigen = SCORE_CFG.eigenAnteil/100;
-    score = Math.round(ownScore*wEigen + verScore*(1-wEigen));
+  const wEigen = SCORE_CFG.eigenAnteil/100;
+  if(ownScore!=null || verScore!=null){
+    // Beide Seiten werden STRIKT nach der eingestellten Gewichtung
+    // (SCORE_CFG.eigenAnteil) kombiniert. Fehlt eine Seite (keine eigenen
+    // Flüge bzw. keine bewertbare Nachzucht), geht sie mit 0 in ihren
+    // Gewichtsanteil ein — vorher wurde die volle Gewichtung stillschweigend
+    // auf die vorhandene Seite verschoben, wodurch z.B. "0% Eigenleistung"
+    // bei fehlender Nachzucht wirkungslos blieb, obwohl der Regler das
+    // Gegenteil signalisierte.
+    score = Math.round((ownScore!=null?ownScore:0)*wEigen + (verScore!=null?verScore:0)*(1-wEigen));
+    if(ownScore!=null && verScore==null) note = `Vererbung geht mit 0 ein (${100-SCORE_CFG.eigenAnteil}% Gewicht) — keine bewertbare Nachzucht vorhanden`;
+    else if(ownScore==null && verScore!=null) note = `Eigenleistung geht mit 0 ein (${SCORE_CFG.eigenAnteil}% Gewicht) — keine eigenen Flugdaten`;
   }
-  else if(ownScore!=null){ score=ownScore; note='nur Eigenleistung — Nachkommen ohne ausreichende Datenbasis'; }
-  else if(verScore!=null){ score=verScore; note='nur Nachkommen — keine eigenen Flugdaten'; }
   const stillLoading = !own.ready || !ver.ready;
   return {ready: own.ready && ver.ready, score, own, ver, note, stillLoading};
 }
