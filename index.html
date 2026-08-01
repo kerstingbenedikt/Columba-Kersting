@@ -8761,6 +8761,22 @@ async function backfillMissingPigeonLinks(){
       addKey(normRingCore(raw), p);
     });
   });
+  // Eingebauter Selbsttest mit einer Ringnummer, von der wir sicher wissen,
+  // dass die Taube existiert (siehe Chat) — zeigt bei jedem Lauf exakt, an
+  // welcher Stelle es hakt: Lädt "allPigeons" sie überhaupt? Stimmt der
+  // exakte String? Der normalisierte Schlüssel? Der Index-Lookup selbst?
+  const TEST_RING = 'DE-06559-24-4241';
+  const testExact = allPigeons.find(p=>p.ringnumber===TEST_RING || p.ringnumberold===TEST_RING);
+  const testNormScan = allPigeons.find(p=>normRing(p.ringnumber||'')===normRing(TEST_RING) || normRing(p.ringnumberold||'')===normRing(TEST_RING));
+  const testIndexHit = byRing[normRing(TEST_RING)];
+  const selbsttest = {
+    exaktGefunden: !!testExact,
+    exaktesRingnumberFeld: testExact?testExact.ringnumber:null,
+    normalisiertPerScanGefunden: !!testNormScan,
+    normalisiertPerIndexGefunden: !!(testIndexHit && testIndexHit.length),
+    normalisierterSchluessel: normRing(TEST_RING),
+    byRingKeyAnzahl: Object.keys(byRing).length
+  };
   let linked=0; const noMatch=[]; const updateFailed=[];
   await runWithConcurrency(orphans, 6, async row=>{
     if(!row.ringnumber){ noMatch.push(row); return; }
@@ -8770,7 +8786,7 @@ async function backfillMissingPigeonLinks(){
       catch(e){ updateFailed.push({row, error:(e&&e.message)||String(e)}); }
     } else noMatch.push(row);
   });
-  return {geprueft:orphans.length, linked, noMatch, updateFailed, pigeonsGeladen:allPigeons.length};
+  return {geprueft:orphans.length, linked, noMatch, updateFailed, pigeonsGeladen:allPigeons.length, selbsttest};
 }
 async function runBackfillMissingPigeonLinks(ev){
   const btn = ev && ev.target;
@@ -8778,7 +8794,13 @@ async function runBackfillMissingPigeonLinks(ev){
   try{
     const r = await backfillMissingPigeonLinks();
     if(!r.geprueft){ alert('Keine Flugergebnisse ohne Taubenzuordnung gefunden.'); return; }
-    let msg='Tauben-Tabelle geladen: '+r.pigeonsGeladen+' Tauben\n'
+    let msg='Tauben-Tabelle geladen: '+r.pigeonsGeladen+' Tauben\n\n'
+      +'🔎 SELBSTTEST (DE-06559-24-4241):\n'
+      +'• In allPigeons per exaktem String gefunden: '+(r.selbsttest.exaktGefunden?'JA':'NEIN')+(r.selbsttest.exaktesRingnumberFeld?' (gespeichert als "'+r.selbsttest.exaktesRingnumberFeld+'")':'')+'\n'
+      +'• Per normalisiertem Scan gefunden: '+(r.selbsttest.normalisiertPerScanGefunden?'JA':'NEIN')+'\n'
+      +'• Per Index-Lookup gefunden: '+(r.selbsttest.normalisiertPerIndexGefunden?'JA':'NEIN')+'\n'
+      +'• Normalisierter Schlüssel: "'+r.selbsttest.normalisierterSchluessel+'"\n'
+      +'• Anzahl unterschiedlicher Schlüssel im Index: '+r.selbsttest.byRingKeyAnzahl+'\n\n'
       +r.geprueft+' Flugergebnisse ohne Taubenzuordnung geprüft:\n'
       +'• '+r.linked+' nachträglich verknüpft\n'
       +'• '+r.noMatch.length+' kein Treffer (Ringnummer passt zu keiner Taube)\n'
