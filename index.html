@@ -8744,14 +8744,15 @@ function normRingCore(s){
   return normRing(s).replace(/^[a-z]{1,3}(?=\d)/,'');
 }
 async function backfillMissingPigeonLinks(){
-  const [orphans, allPigeons] = await Promise.all([
-    // WICHTIG: explizites order= ist bei limit/offset-Pagination Pflicht —
-    // ohne feste Sortierung ist die Zeilenreihenfolge zwischen zwei einzelnen
-    // Anfragen an Postgres/PostgREST NICHT garantiert stabil. Dadurch können
-    // beim Blättern über mehrere Seiten Zeilen "durchrutschen" (weder auf
-    // Seite 1 noch auf Seite 2 landen) — vermutlich der Grund, warum einzelne
-    // Flugergebnisse in den bisherigen Testläufen fehlten.
-    apiGetAll('/pigeontrips?pigeonid=is.null&select=id,ringnumber,breedername&order=id.asc'),
+  const [allTrips, allPigeons] = await Promise.all([
+    // Bisher wurden NUR Zeilen mit pigeonid IS NULL als "kaputt" behandelt.
+    // Der Selbsttest hat aber gezeigt: eine Zeile kann auch eine GESETZTE
+    // pigeonid haben, die auf keine (mehr) gültige Taube zeigt (z.B. Rest
+    // einer gelöschten Dublette) — die taucht dann NIE in der pigeonid=is.null
+    // Abfrage auf, obwohl sie in der App weiterhin als "nicht in DB" erscheint.
+    // Deshalb jetzt ALLE Flugergebnisse mit Ringnummer laden und selbst
+    // gegen die aktuell gültigen Tauben-IDs prüfen.
+    apiGetAll('/pigeontrips?ringnumber=not.is.null&select=id,ringnumber,breedername,pigeonid&order=id.asc'),
     apiGetAll('/pigeons?or=(deleted.is.null,deleted.eq.false)&select=pigeonid,ringnumber,ringnumberold&order=pigeonid.asc')
   ]);
   const byRing = {};
@@ -8763,6 +8764,8 @@ async function backfillMissingPigeonLinks(){
       addKey(normRingCore(raw), p);
     });
   });
+  const validPigeonIds = new Set(allPigeons.map(p=>p.pigeonid));
+  const orphans = allTrips.filter(row=>!row.pigeonid || !validPigeonIds.has(row.pigeonid));
   // Eingebauter Selbsttest mit einer Ringnummer, von der wir sicher wissen,
   // dass die Taube existiert (siehe Chat) — zeigt bei jedem Lauf exakt, an
   // welcher Stelle es hakt: Lädt "allPigeons" sie überhaupt? Stimmt der
@@ -8771,10 +8774,9 @@ async function backfillMissingPigeonLinks(){
   const testExact = allPigeons.find(p=>p.ringnumber===TEST_RING || p.ringnumberold===TEST_RING);
   const testNormScan = allPigeons.find(p=>normRing(p.ringnumber||'')===normRing(TEST_RING) || normRing(p.ringnumberold||'')===normRing(TEST_RING));
   const testIndexHit = byRing[normRing(TEST_RING)];
-  // Bisher haben wir nur die Tauben-Seite (allPigeons) direkt inspiziert —
-  // nie den rohen, tatsächlich gespeicherten Wert auf der Flugergebnis-Seite
-  // (orphans) für dieselbe Taube. Genau den zeigen wir jetzt zusätzlich.
-  const orphanHitsForTest = orphans.filter(r=>(r.ringnumber||'').toLowerCase().includes('4241'));
+  // Jetzt gegen ALLE Flüge (nicht nur "orphans") prüfen, um zu sehen, ob die
+  // Zeile eine (falsche/verwaiste) pigeonid gesetzt hat.
+  const tripHitsForTest = allTrips.filter(r=>(r.ringnumber||'').toLowerCase().includes('4241'));
   const selbsttest = {
     exaktGefunden: !!testExact,
     exaktesRingnumberFeld: testExact?testExact.ringnumber:null,
@@ -8782,8 +8784,11 @@ async function backfillMissingPigeonLinks(){
     normalisiertPerIndexGefunden: !!(testIndexHit && testIndexHit.length),
     normalisierterSchluessel: normRing(TEST_RING),
     byRingKeyAnzahl: Object.keys(byRing).length,
-    orphanTreffer: orphanHitsForTest.map(r=>({
+    allTripsGeladen: allTrips.length,
+    orphanTreffer: tripHitsForTest.map(r=>({
       ringnumber: r.ringnumber,
+      pigeonidGesetzt: r.pigeonid||null,
+      pigeonidGueltig: r.pigeonid?validPigeonIds.has(r.pigeonid):null,
       normalisiert: normRing(r.ringnumber||''),
       matchtIndex: !!(byRing[normRing(r.ringnumber||'')] && byRing[normRing(r.ringnumber||'')].length),
       zeichencodes: [...(r.ringnumber||'')].map(c=>c+'(U+'+c.codePointAt(0).toString(16).padStart(4,'0')+')').join(' ')
@@ -8806,7 +8811,8 @@ async function runBackfillMissingPigeonLinks(ev){
   try{
     const r = await backfillMissingPigeonLinks();
     if(!r.geprueft){ alert('Keine Flugergebnisse ohne Taubenzuordnung gefunden.'); return; }
-    let msg='Tauben-Tabelle geladen: '+r.pigeonsGeladen+' Tauben\n\n'
+    let msg='Tauben-Tabelle geladen: '+r.pigeonsGeladen+' Tauben\n'
+      +'Flugergebnisse (mit Ringnummer) geladen: '+r.selbsttest.allTripsGeladen+'\n\n'
       +'🔎 SELBSTTEST (DE-06559-24-4241):\n'
       +'• In allPigeons per exaktem String gefunden: '+(r.selbsttest.exaktGefunden?'JA':'NEIN')+(r.selbsttest.exaktesRingnumberFeld?' (gespeichert als "'+r.selbsttest.exaktesRingnumberFeld+'")':'')+'\n'
       +'• Per normalisiertem Scan gefunden: '+(r.selbsttest.normalisiertPerScanGefunden?'JA':'NEIN')+'\n'
@@ -8814,8 +8820,8 @@ async function runBackfillMissingPigeonLinks(ev){
       +'• Normalisierter Schlüssel: "'+r.selbsttest.normalisierterSchluessel+'"\n'
       +'• Anzahl unterschiedlicher Schlüssel im Index: '+r.selbsttest.byRingKeyAnzahl+'\n'
       +'• Passende Flugergebnis-Zeilen (enthalten "4241") gefunden: '+r.selbsttest.orphanTreffer.length+'\n'
-      +r.selbsttest.orphanTreffer.map(o=>'   - Ringnummer im Flugergebnis: "'+o.ringnumber+'" → normalisiert "'+o.normalisiert+'" → Index-Treffer: '+(o.matchtIndex?'JA':'NEIN')+'\n     Zeichencodes: '+o.zeichencodes).join('\n')+'\n\n'
-      +r.geprueft+' Flugergebnisse ohne Taubenzuordnung geprüft:\n'
+      +r.selbsttest.orphanTreffer.map(o=>'   - Ringnummer: "'+o.ringnumber+'" → normalisiert "'+o.normalisiert+'" → Index-Treffer: '+(o.matchtIndex?'JA':'NEIN')+'\n     pigeonid gesetzt: '+(o.pigeonidGesetzt?o.pigeonidGesetzt:'NEIN (null)')+(o.pigeonidGesetzt?' — gültig: '+(o.pigeonidGueltig?'JA':'NEIN, zeigt ins Leere!'):'')+'\n     Zeichencodes: '+o.zeichencodes).join('\n')+'\n\n'
+      +r.geprueft+' Flugergebnisse ohne (gültige) Taubenzuordnung geprüft:\n'
       +'• '+r.linked+' nachträglich verknüpft\n'
       +'• '+r.noMatch.length+' kein Treffer (Ringnummer passt zu keiner Taube)\n'
       +'• '+r.updateFailed.length+' Treffer gefunden, aber Speichern fehlgeschlagen';
