@@ -8745,12 +8745,14 @@ function normRingCore(s){
 }
 async function backfillMissingPigeonLinks(){
   const [orphans, allPigeons] = await Promise.all([
-    apiGetAll('/pigeontrips?pigeonid=is.null&select=id,ringnumber,breedername'),
-    // "deleted=eq.false" allein würde Datensätze mit deleted=NULL ausschließen
-    // (SQL: NULL ≠ false) — solche NULL-Zeilen kommen bei Alt-/Fremdbeständen
-    // vor, die nicht über die App selbst angelegt wurden. Für den Rückgleich
-    // zählen NULL und false beide als "nicht gelöscht".
-    apiGetAll('/pigeons?or=(deleted.is.null,deleted.eq.false)&select=pigeonid,ringnumber,ringnumberold')
+    // WICHTIG: explizites order= ist bei limit/offset-Pagination Pflicht —
+    // ohne feste Sortierung ist die Zeilenreihenfolge zwischen zwei einzelnen
+    // Anfragen an Postgres/PostgREST NICHT garantiert stabil. Dadurch können
+    // beim Blättern über mehrere Seiten Zeilen "durchrutschen" (weder auf
+    // Seite 1 noch auf Seite 2 landen) — vermutlich der Grund, warum einzelne
+    // Flugergebnisse in den bisherigen Testläufen fehlten.
+    apiGetAll('/pigeontrips?pigeonid=is.null&select=id,ringnumber,breedername&order=id.asc'),
+    apiGetAll('/pigeons?or=(deleted.is.null,deleted.eq.false)&select=pigeonid,ringnumber,ringnumberold&order=pigeonid.asc')
   ]);
   const byRing = {};
   const addKey=(k,p)=>{ if(k) (byRing[k]=byRing[k]||[]).push(p); };
