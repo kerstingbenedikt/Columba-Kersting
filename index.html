@@ -8185,7 +8185,7 @@ function renderTripsList(){
     </div>`;
   }).join('');
 
-  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" title="Findet Reisen, die versehentlich mehrfach angelegt wurden (gleicher Jahrgang/Ort/Datum) und führt sie zusammen." onclick="showDuplicateTripsModal()">🧹 Duplikate bereinigen</button><button class="btn btn-outline" title="Für alle bereits importierten Flüge ohne eigene RV-Liste (zu wenig Tauben) die RV-Rangliste selbst berechnen und speichern — einmalig nötig für Altbestand, neue Importe machen das automatisch." onclick="runBackfillRVFallbackAll(event)">🧮 RV-Ranglisten nachrechnen</button><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div></div>'
+  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" title="Findet Reisen, die versehentlich mehrfach angelegt wurden (gleicher Jahrgang/Ort/Datum) und führt sie zusammen." onclick="showDuplicateTripsModal()">🧹 Duplikate bereinigen</button><button class="btn btn-outline" title="Gleicht Flugergebnisse ohne Taubenzuordnung (z.B. weil die Taube erst nach dem Import angelegt wurde) erneut per Ringnummer mit der Tauben-Datenbank ab." onclick="runBackfillMissingPigeonLinks(event)">🔗 Fehlende Verknüpfungen reparieren</button><button class="btn btn-outline" title="Für alle bereits importierten Flüge ohne eigene RV-Liste (zu wenig Tauben) die RV-Rangliste selbst berechnen und speichern — einmalig nötig für Altbestand, neue Importe machen das automatisch." onclick="runBackfillRVFallbackAll(event)">🧮 RV-Ranglisten nachrechnen</button><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div></div>'
     +(anyComputedRV?'<div style="font-size:11px;color:var(--text3);margin:-8px 0 12px">* RV-Taubenzahl selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene).</div>':'')
     +(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
 }
@@ -8716,6 +8716,43 @@ async function backfillRVFallbackAll(){
   }
   stats.firstError=firstError;
   return stats;
+}
+// Verknüpft Flugergebnisse ohne Taubenzuordnung (pigeontrips.pigeonid IS NULL)
+// nachträglich mit der Tauben-Datenbank — z.B. weil die Taube erst NACH dem
+// Reise-Import angelegt wurde (beim Import selbst wird nur gegen den zu dem
+// Zeitpunkt bereits vorhandenen Bestand abgeglichen, siehe parseXlsxRows/
+// parseTripsFile) oder weil die Ringnummer im Import leicht anders geschrieben
+// war (normRing gleicht das i.d.R. aus: führende Nullen, Trennzeichen, 2-
+// vs. 4-stelliger Jahrgang).
+async function backfillMissingPigeonLinks(){
+  const orphans = await apiGetAll('/pigeontrips?pigeonid=is.null&select=id,ringnumber,breedername');
+  let linked=0; const stillUnmatched=[];
+  await runWithConcurrency(orphans, 6, async row=>{
+    if(!row.ringnumber){ stillUnmatched.push(row); return; }
+    const n = normRing(row.ringnumber);
+    const p = S.pigeons.find(x=>normRing(x.ringnumber)===n || normRing(x.ringnumberold||'')===n);
+    if(p){
+      try{ await apiPatchBy('pigeontrips','id=eq.'+row.id, {pigeonid:p.pigeonid}); linked++; }
+      catch(e){ stillUnmatched.push(row); }
+    } else stillUnmatched.push(row);
+  });
+  return {geprueft:orphans.length, linked, stillUnmatched};
+}
+async function runBackfillMissingPigeonLinks(ev){
+  const btn = ev && ev.target;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Prüfe …'; }
+  try{
+    const r = await backfillMissingPigeonLinks();
+    if(!r.geprueft){ alert('Keine Flugergebnisse ohne Taubenzuordnung gefunden.'); return; }
+    let msg=r.geprueft+' Flugergebnisse ohne Taubenzuordnung geprüft:\n'
+      +'• '+r.linked+' nachträglich verknüpft\n'
+      +'• '+r.stillUnmatched.length+' weiterhin ohne Zuordnung';
+    if(r.stillUnmatched.length) msg+=' (Ringnummer passt zu keiner Taube in der Datenbank), z.B.:\n'
+      +r.stillUnmatched.slice(0,10).map(x=>x.ringnumber||'(ohne Ringnummer)').join(', ');
+    clearPTCache();
+    alert(msg);
+  }catch(e){ alert('Fehler: '+e.message); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='🔗 Fehlende Verknüpfungen reparieren'; } render(); }
 }
 async function runBackfillRVFallbackAll(ev){
   const btn = ev && ev.target;
