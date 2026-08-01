@@ -4283,7 +4283,12 @@ function normRing(s){
   if(!s) return '';
   // Pro Segment (durch Leerzeichen/Bindestrich/Punkt/Schrägstrich getrennt) führende Nullen
   // bei rein numerischen Teilen entfernen, damit "004" und "4" als gleich gelten.
-  return s.split(/[\s\-\.\/]+/).filter(Boolean).map(function(seg){
+  // Trennzeichen bewusst nicht nur der ASCII-Bindestrich "-": aus Excel/Word
+  // kopierte Ringnummern enthalten teils Halbgeviertstrich "–", Geviertstrich
+  // "—" oder das Unicode-Minuszeichen "−" statt eines normalen Bindestrichs —
+  // ohne das würde z.B. "DE–06559–24–4241" als EIN nicht-numerisches Segment
+  // durchfallen und nie mit "DE-06559-24-4241" übereinstimmen.
+  return s.split(/[\s\-\u2010-\u2015\u2212\.\/]+/).filter(Boolean).map(function(seg){
     if(!/^\d+$/.test(seg)) return seg.toLowerCase();
     let n = seg.replace(/^0+(?=\d)/,'');
     // Jahrgang marginal abweichend: 4-stellig (19xx/20xx) auf 2-stellig normalisieren,
@@ -8741,7 +8746,11 @@ function normRingCore(s){
 async function backfillMissingPigeonLinks(){
   const [orphans, allPigeons] = await Promise.all([
     apiGetAll('/pigeontrips?pigeonid=is.null&select=id,ringnumber,breedername'),
-    apiGetAll('/pigeons?deleted=eq.false&select=pigeonid,ringnumber,ringnumberold')
+    // "deleted=eq.false" allein würde Datensätze mit deleted=NULL ausschließen
+    // (SQL: NULL ≠ false) — solche NULL-Zeilen kommen bei Alt-/Fremdbeständen
+    // vor, die nicht über die App selbst angelegt wurden. Für den Rückgleich
+    // zählen NULL und false beide als "nicht gelöscht".
+    apiGetAll('/pigeons?or=(deleted.is.null,deleted.eq.false)&select=pigeonid,ringnumber,ringnumberold')
   ]);
   const byRing = {};
   const addKey=(k,p)=>{ if(k) (byRing[k]=byRing[k]||[]).push(p); };
@@ -8774,8 +8783,15 @@ async function runBackfillMissingPigeonLinks(ev){
       +'• '+r.linked+' nachträglich verknüpft\n'
       +'• '+r.noMatch.length+' kein Treffer (Ringnummer passt zu keiner Taube)\n'
       +'• '+r.updateFailed.length+' Treffer gefunden, aber Speichern fehlgeschlagen';
-    if(r.noMatch.length) msg+='\n\nBeispiele ohne Treffer (Ringnummer → normalisiert):\n'
-      +r.noMatch.slice(0,5).map(x=>(x.ringnumber||'(ohne Ringnummer)')+' → "'+normRing(x.ringnumber||'')+'" / "'+normRingCore(x.ringnumber||'')+'"').join('\n');
+    if(r.noMatch.length){
+      msg+='\n\nBeispiele ohne Treffer (Ringnummer → normalisiert):\n'
+        +r.noMatch.slice(0,5).map(x=>(x.ringnumber||'(ohne Ringnummer)')+' → "'+normRing(x.ringnumber||'')+'" / "'+normRingCore(x.ringnumber||'')+'"').join('\n');
+      // Zeichencodes des ersten Beispiels — deckt unsichtbare/untypische
+      // Zeichen auf (z.B. Halbgeviertstrich statt Bindestrich, geschütztes
+      // Leerzeichen), die man am Bildschirm nicht von normalen unterscheiden kann.
+      const first = r.noMatch[0].ringnumber||'';
+      if(first) msg+='\n\nZeichencodes 1. Beispiel: '+[...first].map(c=>c+'(U+'+c.codePointAt(0).toString(16).padStart(4,'0')+')').join(' ');
+    }
     if(r.updateFailed.length) msg+='\n\nFehler beim Speichern, z.B.:\n'+r.updateFailed[0].error;
     clearPTCache();
     alert(msg);
