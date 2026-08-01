@@ -8729,29 +8729,39 @@ async function backfillRVFallbackAll(){
 // (siehe loadData()), nicht abgegebene/verstorbene/sonstige Tauben. Für den
 // Rückgleich wird stattdessen einmalig die komplette (nicht gelöschte)
 // Tauben-Tabelle direkt aus Supabase geladen.
+// Wie normRing(), aber ohne führendes Länderkürzel (z.B. "de"/"be"/"nl") —
+// manche Alt-Datensätze speichern die Ringnummer OHNE Länderpräfix (das
+// "DE-" wird nur bei der ANZEIGE ergänzt, siehe fmtRingnumber()), während
+// der Reise-Import die Ringnummer MIT "DE-" abspeichert (siehe parseXlsxRows/
+// parseTripsFile). Für den Rückgleich müssen daher beide Varianten als
+// gleichwertig gelten.
+function normRingCore(s){
+  return normRing(s).replace(/^[a-z]{1,3}(?=\d)/,'');
+}
 async function backfillMissingPigeonLinks(){
   const [orphans, allPigeons] = await Promise.all([
     apiGetAll('/pigeontrips?pigeonid=is.null&select=id,ringnumber,breedername'),
     apiGetAll('/pigeons?deleted=eq.false&select=pigeonid,ringnumber,ringnumberold')
   ]);
   const byRing = {};
+  const addKey=(k,p)=>{ if(k) (byRing[k]=byRing[k]||[]).push(p); };
   allPigeons.forEach(p=>{
-    const n1=normRing(p.ringnumber||'');
-    if(n1) (byRing[n1]=byRing[n1]||[]).push(p);
-    const n2=normRing(p.ringnumberold||'');
-    if(n2 && n2!==n1) (byRing[n2]=byRing[n2]||[]).push(p);
+    [p.ringnumber, p.ringnumberold].forEach(raw=>{
+      if(!raw) return;
+      addKey(normRing(raw), p);
+      addKey(normRingCore(raw), p);
+    });
   });
-  let linked=0; const stillUnmatched=[];
+  let linked=0; const noMatch=[]; const updateFailed=[];
   await runWithConcurrency(orphans, 6, async row=>{
-    if(!row.ringnumber){ stillUnmatched.push(row); return; }
-    const n = normRing(row.ringnumber);
-    const matches = byRing[n];
+    if(!row.ringnumber){ noMatch.push(row); return; }
+    const matches = byRing[normRing(row.ringnumber)] || byRing[normRingCore(row.ringnumber)];
     if(matches && matches.length){
       try{ await apiPatchBy('pigeontrips','id=eq.'+row.id, {pigeonid:matches[0].pigeonid}); linked++; }
-      catch(e){ stillUnmatched.push(row); }
-    } else stillUnmatched.push(row);
+      catch(e){ updateFailed.push({row, error:(e&&e.message)||String(e)}); }
+    } else noMatch.push(row);
   });
-  return {geprueft:orphans.length, linked, stillUnmatched};
+  return {geprueft:orphans.length, linked, noMatch, updateFailed, pigeonsGeladen:allPigeons.length};
 }
 async function runBackfillMissingPigeonLinks(ev){
   const btn = ev && ev.target;
@@ -8759,11 +8769,14 @@ async function runBackfillMissingPigeonLinks(ev){
   try{
     const r = await backfillMissingPigeonLinks();
     if(!r.geprueft){ alert('Keine Flugergebnisse ohne Taubenzuordnung gefunden.'); return; }
-    let msg=r.geprueft+' Flugergebnisse ohne Taubenzuordnung geprüft:\n'
+    let msg='Tauben-Tabelle geladen: '+r.pigeonsGeladen+' Tauben\n'
+      +r.geprueft+' Flugergebnisse ohne Taubenzuordnung geprüft:\n'
       +'• '+r.linked+' nachträglich verknüpft\n'
-      +'• '+r.stillUnmatched.length+' weiterhin ohne Zuordnung';
-    if(r.stillUnmatched.length) msg+=' (Ringnummer passt zu keiner Taube in der Datenbank), z.B.:\n'
-      +r.stillUnmatched.slice(0,10).map(x=>x.ringnumber||'(ohne Ringnummer)').join(', ');
+      +'• '+r.noMatch.length+' kein Treffer (Ringnummer passt zu keiner Taube)\n'
+      +'• '+r.updateFailed.length+' Treffer gefunden, aber Speichern fehlgeschlagen';
+    if(r.noMatch.length) msg+='\n\nBeispiele ohne Treffer (Ringnummer → normalisiert):\n'
+      +r.noMatch.slice(0,5).map(x=>(x.ringnumber||'(ohne Ringnummer)')+' → "'+normRing(x.ringnumber||'')+'" / "'+normRingCore(x.ringnumber||'')+'"').join('\n');
+    if(r.updateFailed.length) msg+='\n\nFehler beim Speichern, z.B.:\n'+r.updateFailed[0].error;
     clearPTCache();
     alert(msg);
   }catch(e){ alert('Fehler: '+e.message); }
