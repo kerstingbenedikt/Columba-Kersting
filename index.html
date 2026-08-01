@@ -8769,13 +8769,23 @@ async function backfillMissingPigeonLinks(){
   const testExact = allPigeons.find(p=>p.ringnumber===TEST_RING || p.ringnumberold===TEST_RING);
   const testNormScan = allPigeons.find(p=>normRing(p.ringnumber||'')===normRing(TEST_RING) || normRing(p.ringnumberold||'')===normRing(TEST_RING));
   const testIndexHit = byRing[normRing(TEST_RING)];
+  // Bisher haben wir nur die Tauben-Seite (allPigeons) direkt inspiziert —
+  // nie den rohen, tatsächlich gespeicherten Wert auf der Flugergebnis-Seite
+  // (orphans) für dieselbe Taube. Genau den zeigen wir jetzt zusätzlich.
+  const orphanHitsForTest = orphans.filter(r=>(r.ringnumber||'').toLowerCase().includes('4241'));
   const selbsttest = {
     exaktGefunden: !!testExact,
     exaktesRingnumberFeld: testExact?testExact.ringnumber:null,
     normalisiertPerScanGefunden: !!testNormScan,
     normalisiertPerIndexGefunden: !!(testIndexHit && testIndexHit.length),
     normalisierterSchluessel: normRing(TEST_RING),
-    byRingKeyAnzahl: Object.keys(byRing).length
+    byRingKeyAnzahl: Object.keys(byRing).length,
+    orphanTreffer: orphanHitsForTest.map(r=>({
+      ringnumber: r.ringnumber,
+      normalisiert: normRing(r.ringnumber||''),
+      matchtIndex: !!(byRing[normRing(r.ringnumber||'')] && byRing[normRing(r.ringnumber||'')].length),
+      zeichencodes: [...(r.ringnumber||'')].map(c=>c+'(U+'+c.codePointAt(0).toString(16).padStart(4,'0')+')').join(' ')
+    }))
   };
   let linked=0; const noMatch=[]; const updateFailed=[];
   await runWithConcurrency(orphans, 6, async row=>{
@@ -8800,7 +8810,9 @@ async function runBackfillMissingPigeonLinks(ev){
       +'• Per normalisiertem Scan gefunden: '+(r.selbsttest.normalisiertPerScanGefunden?'JA':'NEIN')+'\n'
       +'• Per Index-Lookup gefunden: '+(r.selbsttest.normalisiertPerIndexGefunden?'JA':'NEIN')+'\n'
       +'• Normalisierter Schlüssel: "'+r.selbsttest.normalisierterSchluessel+'"\n'
-      +'• Anzahl unterschiedlicher Schlüssel im Index: '+r.selbsttest.byRingKeyAnzahl+'\n\n'
+      +'• Anzahl unterschiedlicher Schlüssel im Index: '+r.selbsttest.byRingKeyAnzahl+'\n'
+      +'• Passende Flugergebnis-Zeilen (enthalten "4241") gefunden: '+r.selbsttest.orphanTreffer.length+'\n'
+      +r.selbsttest.orphanTreffer.map(o=>'   - Ringnummer im Flugergebnis: "'+o.ringnumber+'" → normalisiert "'+o.normalisiert+'" → Index-Treffer: '+(o.matchtIndex?'JA':'NEIN')+'\n     Zeichencodes: '+o.zeichencodes).join('\n')+'\n\n'
       +r.geprueft+' Flugergebnisse ohne Taubenzuordnung geprüft:\n'
       +'• '+r.linked+' nachträglich verknüpft\n'
       +'• '+r.noMatch.length+' kein Treffer (Ringnummer passt zu keiner Taube)\n'
