@@ -8724,15 +8724,30 @@ async function backfillRVFallbackAll(){
 // parseTripsFile) oder weil die Ringnummer im Import leicht anders geschrieben
 // war (normRing gleicht das i.d.R. aus: führende Nullen, Trennzeichen, 2-
 // vs. 4-stelliger Jahrgang).
+// WICHTIG: bewusst NICHT gegen S.pigeons abgeglichen — das enthält beim Start
+// nur den aktiven Bestand (instock/Reisetauben) + deren Ahnen bis 5. Generation
+// (siehe loadData()), nicht abgegebene/verstorbene/sonstige Tauben. Für den
+// Rückgleich wird stattdessen einmalig die komplette (nicht gelöschte)
+// Tauben-Tabelle direkt aus Supabase geladen.
 async function backfillMissingPigeonLinks(){
-  const orphans = await apiGetAll('/pigeontrips?pigeonid=is.null&select=id,ringnumber,breedername');
+  const [orphans, allPigeons] = await Promise.all([
+    apiGetAll('/pigeontrips?pigeonid=is.null&select=id,ringnumber,breedername'),
+    apiGetAll('/pigeons?deleted=eq.false&select=pigeonid,ringnumber,ringnumberold')
+  ]);
+  const byRing = {};
+  allPigeons.forEach(p=>{
+    const n1=normRing(p.ringnumber||'');
+    if(n1) (byRing[n1]=byRing[n1]||[]).push(p);
+    const n2=normRing(p.ringnumberold||'');
+    if(n2 && n2!==n1) (byRing[n2]=byRing[n2]||[]).push(p);
+  });
   let linked=0; const stillUnmatched=[];
   await runWithConcurrency(orphans, 6, async row=>{
     if(!row.ringnumber){ stillUnmatched.push(row); return; }
     const n = normRing(row.ringnumber);
-    const p = S.pigeons.find(x=>normRing(x.ringnumber)===n || normRing(x.ringnumberold||'')===n);
-    if(p){
-      try{ await apiPatchBy('pigeontrips','id=eq.'+row.id, {pigeonid:p.pigeonid}); linked++; }
+    const matches = byRing[n];
+    if(matches && matches.length){
+      try{ await apiPatchBy('pigeontrips','id=eq.'+row.id, {pigeonid:matches[0].pigeonid}); linked++; }
       catch(e){ stillUnmatched.push(row); }
     } else stillUnmatched.push(row);
   });
