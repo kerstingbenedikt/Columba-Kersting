@@ -9480,30 +9480,36 @@ async function runTripsImport(){
     // Vorhandene Ergebnisse dieser Reise laden, um Doppel-Einträge zu vermeiden.
     // Primärer Abgleich: NUR über die Ringnummer — die ist pro Taube eindeutig,
     // unabhängig davon, wie der Züchtername in der jeweiligen Import-Datei
-    // geschrieben/kodiert ist. Früher wurde zusätzlich der Züchtername exakt
-    // (als Roh-String) mitverglichen — kam der beim Re-Import z.B. mit einer
-    // anderen Zeichenkodierung ("Kersting/Soehne" vs. "Kersting/S”hne" durch
-    // ein falsch kodiertes "ö"), griff das Update nicht mehr und es wurden
-    // ungewollt Duplikate angelegt. Nur wenn KEINE Ringnummer vorhanden ist
-    // (z.B. nicht identifizierte Taube), wird zusätzlich der — jetzt tolerant
-    // normalisierte — Züchtername zur Unterscheidung herangezogen.
+    // geschrieben/kodiert ist. Fehlt die Ringnummer (z.B. nicht identifizierte
+    // Taube), wird als Fallback die — vollständige, kanonisierte — Züchter-
+    // NUMMER zur Unterscheidung herangezogen, NICHT der Züchtername: der
+    // Name kam beim Re-Import schon mal mit einer anderen Zeichenkodierung
+    // rein ("Kersting/Soehne" vs. "Kersting/S”hne" durch ein falsch kodiertes
+    // "ö"), wodurch das Update nicht mehr griff und ungewollt Duplikate
+    // angelegt wurden — die Züchternummer ist von so etwas nicht betroffen.
+    // Nur falls auch keine Züchternummer vorhanden ist, zählt notgedrungen
+    // der (tolerant normalisierte) Züchtername als letzter Fallback.
     const normBreeder=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
+    const breederFallbackKey=r=>{
+      const num=canonicalizeZuechternummer(r.breedernumber);
+      return (num!=null && num!=='') ? 'num:'+num : 'name:'+normBreeder(r.breedername);
+    };
     touchedTripIds.add(tripid);
     let existingResults=[];
     try{
-      existingResults = await apiGet('/pigeontrips?tripid=eq.'+tripid+'&select=id,ringnumber,breedername') || [];
+      existingResults = await apiGet('/pigeontrips?tripid=eq.'+tripid+'&select=id,ringnumber,breedername,breedernumber') || [];
     }catch(e){ existingResults=[]; }
     const existingByRing={}, existingByKey={};
     existingResults.forEach(r=>{
       const rn=normRing(r.ringnumber);
       if(rn) existingByRing[rn]=r.id;
-      existingByKey[rn+'|'+normBreeder(r.breedername)]=r.id;
+      existingByKey[rn+'|'+breederFallbackKey(r)]=r.id;
     });
 
     await runWithConcurrency(item.results, 8, async(res)=>{
       try{
         const rn=normRing(res.ringnumber);
-        const existingId = (rn && existingByRing[rn]) || existingByKey[rn+'|'+normBreeder(res.breedername)];
+        const existingId = (rn && existingByRing[rn]) || existingByKey[rn+'|'+breederFallbackKey(res)];
         const row={};
         const setIf=(k,v)=>{ if(v!=null) row[k]=v; };
         // Platzierungs- und AS-Felder IMMER explizit setzen (auch null) — sonst
