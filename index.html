@@ -8502,6 +8502,41 @@ async function handleTripsFiles(fileList){
   RT.imp.step='preview';
   if(errors.length) alert('Einige Dateien konnten nicht gelesen werden:\n'+errors.join('\n'));
   render();
+  detectImportOrphans(); // läuft im Hintergrund, aktualisiert die Vorschau selbst per render()
+}
+// Prüft für alle Reisen, die es bereits in der DB gibt, ob dort Ergebnis-
+// Zeilen stehen, die in der NEU hochgeladenen Datei gar nicht mehr vorkommen
+// (z.B. weil eine fehlerhafte Zeile aus der Quelldatei entfernt wurde, oder
+// weil eine vorherige, verpfuschte Import-Sitzung Karteileichen hinterlassen
+// hat). Der Import selbst löscht dadurch NICHTS automatisch — die Vorschau
+// zeigt lediglich transparent an, was fehlt, und man entscheidet pro Reise
+// bewusst per Checkbox, ob diese Zeilen beim Import mitgelöscht werden sollen.
+async function detectImportOrphans(){
+  const existingItems = RT.imp.rows.filter(item=>findExistingTripFor(item));
+  if(!existingItems.length) return;
+  const tripidOf = new Map();
+  existingItems.forEach(item=>{ tripidOf.set(item, findExistingTripFor(item).tripid); });
+  const tripIds = [...new Set([...tripidOf.values()])];
+  const dbRowsByTrip = {};
+  for(let i=0;i<tripIds.length;i+=60){
+    const chunk=tripIds.slice(i,i+60);
+    let rows=[];
+    try{ rows = await apiGetAll('/pigeontrips?tripid=in.('+chunk.join(',')+')&select=id,tripid,ringnumber,breedername'); }catch(e){}
+    rows.forEach(r=>{ (dbRowsByTrip[r.tripid]=dbRowsByTrip[r.tripid]||[]).push(r); });
+    await new Promise(r=>setTimeout(r,0)); // Browser zwischendurch "atmen" lassen
+  }
+  existingItems.forEach(item=>{
+    const tripid=tripidOf.get(item);
+    const dbRows=dbRowsByTrip[tripid]||[];
+    const presentRings=new Set(item.results.map(r=>normRing(r.ringnumber)).filter(Boolean));
+    item._orphans = dbRows.filter(r=>{ const rn=normRing(r.ringnumber); return rn && !presentRings.has(rn); });
+    if(item._deleteOrphans===undefined) item._deleteOrphans=false;
+  });
+  render();
+}
+function tripsPreviewMarkAllOrphans(mark){
+  RT.imp.rows.forEach(r=>{ if(r._orphans && r._orphans.length) r._deleteOrphans=mark; });
+  render();
 }
 
 // Führt neu geparste Reisen/Ergebnisse mit bereits vorhandenen (aus zuvor in
@@ -9288,6 +9323,9 @@ function renderTripsPreview(){
   const totalR=selRows.reduce((s,r)=>s+r.results.length,0);
   const foundR=selRows.reduce((s,r)=>s+r.results.filter(x=>x.found).length,0);
   const existingCount=rows.filter(r=>r._existing).length;
+  const totalOrphans=rows.reduce((s,r)=>s+((r._orphans&&r._orphans.length)||0),0);
+  const markedOrphans=rows.reduce((s,r)=>s+((r._deleteOrphans&&r._orphans)?r._orphans.length:0),0);
+  const orphanScanPending = rows.some(r=>r._existing && r._orphans===undefined);
   const tRows=rows.map((item,i)=>`<tr style="${item.selected?'':'opacity:.4'}">
     <td style="text-align:center"><input type="checkbox" ${item.selected?'checked':''}
       onchange="RT.imp.rows[${i}].selected=this.checked;render()"></td>
@@ -9302,6 +9340,19 @@ function renderTripsPreview(){
     <td style="text-align:center;font-size:11px">${item._existing
       ?'<span style="color:var(--amber)" title="Reise mit gleichem Jahrgang/Ort/Datum ist schon in der DB">⚠ vorhanden</span>'
       :'<span style="color:var(--green)">neu</span>'}</td>
+    <td style="font-size:11px">${!item._existing ? '<span style="color:var(--text3)">—</span>'
+      : item._orphans===undefined ? '<span style="color:var(--text3)">prüfe…</span>'
+      : item._orphans.length===0 ? '<span style="color:var(--text3)">—</span>'
+      : `<details>
+          <summary style="cursor:pointer;color:var(--amber)">⚠ ${item._orphans.length} fehlen in Datei</summary>
+          <div style="margin-top:5px;min-width:180px">
+            <label style="display:flex;gap:5px;align-items:center;cursor:pointer;color:var(--text2)">
+              <input type="checkbox" ${item._deleteOrphans?'checked':''} onchange="RT.imp.rows[${i}]._deleteOrphans=this.checked;render()">
+              beim Import löschen
+            </label>
+            <div style="color:var(--text3);margin-top:4px">${item._orphans.map(o=>escH(o.ringnumber||'(ohne Ring)')+(o.breedername?' · '+escH(o.breedername):'')).join('<br>')}</div>
+          </div>
+        </details>`}</td>
   </tr>`).join('');
   const breeders = RT.imp.breeders && RT.imp.breeders.length ? RT.imp.breeders : [];
   return `<div class="card">
@@ -9319,11 +9370,16 @@ function renderTripsPreview(){
         <strong style="color:var(--green)">${foundR}</strong> <span style="color:var(--text2)">Tauben gefunden</span></div>
       ${existingCount?`<div style="background:rgba(212,168,67,.1);border:1px solid rgba(212,168,67,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
         <strong style="color:var(--amber)">${existingCount}</strong> <span style="color:var(--text2)">bereits vorhanden</span></div>`:''}
+      ${orphanScanPending?`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px;color:var(--text3)">🔍 prüfe auf fehlende Ergebnisse…</div>`
+        : totalOrphans?`<div style="background:rgba(192,80,77,.08);border:1px solid rgba(192,80,77,.25);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
+        <strong style="color:#e07070">${totalOrphans}</strong> <span style="color:var(--text2)">Ergebnisse fehlen in der Datei${markedOrphans?' ('+markedOrphans+' zum Löschen markiert)':''}</span></div>`:''}
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
       <button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="tripsPreviewSelectAll(true)">Alle auswählen</button>
       <button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="tripsPreviewSelectAll(false)">Alle abwählen</button>
       <button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="tripsPreviewSelectOnlyNew()">Nur neue Reisen auswählen</button>
+      ${totalOrphans?`<button class="btn btn-outline" style="padding:5px 10px;font-size:12px;color:#e07070" onclick="tripsPreviewMarkAllOrphans(true)">Alle fehlenden Ergebnisse zum Löschen markieren</button>
+      <button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="tripsPreviewMarkAllOrphans(false)">Keine löschen</button>`:''}
     </div>
     <div class="table-wrap" style="margin-bottom:14px">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -9331,13 +9387,14 @@ function renderTripsPreview(){
           <th style="text-align:center">Tauben</th>
           <th style="text-align:center">Gefunden</th>
           <th style="text-align:center">Fehlen</th>
-          <th style="text-align:center">Status</th></tr></thead>
+          <th style="text-align:center">Status</th>
+          <th>In DB, nicht in Datei</th></tr></thead>
         <tbody>${tRows}</tbody>
       </table>
     </div>
     <div class="form-actions">
       <button class="btn btn-outline" onclick="RT.step='list';render()">Abbrechen</button>
-      <button class="btn" ${selRows.length?'':'disabled'} onclick="runTripsImport()">🏁 Import starten (${selRows.length} Reisen · ${totalR} Ergebnisse)</button>
+      <button class="btn" ${selRows.length?'':'disabled'} onclick="runTripsImport()">🏁 Import starten (${selRows.length} Reisen · ${totalR} Ergebnisse${markedOrphans?' · '+markedOrphans+' werden gelöscht':''})</button>
     </div>
   </div>`;
 }
@@ -9383,7 +9440,7 @@ function renderTripsDone(){
 }
 
 async function runTripsImport(){
-  RT.imp.stats={trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0};
+  RT.imp.stats={trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,orphansDeleted:0};
   // Nur die in der Vorschau angehakten Reisen werden tatsächlich importiert —
   // abgewählte (z.B. bereits vorhandene) Reisen werden komplett übersprungen,
   // damit ein Re-Import nicht jedes Mal wieder von vorne durch die ganze Datei läuft.
@@ -9573,6 +9630,16 @@ async function runTripsImport(){
       if(RT.imp.stats.results%25===0) updP();
     });
 
+    // Verwaiste Ergebnisse löschen — NUR wenn der Nutzer das für diese Reise
+    // in der Vorschau explizit angehakt hat (item._deleteOrphans). Der Import
+    // selbst löscht sonst nie eigenständig etwas, er fügt nur hinzu/aktualisiert.
+    if(item._deleteOrphans && item._orphans && item._orphans.length){
+      try{
+        const ids=item._orphans.map(o=>o.id);
+        await apiDeleteBy('pigeontrips','id=in.('+ids.join(',')+')');
+        RT.imp.stats.orphansDeleted=(RT.imp.stats.orphansDeleted||0)+ids.length;
+      }catch(e){ console.error('Verwaiste Ergebnisse löschen fehlgeschlagen:',e.message); }
+    }
     // Gesamtreihenfolge ("Pl.") über ALLE Züchter dieser Reise neu berechnen —
     // nicht nur über die gerade importierte Sitzung. Sonst bekommt jede
     // getrennt importierte Züchter-Datei ihre eigene 1,2,3…-Zählung und die
