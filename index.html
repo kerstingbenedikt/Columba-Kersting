@@ -6222,7 +6222,7 @@ function pigeonReiseSummary(pigeonid){
     gesetzt++;
     const hasPreis=rvField(r,'prize_rv')!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null || r.manual_prize!=null;
     if(hasPreis) preise++;
-    const asVals=[rvField(r,'as_rv'),r.as_reg,r.as_nat,r.manual_as].filter(v=>v!=null && v!=='');
+    const asVals=[rvField(r,'as_rv'),r.as_fg,r.as_reg,r.as_nat,r.manual_as].filter(v=>v!=null && v!=='');
     if(asVals.length) asSum+=Math.max(...asVals.map(Number));
   });
   return {gesetzt, preise, asSum, top10:getTop10Placements(rows).length};
@@ -6236,7 +6236,7 @@ function groupPigeonTripsByYear(rows){
     byYear[yr].gesetzt++;
     const hasPreis = rvField(r,'prize_rv')!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null || r.manual_prize!=null;
     if(hasPreis) byYear[yr].preise++;
-    const asVals=[rvField(r,'as_rv'),r.as_reg,r.as_nat,r.manual_as].filter(v=>v!=null && v!=='');
+    const asVals=[rvField(r,'as_rv'),r.as_fg,r.as_reg,r.as_nat,r.manual_as].filter(v=>v!=null && v!=='');
     if(asVals.length) byYear[yr].asSum += Math.max(...asVals.map(Number));
     // Top10 je Flug nur einmal zählen (bester Platz der 3 Kategorien + manuell)
     const platzVals=[rvField(r,'prize_rv'),r.prize_reggr,r.prize_reg,r.manual_prize].filter(v=>v!=null && v>0 && v<=10);
@@ -6818,7 +6818,7 @@ function hasPrizeRow(r){ return r.prize_rv!=null||r.prize_reggr!=null||r.prize_r
 // der App (Rekordflüge), damit ein Flug nicht mehrfach gezählt wird, nur
 // weil er in mehreren Listen platziert war.
 function getFlightAS(r){
-  var vals=[r.as_rv,r.as_nat,r.as_reg,r.manual_as].filter(function(v){ return v!=null && v!==''; }).map(Number).filter(function(v){ return !isNaN(v); });
+  var vals=[r.as_rv,r.as_fg,r.as_nat,r.as_reg,r.manual_as].filter(function(v){ return v!=null && v!==''; }).map(Number).filter(function(v){ return !isNaN(v); });
   return vals.length ? Math.max.apply(null, vals) : null;
 }
 // Mindestanzahl "erfolgreicher" Nachkommen (siehe VERERBER_ERFOLG_* unten),
@@ -7564,7 +7564,7 @@ function renderPigeonTripsSection(p){
       .sort((a,b)=>String(a.tripdate||'').localeCompare(String(b.tripdate||'')));
     let anyCalcRV=false;
     const trRows=rows.map(r=>{
-      const asVals=[r.as_rv,r.as_reg,r.as_nat,r.manual_as].filter(v=>v!=null && v!=='');
+      const asVals=[r.as_rv,r.as_fg,r.as_reg,r.as_nat,r.manual_as].filter(v=>v!=null && v!=='');
       const bestAS=asVals.length?Math.max(...asVals.map(Number)):null;
       const rvVal=rvField(r,'prize_rv');
       const rvCalc=rvVal!=null && r.prize_rv==null;
@@ -9249,6 +9249,7 @@ async function parseXlsxRows(file){
         prize_rv:parseInt(r['RV']||'0')||null,prize_fg:parseInt(r['FG']||'0')||null,
         prize_reggr:parseInt(r['RegGr']||'0')||null,prize_reg:parseInt(r['REG']||r['Reg']||'0')||null,
         as_rv:parseFloat(String(r['AS RV']||'0').replace(',','.'))||null,
+        as_fg:parseFloat(String(r['AS FG']||'0').replace(',','.'))||null,
         as_reg:parseFloat(String(r['AS Reg']||'0').replace(',','.'))||null,
         as_nat:parseFloat(String(r['AS Nat']||'0').replace(',','.'))||null,
         v_flag:vC.flag, v_platz:vC.platz, j_flag:jC.flag, j_platz:jC.platz,
@@ -9476,23 +9477,33 @@ async function runTripsImport(){
       }
     }
 
-    // Vorhandene Ergebnisse dieser Reise laden, um Doppel-Einträge zu vermeiden
-    // (Abgleich über Ringnummer + ggf. Züchtername, falls mehrere Züchter dieselbe Reise melden)
+    // Vorhandene Ergebnisse dieser Reise laden, um Doppel-Einträge zu vermeiden.
+    // Primärer Abgleich: NUR über die Ringnummer — die ist pro Taube eindeutig,
+    // unabhängig davon, wie der Züchtername in der jeweiligen Import-Datei
+    // geschrieben/kodiert ist. Früher wurde zusätzlich der Züchtername exakt
+    // (als Roh-String) mitverglichen — kam der beim Re-Import z.B. mit einer
+    // anderen Zeichenkodierung ("Kersting/Soehne" vs. "Kersting/S”hne" durch
+    // ein falsch kodiertes "ö"), griff das Update nicht mehr und es wurden
+    // ungewollt Duplikate angelegt. Nur wenn KEINE Ringnummer vorhanden ist
+    // (z.B. nicht identifizierte Taube), wird zusätzlich der — jetzt tolerant
+    // normalisierte — Züchtername zur Unterscheidung herangezogen.
+    const normBreeder=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
     touchedTripIds.add(tripid);
     let existingResults=[];
     try{
       existingResults = await apiGet('/pigeontrips?tripid=eq.'+tripid+'&select=id,ringnumber,breedername') || [];
     }catch(e){ existingResults=[]; }
-    const existingByKey={};
+    const existingByRing={}, existingByKey={};
     existingResults.forEach(r=>{
-      const key=normRing(r.ringnumber)+'|'+(r.breedername||'');
-      existingByKey[key]=r.id;
+      const rn=normRing(r.ringnumber);
+      if(rn) existingByRing[rn]=r.id;
+      existingByKey[rn+'|'+normBreeder(r.breedername)]=r.id;
     });
 
     await runWithConcurrency(item.results, 8, async(res)=>{
       try{
-        const key=normRing(res.ringnumber)+'|'+(res.breedername||'');
-        const existingId=existingByKey[key];
+        const rn=normRing(res.ringnumber);
+        const existingId = (rn && existingByRing[rn]) || existingByKey[rn+'|'+normBreeder(res.breedername)];
         const row={};
         const setIf=(k,v)=>{ if(v!=null) row[k]=v; };
         // Platzierungs- und AS-Felder IMMER explizit setzen (auch null) — sonst
@@ -9505,7 +9516,7 @@ async function runTripsImport(){
         setIf('maxkm',res.maxkm);
         setAlways('prize_rv',res.prize_rv); setAlways('prize_fg',res.prize_fg);
         setAlways('prize_reggr',res.prize_reggr); setAlways('prize_reg',res.prize_reg);
-        setAlways('as_rv',res.as_rv); setAlways('as_reg',res.as_reg); setAlways('as_nat',res.as_nat);
+        setAlways('as_rv',res.as_rv); setAlways('as_fg',res.as_fg); setAlways('as_reg',res.as_reg); setAlways('as_nat',res.as_nat);
         setIf('breedername',res.breedername); setIf('breedernumber',res.breedernumber);
         setIf('sex',res.sex);
         // Vorbenennungs-Flags (V/J/M), je Flug
@@ -9519,7 +9530,7 @@ async function runTripsImport(){
         // die in der eigenen DB erfassten).
         setAlways('ass_a',!!res.ass_a); setAlways('ass_b',!!res.ass_b);
         setAlways('ass_c',!!res.ass_c); setAlways('ass_d',!!res.ass_d);
-        const flagFields=['v_flag','v_platz','j_flag','j_platz','m_flag','m_platz','ass_a','ass_b','ass_c','ass_d'];
+        const flagFields=['v_flag','v_platz','j_flag','j_platz','m_flag','m_platz','ass_a','ass_b','ass_c','ass_d','as_fg'];
         const doWrite=async(r)=>{
           if(existingId){
             // Supabase PATCH mit "Prefer: return=representation" liefert die
@@ -10094,9 +10105,13 @@ function showDuplicateTripsModal(){
 let ZT = { rows:[], loaded:false, selected:null, vereinFilter:undefined, yearFilter:null };
 
 async function loadZuechterData(){
-  const FULL='breedername,breedernumber,tripid,pigeonid,ringnumber,sex,speed,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat,ass_a,ass_b,ass_c,ass_d';
-  const NO_ASS='breedername,breedernumber,tripid,pigeonid,ringnumber,sex,speed,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat';
-  const NO_SEX_ASS='breedername,breedernumber,tripid,pigeonid,ringnumber,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat';
+  const FULL='breedername,breedernumber,tripid,pigeonid,ringnumber,sex,speed,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_fg,as_reg,as_nat,ass_a,ass_b,ass_c,ass_d';
+  const NO_ASS='breedername,breedernumber,tripid,pigeonid,ringnumber,sex,speed,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_fg,as_reg,as_nat';
+  const NO_SEX_ASS='breedername,breedernumber,tripid,pigeonid,ringnumber,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_fg,as_reg,as_nat';
+  // Letzter Fallback OHNE as_fg — falls die Spalte in Supabase noch nicht
+  // angelegt wurde (siehe Migrations-SQL im Chat), bricht die Bestenliste
+  // trotzdem nicht komplett weg, sondern rechnet vorübergehend ohne FG-Punkte.
+  const NO_FG='breedername,breedernumber,tripid,pigeonid,ringnumber,prize_rv,prize_reggr,prize_reg,prize_fg,as_rv,as_reg,as_nat';
   try{
     ZT.rows = await apiGet('/pigeontrips?breedername=not.is.null&select='+FULL+'&limit=10000') || [];
   }catch(e){
@@ -10107,7 +10122,12 @@ async function loadZuechterData(){
       try{
         // Fallback: sex-Spalte evtl. auch noch nicht angelegt
         ZT.rows = await apiGet('/pigeontrips?breedername=not.is.null&select='+NO_SEX_ASS+'&limit=10000') || [];
-      }catch(e3){ ZT.rows = []; }
+      }catch(e3){
+        try{
+          // Fallback: as_fg-Spalte evtl. noch nicht angelegt (siehe Migrations-SQL)
+          ZT.rows = await apiGet('/pigeontrips?breedername=not.is.null&select='+NO_FG+'&limit=10000') || [];
+        }catch(e4){ ZT.rows = []; }
+      }
     }
   }
   ZT.loaded = true;
@@ -10146,7 +10166,7 @@ function zuechterAgg(yearFilter){
       if(trip.pigeonsset_reggr>0) { b.reggrSet++; if(r.prize_reggr) b.reggrWon++; }
       if(trip.pigeonsset_reg>0)   { b.regSet++;   if(r.prize_reg)   b.regWon++; }
     }
-    [r.as_rv,r.as_reg,r.as_nat].forEach(v=>{ if(v&&v>b.bestAS) b.bestAS=v; });
+    [r.as_rv,r.as_fg,r.as_reg,r.as_nat].forEach(v=>{ if(v&&v>b.bestAS) b.bestAS=v; });
   });
   return Object.values(g).map(b=>({...b, tripCount:b.trips.size,
     pctRV:   b.rvSet    ? b.rvWon/b.rvSet*100       : null,
@@ -10334,7 +10354,7 @@ function renderZuechterDetail(key){
     if(r.prize_rv)    t.rv++;
     if(r.prize_reggr) t.reggr++;
     if(r.prize_reg)   t.reg++;
-    [r.as_rv,r.as_reg,r.as_nat].forEach(v=>{ if(v&&v>t.bestAS) t.bestAS=v; });
+    [r.as_rv,r.as_fg,r.as_reg,r.as_nat].forEach(v=>{ if(v&&v>t.bestAS) t.bestAS=v; });
     if(r.speed!=null && (t.bestSpeed==null || Number(r.speed)>t.bestSpeed)) t.bestSpeed=Number(r.speed);
   });
   const tripRows=Object.values(byTrip).map(t=>({...t, trip:tripById[t.tripid]}))
@@ -10514,6 +10534,7 @@ function bestenliste(breederFilter, rvFilter){
     // Je Liste (RV/RegGr/Reg) ein Kandidatenpaar aus Platz+AS; das beste (höchste AS) gilt für den Flug
     const candidates=[
       {platz:rvField(r,'prize_rv'), as:rvField(r,'as_rv')},
+      {platz:r.prize_fg,    as:r.as_fg},
       {platz:r.prize_reggr, as:r.as_nat},
       {platz:r.prize_reg,   as:r.as_reg}
     ].filter(c=>c.as!=null && c.as!=='');
