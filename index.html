@@ -5802,9 +5802,9 @@ function renderImpDone(){
 // Taube   [10:12]=Jahr [12:16]=Verein [16:20]=Endnr [20]=Geschl(W=F)
 //         [32:41]=Speed/10000
 // Platzierungsfelder je Taube (5 Kategorie-Slots, Reihenfolge identisch zur
-// Flug-Kopfzeile "A ... G ... [Nat] R ..."): [41:46]=FG (unbenutzt bei diesem
-// Verein) [46:51]=Reg/RegV (A-Liste, große Liste) [51:56]=RegGr (G-Liste)
-// [56:61]=Nat (unbenutzt) [61:66]=RV (kleine Liste, Reisevereinigung)
+// Flug-Kopfzeile): [41:46]=weitere/überregionale Liste, [46:51]=Reg/RegV
+// (A-Liste, große Liste), [51:56]=RegGr (G-Liste), [56:61]=FG (F-Liste),
+// [61:66]=RV (R-Liste, kleine Liste/Reisevereinigung).
 // Verifiziert anhand Taube 06559.24.4241W, Flug F06 (Würzburg 30.05.26):
 // Datei liefert 0 / 458 / 175 / 0 / 33 → amtlicher Ausdruck bestätigt
 // Reg=458, RegGr=175, RV=33 (vorher waren Reg/RegGr vertauscht und RV wurde
@@ -9108,6 +9108,7 @@ async function parseKrausRows(file, breedernumber){
       const mR=line.match(/R\s+(\d+)\s+(\d+)\s+(\d{1,3})/);
       const mG=line.match(/G\s+(\d+)\s+(\d+)\s+(\d{1,3})/);
       const mA=line.match(/A\s+(\d+)\s+(\d+)\s+(\d{1,3})/);
+      const mF=line.match(/F\s+(\d+)\s+(\d+)\s+(\d{1,3})/);
       // Format je Liste: "<Buchstabe> <gesetzt> <Preise> <Entfernung-km>".
       // "R" = RV-Gesamt (übergeordnete, für ALLE Züchter des Reisevereins
       // gültige Liste) — das ist die "mittlere Entfernung des Fluges in der
@@ -9123,6 +9124,7 @@ async function parseKrausRows(file, breedernumber){
       reiseMap[rNr]={number:rNr, vintage:yr?2000+parseInt(yr):null,
         location:ort, tripdate:date, results:[],
         g_rv:  mR?parseInt(mR[1]):0,
+        g_fg:  mF?parseInt(mF[1]):0,
         g_reggr:mG?parseInt(mG[1]):0,
         g_reg:  mA?parseInt(mA[1]):0,
         distRv, distReg, distReggr};
@@ -9154,10 +9156,10 @@ async function parseKrausRows(file, breedernumber){
       const gRaw =line.substring(32,41).trim();
       const speed=(gRaw&&gRaw!=='0')?parseInt(gRaw)/10000:null;
       // 5 Kategorie-Slots je Taube, siehe Kommentar oben (verifiziert an 4241W/F06).
-      const pFg =parseInt(line.substring(41,46).trim())||0;
+      const pOther=parseInt(line.substring(41,46).trim())||0;
       const pReg=parseInt(line.substring(46,51).trim())||0;
       const pRgg=parseInt(line.substring(51,56).trim())||0;
-      const pNat=parseInt(line.substring(56,61).trim())||0;
+      const pFg =parseInt(line.substring(56,61).trim())||0;
       const pRv =parseInt(line.substring(61,66).trim())||0;
       if(!vrnr||!endnr||!yr) return;
       // Vereins-/Züchternummer-Block direkt nach dem Zeilen-Präfix (5 Stellen,
@@ -9171,7 +9173,7 @@ async function parseKrausRows(file, breedernumber){
       const prv = pRv!==0 ?pRv :null;
       const prg = pRgg!==0?pRgg:null;  // RegGr = G-Liste
       const pre = pReg!==0?pReg:null;  // Reg   = A-Liste (große Liste)
-      const pfg = pFg!==0?pFg:null;    // bei diesem Verein bislang stets 0/unbenutzt
+      const pfg = pFg!==0?pFg:null;    // FG = F-Liste
       // Vorbenennungs-/Ass-Flags, siehe FLAG_COL-Kommentar oben
       const flagAt = c => c!=null && line.length>c && line[c]!==' ' ? line[c] : null;
       const vFlag = flagAt(FLAG_COL.v)==='V';
@@ -9185,7 +9187,8 @@ async function parseKrausRows(file, breedernumber){
         ringnumber:ring, sex:geschl==='W'?'F':'M',
         speed,
         prize_rv:prv, prize_fg:pfg, prize_reggr:prg, prize_reg:pre,
-        as_rv:calcAS(prv,_h.g_rv||0), as_reg:calcAS(pre,_h.g_reg||0), as_nat:calcAS(prg,_h.g_reggr||0),
+        as_rv:calcAS(prv,_h.g_rv||0), as_fg:calcAS(pfg,_h.g_fg||0),
+        as_reg:calcAS(pre,_h.g_reg||0), as_nat:calcAS(prg,_h.g_reggr||0),
         v_flag:vFlag, j_flag:jFlag, m_flag:mFlag,
         ass_a:assA, ass_b:assB, ass_c:assC, ass_d:assD
       });
