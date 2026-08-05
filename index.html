@@ -1346,6 +1346,14 @@ async function apiPost(table, body){
   const r = await apiFetch(SUPA_URL+'/'+table,{method:'POST',headers:H(),body:JSON.stringify(body)});
   return r.json();
 }
+async function apiUpsert(table, conflictColumn, body){
+  const r = await apiFetch(SUPA_URL+'/'+table+'?on_conflict='+encodeURIComponent(conflictColumn),{
+    method:'POST',
+    headers:Object.assign({},H(),{'Prefer':'resolution=merge-duplicates,return=representation'}),
+    body:JSON.stringify(body)
+  });
+  return r.json();
+}
 async function apiPatch(table, id, body){
   const r = await apiFetch(SUPA_URL+'/'+table+'?pigeonid=eq.'+id,{method:'PATCH',headers:H(),body:JSON.stringify(body)});
   return r.json();
@@ -1542,6 +1550,7 @@ const LOADED_PIGEON_IDS = new Set();
 
 async function loadData(){
   S.loading=true; S._loadingMore=false; S._archiveLoaded=false; S._archiveLoading=false; render();
+  await loadEliteConfig();
   // Status-Tabelle laden
   try{ const ps=await apiGet('/pigeonstates?order=name.asc'); S.pigeonStates=ps||[]; } catch(e){ S.pigeonStates=[]; }
   // Manuell erfasste Jahresleistungen — eine Abfrage für den ganzen Bestand,
@@ -2622,9 +2631,107 @@ function renderDetail(p){
     </div>`;
 }
 
-function startEdit(id){
+const WEBSITE_SETTINGS_CACHE = new Map();
+const WEBSITE_SECTIONS = [
+  ['','— keine feste Homepage-Sektion —'],
+  ['hero','Hauptaufmacher'],
+  ['breeding','Stammvogel-Präsentation'],
+  ['elite_offspring','Elite-Nachzucht'],
+  ['sale','Verkauf'],
+  ['hall_of_fame','Hall of Fame']
+];
+function emptyWebsiteSettings(id){
+  return {pigeonid:id,profile_public:false,homepage_visible:false,homepage_section:'',sort_order:100,
+    headline:'',teaser:'',button_label:'Profil ansehen',featured_image:'',publish_from:'',publish_until:''};
+}
+async function loadWebsiteSettings(id){
+  if(WEBSITE_SETTINGS_CACHE.has(id)) return WEBSITE_SETTINGS_CACHE.get(id);
+  let value=emptyWebsiteSettings(id);
+  try{
+    const rows=await apiGet('/website_pigeon_settings?pigeonid=eq.'+encodeURIComponent(id)+'&limit=1');
+    if(rows&&rows[0]) value=Object.assign(value,rows[0]);
+  }catch(e){
+    value._tableMissing=true;
+  }
+  WEBSITE_SETTINGS_CACHE.set(id,value);
+  return value;
+}
+function computeEliteSeason(pigeonid){
+  const p=findById(pigeonid), rows=PT_CACHE[pigeonid];
+  if(!p || !rows) return {ready:false};
+  const years={};
+  rows.forEach(r=>{
+    const y=String(r.vintage||r.date_year||''); if(!y) return;
+    const item=years[y]||(years[y]={vintage:y,gesetzt:0,preise:0,top:0,asSum:0});
+    item.gesetzt++;
+    if(hasPrizeRow(r)) item.preise++;
+    const as=getFlightAS(r); if(as!=null){item.asSum+=as;if(as>VERERBER_ELITE_AS_SCHWELLE)item.top++;}
+  });
+  (MANUAL_SEASONS_BY_PIGEON[pigeonid]||[]).forEach(ms=>{
+    const y=String(ms.vintage||''); if(!y||years[y]) return;
+    years[y]={vintage:y,gesetzt:Number(ms.gesetzt)||0,preise:Number(ms.preise)||0,top:0,asSum:Number(ms.as_sum)||0,manual:true};
+  });
+  const seasons=Object.values(years).map(s=>Object.assign(s,{preisquote:s.gesetzt?s.preise/s.gesetzt*100:0}))
+    .sort((a,b)=>b.asSum-a.asSum||b.preise-a.preise);
+  const qualifying=seasons.filter(s=>s.preise>=VERERBER_ELITE_MIN_PREISE && s.preisquote>=VERERBER_ELITE_MIN_PREISQUOTE && s.top>=VERERBER_ELITE_MIN_TOPAS);
+  const stockOk=!ELITE_ONLY_IN_STOCK || (!!p.instock&&!p.pigeonstateid);
+  return {ready:true,elite:stockOk&&qualifying.length>0,best:qualifying[0]||seasons[0]||null};
+}
+async function loadEliteConfig(){
+  try{
+    const rows=await apiGet('/website_elite_config?id=eq.1&limit=1');
+    const c=rows&&rows[0]; if(!c) return;
+    VERERBER_ELITE_MIN_PREISE=Number(c.min_prizes)||VERERBER_ELITE_MIN_PREISE;
+    VERERBER_ELITE_MIN_PREISQUOTE=Number(c.min_prize_percentage)||VERERBER_ELITE_MIN_PREISQUOTE;
+    VERERBER_ELITE_MIN_TOPAS=Number(c.min_top_as_count)||VERERBER_ELITE_MIN_TOPAS;
+    VERERBER_ELITE_AS_SCHWELLE=Number(c.as_threshold)||VERERBER_ELITE_AS_SCHWELLE;
+    ELITE_ONLY_IN_STOCK=c.only_in_stock!==false;
+  }catch(e){ /* Fallback auf die vereinbarten Standardwerte */ }
+}
+function showEliteCriteriaModal(){
+  const wrap=document.createElement('div'); wrap.className='modal-overlay'; wrap.id='elite-criteria-modal';
+  wrap.innerHTML=`<div class="modal" style="max-width:520px"><div class="modal-head"><div class="serif" style="font-size:19px">★ Zentrale Elite-Kriterien</div><button class="modal-close" onclick="document.getElementById('elite-criteria-modal').remove()">✕</button></div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Die Bewertung erfolgt anhand der besten einzelnen Saison. Diese Werte gelten in der Verwaltung für Listen, Nachzucht und Homepage-Auswahl.</div>
+    <div class="form-grid">
+      <div class="form-field"><label>Mindestpreise</label><input id="ec_prizes" type="number" min="1" value="${VERERBER_ELITE_MIN_PREISE}"></div>
+      <div class="form-field"><label>Mindest-Preisquote (%)</label><input id="ec_quote" type="number" min="0" max="100" step="0.1" value="${VERERBER_ELITE_MIN_PREISQUOTE}"></div>
+      <div class="form-field"><label>Mindestzahl Top-AS</label><input id="ec_top" type="number" min="1" value="${VERERBER_ELITE_MIN_TOPAS}"></div>
+      <div class="form-field"><label>AS-Schwelle</label><input id="ec_threshold" type="number" min="0" max="100" step="0.1" value="${VERERBER_ELITE_AS_SCHWELLE}"></div>
+      <div class="form-field"><label>Nur im Bestand / ohne Status</label><select id="ec_stock"><option value="true" ${ELITE_ONLY_IN_STOCK?'selected':''}>Ja</option><option value="false" ${!ELITE_ONLY_IN_STOCK?'selected':''}>Nein</option></select></div>
+      <div class="form-field"><label>Auswertung</label><input value="Beste einzelne Saison" disabled></div>
+    </div>
+    <div id="ec_msg" style="font-size:12px;margin-top:10px"></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn btn-outline" onclick="document.getElementById('elite-criteria-modal').remove()">Abbrechen</button><button class="btn" onclick="saveEliteConfig()">Speichern</button></div></div>`;
+  document.body.appendChild(wrap);
+}
+async function saveEliteConfig(){
+  const n=id=>Number(document.getElementById(id).value);
+  const row={id:1,min_prizes:n('ec_prizes'),min_prize_percentage:n('ec_quote'),min_top_as_count:n('ec_top'),as_threshold:n('ec_threshold'),only_in_stock:document.getElementById('ec_stock').value==='true',best_single_season:true,updated_at:new Date().toISOString()};
+  const msg=document.getElementById('ec_msg');
+  try{
+    await apiUpsert('website_elite_config','id',row);
+    VERERBER_ELITE_MIN_PREISE=row.min_prizes; VERERBER_ELITE_MIN_PREISQUOTE=row.min_prize_percentage;
+    VERERBER_ELITE_MIN_TOPAS=row.min_top_as_count; VERERBER_ELITE_AS_SCHWELLE=row.as_threshold; ELITE_ONLY_IN_STOCK=row.only_in_stock;
+    invalidateESList(); if(msg){msg.style.color='var(--green)';msg.textContent='✓ Kriterien gespeichert.';} setTimeout(()=>{document.getElementById('elite-criteria-modal')?.remove();render();},500);
+  }catch(e){if(msg){msg.style.color='#e07070';msg.textContent='Fehler: '+e.message;}}
+}
+function websiteSettingsFromForm(id){
+  const v=x=>{const e=document.getElementById(x);return e?e.value.trim():'';};
+  return {pigeonid:id,profile_public:v('w_profile_public')==='true',
+    homepage_visible:v('w_homepage_visible')==='true',
+    homepage_section:v('w_homepage_section')||null,sort_order:Number(v('w_sort_order'))||100,
+    headline:v('w_headline')||null,teaser:v('w_teaser')||null,button_label:v('w_button_label')||null,
+    featured_image:v('w_featured_image')||null,publish_from:v('w_publish_from')||null,publish_until:v('w_publish_until')||null,
+    updated_at:new Date().toISOString()};
+}
+async function saveWebsiteSettings(id){
+  const row=websiteSettingsFromForm(id);
+  await apiUpsert('website_pigeon_settings','pigeonid',row);
+  WEBSITE_SETTINGS_CACHE.set(id,Object.assign(emptyWebsiteSettings(id),row));
+}
+async function startEdit(id){
   const p=findById(id);
   if(!p) return;
+  await Promise.all([loadWebsiteSettings(id),loadPigeonTrips(id)]);
   p._editMode=true;
   S.selected=p;
   render();
@@ -2713,6 +2820,8 @@ function renderDetailEdit(p){
   const f=findFather(p),mo=findMother(p);
   const fR=f?ring(f):(p.ringnumberfather||'');
   const mR=mo?ring(mo):(p.ringnumbermother||'');
+  const ws=WEBSITE_SETTINGS_CACHE.get(p.pigeonid)||emptyWebsiteSettings(p.pigeonid);
+  const elite=computeEliteSeason(p.pigeonid);
   return `
     <button class="back-btn" onclick="cancelEdit('${p.pigeonid}')">${t('btn_back_cancel')}</button>
     <div class="card">
@@ -2817,6 +2926,33 @@ function renderDetailEdit(p){
           </div>
         </div>
       </div>
+      <div class="section-label" style="margin-top:22px">🌐 Website & Homepage</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-top:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+          <div>
+            <div style="font-weight:700;color:var(--text)">Öffentliche Darstellung <button type="button" class="btn btn-outline btn-sm" style="margin-left:8px" onclick="showEliteCriteriaModal()">★ Kriterien</button></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px">Elite wird automatisch aus der besten einzelnen Saison berechnet und ist hier nicht manuell änderbar.</div>
+          </div>
+          <span class="badge" style="background:${elite.elite?'rgba(80,180,110,.16)':'rgba(255,255,255,.05)'};color:${elite.elite?'var(--green)':'var(--text3)'};border:1px solid var(--border)">
+            ${elite.ready?(elite.elite?'★ Elite':'Keine Elite-Einstufung'):'Elite wird geladen…'}
+          </span>
+        </div>
+        ${elite.best?`<div style="font-size:11px;color:var(--text3);margin:-6px 0 14px">Beste Saison ${escH(elite.best.vintage)}: ${elite.best.gesetzt}/${elite.best.preise} Flüge/Preise · ${elite.best.preisquote.toFixed(1)} % · ${elite.best.top} über ${VERERBER_ELITE_AS_SCHWELLE} AS</div>`:''}
+        ${ws._tableMissing?`<div style="background:#2a1a0a;color:var(--orange);border-radius:7px;padding:9px 11px;font-size:12px;margin-bottom:12px">Die Tabelle <code>website_pigeon_settings</code> fehlt noch. Bitte zuerst das mitgelieferte SQL einmal in Supabase ausführen.</div>`:''}
+        <div class="form-grid">
+          <div class="form-field"><label>Profil öffentlich</label><select id="w_profile_public"><option value="false" ${!ws.profile_public?'selected':''}>Nein</option><option value="true" ${ws.profile_public?'selected':''}>Ja</option></select></div>
+          <div class="form-field"><label>Auf Homepage anzeigen</label><select id="w_homepage_visible"><option value="false" ${!ws.homepage_visible?'selected':''}>Nein</option><option value="true" ${ws.homepage_visible?'selected':''}>Ja</option></select></div>
+          <div class="form-field"><label>Homepage-Sektion</label><select id="w_homepage_section">${WEBSITE_SECTIONS.map(([v,l])=>`<option value="${v}" ${String(ws.homepage_section||'')===v?'selected':''}>${l}</option>`).join('')}</select></div>
+          <div class="form-field"><label>Sortierung</label><input id="w_sort_order" type="number" min="0" step="1" value="${Number(ws.sort_order)||100}"></div>
+          <div class="form-field"><label>Überschrift</label><input id="w_headline" value="${escH(ws.headline||'')}" placeholder="Optional – sonst Taubenname"></div>
+          <div class="form-field"><label>Button-Beschriftung</label><input id="w_button_label" value="${escH(ws.button_label||'Profil ansehen')}"></div>
+          <div class="form-field" style="grid-column:1/-1"><label>Teaser</label><textarea id="w_teaser" rows="3" style="width:100%;resize:vertical" placeholder="Kurzer Text für die Homepage">${escH(ws.teaser||'')}</textarea></div>
+          <div class="form-field" style="grid-column:1/-1"><label>Hervorgehobenes Bild (URL, optional)</label><input id="w_featured_image" value="${escH(ws.featured_image||'')}" placeholder="Leer = Originalfoto der Taube verwenden"></div>
+          <div class="form-field"><label>Veröffentlichen ab</label><input id="w_publish_from" type="datetime-local" value="${escH((ws.publish_from||'').slice(0,16))}"></div>
+          <div class="form-field"><label>Veröffentlichen bis</label><input id="w_publish_until" type="datetime-local" value="${escH((ws.publish_until||'').slice(0,16))}"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:10px">Für „Elite-Nachzucht“ sollte die ausgewählte Taube automatisch die aktuellen Elite-Kriterien erfüllen. Die Homepage kann dies zusätzlich serverseitig absichern.</div>
+      </div>
       <div style="display:flex;gap:8px;margin-top:20px;justify-content:space-between">
         <div style="display:flex;gap:8px">
           <button class="btn" onclick="saveEdit('${p.pigeonid}')">💾 ${t('btn_save')}</button>
@@ -2904,6 +3040,7 @@ async function saveEdit(id){
   if(msg){ msg.style.display='block'; msg.style.background='var(--bg3)'; msg.style.color='var(--text2)'; msg.textContent='Speichern…'; }
   try{
     await apiPatch('pigeons', id, row);
+    await saveWebsiteSettings(id);
     // Lokalen State aktualisieren
     const idx=S.pigeons.findIndex(p=>p.pigeonid===id);
     if(idx!==-1){ S.pigeons[idx]=Object.assign({},S.pigeons[idx],row,{pigeonid:id}); }
@@ -6837,10 +6974,11 @@ const VERERBER_ERFOLG_MIN_TOPAS = 2;
 // Preise bei mind. VERERBER_ELITE_MIN_PREISQUOTE% Preisquote erzielt hat,
 // davon mind. VERERBER_ELITE_MIN_TOPAS Preise mit mehr als
 // VERERBER_ELITE_AS_SCHWELLE AS-Punkten.
-const VERERBER_ELITE_MIN_PREISE = 5;
-const VERERBER_ELITE_MIN_PREISQUOTE = 55;
-const VERERBER_ELITE_MIN_TOPAS = 2;
-const VERERBER_ELITE_AS_SCHWELLE = 80;
+let VERERBER_ELITE_MIN_PREISE = 9;
+let VERERBER_ELITE_MIN_PREISQUOTE = 75;
+let VERERBER_ELITE_MIN_TOPAS = 3;
+let VERERBER_ELITE_AS_SCHWELLE = 90;
+let ELITE_ONLY_IN_STOCK = true;
 function computeVererbungsstaerke(pigeonid){
   var desc = getVererbungDescendants(pigeonid);
   if(!desc.length) return {ready:true, noDescendants:true};
