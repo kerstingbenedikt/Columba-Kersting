@@ -4320,6 +4320,42 @@ let SCAN = {
   pigeons:{}, matches:{}, actions:{}, instock:{}, rawResponse:null, expandedKey:null
 };
 
+// Positions-Reihenfolge für die Auswahl-Liste beim Tauschen (Proband zuerst,
+// dann Generation für Generation nach unten — nur für die Anzeige gedacht,
+// beim Speichern bleibt PED_KEYS mit umgekehrter Reihenfolge maßgeblich).
+const PED_KEYS_DISPLAY_ORDER = [
+  'proband','father','mother','ff','fm','mf','mm',
+  'fff','ffm','fmf','fmm','mff','mfm','mmf','mmm',
+  'ffff','fffm','ffmf','ffmm','fmff','fmfm','fmmf','fmmm',
+  'mfff','mffm','mfmf','mfmm','mmff','mmfm','mmmf','mmmm'
+];
+
+// Positionen zweier Scan-Einträge komplett vertauschen (samt DB-Treffer, gewählter
+// Aktion und Bestand-Flag) — für den Fall, dass die KI eine Taube der falschen
+// Stammbaum-Position zugeordnet hat. Funktioniert auch, wenn eine der beiden
+// Positionen noch leer ist (dann wird die Taube dorthin verschoben statt getauscht).
+function swapScanPositions(keyA, keyB){
+  if(!keyA || !keyB || keyA===keyB) return;
+  const tmpP = SCAN.pigeons[keyA]; SCAN.pigeons[keyA] = SCAN.pigeons[keyB]; SCAN.pigeons[keyB] = tmpP;
+  const tmpM = SCAN.matches[keyA]; SCAN.matches[keyA] = SCAN.matches[keyB]; SCAN.matches[keyB] = tmpM;
+  const tmpA = SCAN.actions[keyA]; SCAN.actions[keyA] = SCAN.actions[keyB]; SCAN.actions[keyB] = tmpA;
+  const tmpI = SCAN.instock[keyA]; SCAN.instock[keyA] = SCAN.instock[keyB]; SCAN.instock[keyB] = tmpI;
+
+  // Geschlechts-Erwartung an der jeweils neuen Position neu prüfen, statt die
+  // alte Markierung einfach mitzuschleppen.
+  [keyA, keyB].forEach(k=>{
+    const p = SCAN.pigeons[k];
+    if(!p) return;
+    const expected = expectedGenderOf(k);
+    if(p.gender && expected && p.gender!==expected) p._genderMismatch = true;
+    else delete p._genderMismatch;
+  });
+
+  checkScanPlausibility();
+  SCAN.expandedKey = keyB;
+  render();
+}
+
 function scanReset(){
   stopScanProgress();
   SCAN={step:'upload',imageData:null,imagePreview:null,imageMediaType:'image/jpeg',
@@ -4540,7 +4576,28 @@ function renderScanEditPanel(k, p){
       <label>Info</label>
       <textarea rows="3" style="width:100%;resize:vertical" oninput="updateScanField('${k}','info',this.value)">${escH(p.info||'')}</textarea>
     </div>
+    ${renderScanPositionSwap(k)}
     <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="toggleScanEdit('${k}')">✓ Fertig</button>`;
+}
+
+// Auswahl, mit welcher anderen Stammbaum-Position diese Taube vertauscht werden
+// soll — falls die KI beim Scannen die Zuordnung verwechselt hat (z.B. Vater und
+// Großvater vertauscht). Tauscht die kompletten Einträge inkl. DB-Treffer.
+function renderScanPositionSwap(k){
+  const options = PED_KEYS_DISPLAY_ORDER.filter(x=>x!==k).map(x=>{
+    const xp = SCAN.pigeons[x];
+    const info = xp && xp.ringnumber ? ` — ${xp.ringnumber}` : ' — leer';
+    return `<option value="${x}">${escH(PED_LABEL[x]||x)}${escH(info)}</option>`;
+  }).join('');
+  return `
+    <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)">
+      <label style="font-size:10px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">Position korrigieren</label>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Falls diese Taube der falschen Stammbaum-Position zugeordnet wurde: richtige Position wählen — beide Einträge werden komplett getauscht.</div>
+      <select onchange="if(this.value){swapScanPositions('${k}',this.value)}" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:8px 10px;font-size:12px;cursor:pointer">
+        <option value="">↔ Mit anderer Position tauschen…</option>
+        ${options}
+      </select>
+    </div>`;
 }
 
 function renderScanResult(){
