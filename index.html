@@ -4622,6 +4622,17 @@ function renderScanResult(){
   const isNew  = keys.filter(k=>!SCAN.matches[k]).length;
   const toSave = keys.filter(k=>(SCAN.actions[k]??'x')!=='skip').length;
 
+  // Debug: KI-Rohantwort einsehbar machen, auch wenn Daten erkannt wurden (nicht nur
+  // im Fehlerfall) — nötig, um Positions-/Zuordnungsfehler von der eigentlichen
+  // KI-Antwort zu unterscheiden statt nur das gerenderte Ergebnis zu sehen.
+  const rawDebugBlock = SCAN.rawResponse ? `
+    <details style="margin-bottom:14px">
+      <summary style="cursor:pointer;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px">🔧 KI-Rohantwort (Debug)</summary>
+      <div style="margin-top:8px;background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px">
+        <pre style="font-size:11px;color:var(--text2);white-space:pre-wrap;overflow-x:auto;max-height:400px">${escH(JSON.stringify(SCAN.rawResponse, null, 2))}</pre>
+      </div>
+    </details>` : '';
+
   // Stammbaum-Box je Scan-Position: klickbar → öffnet das Bearbeiten-Panel für genau diese Taube.
   function scanNode(k){
     const p = SCAN.pigeons[k];
@@ -4767,6 +4778,7 @@ function renderScanResult(){
       </div>
     </div>
     ${legend}
+    ${rawDebugBlock}
     ${treeHtml}
     ${editHtml}
     <div class="form-actions" style="margin-top:14px">
@@ -4798,7 +4810,7 @@ function normalizePigeonData(d){
     ringnumber:       d.ringnumber||d.ring||null,
     name:             d.name||null,
     date_year:        d.date_year||d.year||d.vintage||d.jahrgang||null,
-    gender:           d.gender||d.sex||d.geschlecht||null,
+    gender:           normalizeScanGender(d.gender||d.sex||d.geschlecht||null),
     color:            d.color||d.colour||d.farbe||null,
     race:             d.race||d.rasse||null,
     strain:           d.strain||d.linie||d.stamm||null,
@@ -4810,6 +4822,18 @@ function normalizePigeonData(d){
     ringnumbermother: d.ringnumbermother||d.mother_ring||d.mother?.ringnumber||null,
     info:             d.info||d.notes||d.notizen||d._raw_info||null,
   };
+}
+
+// Die KI liefert lt. Prompt "M"/"F", kann aber auch mal Varianten wie "m", "male",
+// "Täuber", "♂" o.ä. zurückgeben. Der Rest der App vergleicht gender strikt gegen
+// 'M'/'F' (z.B. in scanNode, expectedGenderOf-Abgleich) — ohne diese Normalisierung
+// werden solche Varianten stillschweigend zu "?" und alle Gender-Checks laufen leer.
+function normalizeScanGender(g){
+  if(!g) return null;
+  const s = String(g).trim().toLowerCase();
+  if(['m','1','male','männlich','maennlich','tauber','täuber','taeuber','cock','♂'].includes(s)) return 'M';
+  if(['f','w','2','female','weiblich','taubin','täubin','taeubin','hen','♀'].includes(s)) return 'F';
+  return null;
 }
 
 async function runScanAI(){
