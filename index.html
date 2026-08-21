@@ -4334,7 +4334,9 @@ const PED_KEYS_DISPLAY_ORDER = [
 // Aktion und Bestand-Flag) — für den Fall, dass die KI eine Taube der falschen
 // Stammbaum-Position zugeordnet hat. Funktioniert auch, wenn eine der beiden
 // Positionen noch leer ist (dann wird die Taube dorthin verschoben statt getauscht).
-function swapScanPositions(keyA, keyB){
+// suppressRender: intern genutzt von swapScanSubtree, um nicht bei jedem Einzeltausch
+// neu zu rendern.
+function swapScanPositions(keyA, keyB, suppressRender){
   if(!keyA || !keyB || keyA===keyB) return;
   const tmpP = SCAN.pigeons[keyA]; SCAN.pigeons[keyA] = SCAN.pigeons[keyB]; SCAN.pigeons[keyB] = tmpP;
   const tmpM = SCAN.matches[keyA]; SCAN.matches[keyA] = SCAN.matches[keyB]; SCAN.matches[keyB] = tmpM;
@@ -4351,6 +4353,39 @@ function swapScanPositions(keyA, keyB){
     else delete p._genderMismatch;
   });
 
+  if(suppressRender) return;
+  checkScanPlausibility();
+  SCAN.expandedKey = keyB;
+  render();
+}
+
+// Alle Nachfahren-Schlüssel eines Knotens ermitteln (Breadth-First über PARENT_MAP),
+// der Knoten selbst eingeschlossen. Reihenfolge ist deterministisch: erst der Knoten
+// selbst, dann Generation für Generation jeweils erst die "f"-, dann die "m"-Linie.
+function descendantKeysOf(key){
+  const result = [key];
+  const queue = [key];
+  while(queue.length){
+    const k = queue.shift();
+    const kids = PARENT_MAP[k];
+    if(kids){ result.push(kids.f, kids.m); queue.push(kids.f, kids.m); }
+  }
+  return result;
+}
+
+// Ganzen Zweig (Knoten + alle Vorfahren darunter) mit einem anderen Zweig vertauschen.
+// Genau das braucht man, wenn die KI beim Scannen nicht nur eine einzelne Taube, sondern
+// eine komplette Ahnenlinie der falschen Seite zugeordnet hat (z.B. die gesamte
+// Vorfahrenreihe der Mutter landet unter "father"/"ff"/"fff"/... statt unter
+// "mother"/"mf"/"mfff"/...). Beide Zweige haben durch die feste Baumstruktur immer die
+// gleiche "Form", daher lassen sich die Positionen 1:1 paarweise zuordnen.
+function swapScanSubtree(keyA, keyB){
+  if(!keyA || !keyB || keyA===keyB) return;
+  const keysA = descendantKeysOf(keyA);
+  const keysB = descendantKeysOf(keyB);
+  for(let i=0;i<keysA.length && i<keysB.length;i++){
+    swapScanPositions(keysA[i], keysB[i], true);
+  }
   checkScanPlausibility();
   SCAN.expandedKey = keyB;
   render();
@@ -4589,6 +4624,38 @@ function renderScanPositionSwap(k){
     const info = xp && xp.ringnumber ? ` — ${xp.ringnumber}` : ' — leer';
     return `<option value="${x}">${escH(PED_LABEL[x]||x)}${escH(info)}</option>`;
   }).join('');
+
+  // Zweig-Tausch nur anbieten, wenn dieser Knoten überhaupt Nachfahren hat (also nicht
+  // bei den vier äußersten Generationen "ffff".."mmmm", die haben keine Kinder mehr).
+  const hasChildren = !!PARENT_MAP[k];
+  let subtreeBlock = '';
+  if(hasChildren){
+    const descCount = descendantKeysOf(k).length - 1;
+    // Ziel-Optionen: nur Knoten, die selbst ebenfalls Nachfahren haben (sonst passt die
+    // Baumform nicht zusammen) und nicht Vorfahre/Nachfahre von k selbst sind.
+    const subtreeOptions = PED_KEYS_DISPLAY_ORDER.filter(x=>{
+      if(x===k || !PARENT_MAP[x]) return false;
+      const dK = descendantKeysOf(k), dX = descendantKeysOf(x);
+      return !dK.includes(x) && !dX.includes(k);
+    }).map(x=>{
+      const xp = SCAN.pigeons[x];
+      const info = xp && xp.ringnumber ? ` — ${xp.ringnumber}` : ' — leer';
+      return `<option value="${x}">${escH(PED_LABEL[x]||x)}${escH(info)}</option>`;
+    }).join('');
+    subtreeBlock = `
+      <div style="margin-top:10px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+          Falls die KI eine <b>ganze Ahnenlinie</b> (diese Taube + ${descCount} dahinterliegende Vorfahren)
+          der falschen Seite zugeordnet hat: hier den Ziel-Zweig wählen — der komplette Zweig wird 1:1 mit
+          dem Ziel-Zweig getauscht.
+        </div>
+        <select onchange="if(this.value){swapScanSubtree('${k}',this.value)}" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:8px 10px;font-size:12px;cursor:pointer">
+          <option value="">⇄ Ganzen Zweig mit anderem Zweig tauschen…</option>
+          ${subtreeOptions}
+        </select>
+      </div>`;
+  }
+
   return `
     <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)">
       <label style="font-size:10px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">Position korrigieren</label>
@@ -4597,6 +4664,7 @@ function renderScanPositionSwap(k){
         <option value="">↔ Mit anderer Position tauschen…</option>
         ${options}
       </select>
+      ${subtreeBlock}
     </div>`;
 }
 
