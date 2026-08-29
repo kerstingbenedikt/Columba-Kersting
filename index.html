@@ -435,6 +435,7 @@ const I18N = {
     bl_loading_perf:'Lade Leistungsdaten…', bl_loading_trips:'Lade Flüge…',
     bl_tab_all:'🐦 Alle Tauben', bl_tab_cocks:'♂ Vögel', bl_tab_hens:'♀ Weibchen',
     bl_tab_cocks_yl:'♂ Vögel (einjährig)', bl_tab_hens_yl:'♀ Weibchen (einjährig)',
+    bl_tab_cocks_yb:'♂ Jungtiere', bl_tab_hens_yb:'♀ Jungtiere', bl_tab_yb:'🐣 Jungtiere',
     bl_breeder_label:'Züchter:', bl_all_breeders_opt:'Gesamt (alle Züchter)',
     bl_no_pigeons_cat:'Keine Tauben in dieser Kategorie.',
     bl_desc1:'Je Reisesaison getrennt sortiert nach Anzahl Preise (ein Flug zählt als ein Preis, egal in wie vielen Listen RV/RegGr/Reg platziert wurde), bei Gleichstand nach Summe der AS-Punkte (je Flug wird der offizielle, aus der Importdatei übernommene AS-Wert gewertet — nicht selbst nachgerechnet).',
@@ -548,6 +549,7 @@ const I18N = {
     bl_loading_perf:'Loading performance data…', bl_loading_trips:'Loading races…',
     bl_tab_all:'🐦 All Pigeons', bl_tab_cocks:'♂ Cocks', bl_tab_hens:'♀ Hens',
     bl_tab_cocks_yl:'♂ Cocks (yearling)', bl_tab_hens_yl:'♀ Hens (yearling)',
+    bl_tab_cocks_yb:'♂ Young birds', bl_tab_hens_yb:'♀ Young birds', bl_tab_yb:'🐣 Young birds',
     bl_breeder_label:'Breeder:', bl_all_breeders_opt:'Total (all breeders)',
     bl_no_pigeons_cat:'No pigeons in this category.',
     bl_desc1:'Sorted separately per race season by number of prizes (one race counts as one prize, regardless of how many lists RV/RegGr/Reg it placed in), ties broken by the sum of AS points (the official AS value from the import file is used per race — not recalculated).',
@@ -8410,6 +8412,35 @@ function shortTripDate(iso){
   return m ? m[2]+'.'+m[1]+'.' : iso;
 }
 
+// Ordnet jeden Flug automatisch als Jungtier- oder Alttierflug ein, indem die
+// Jahrgänge der tatsächlich beteiligten Tauben (aus ZT.rows, das für die Flüge-Liste
+// ohnehin schon geladen wird) mit dem Reisejahr (trip.vintage) abgeglichen werden —
+// keine zusätzliche DB-Abfrage nötig. Da bei diesem Verein Jungtier- und Alttierflüge
+// nie gemischt stattfinden, reicht ein einfacher Mehrheitsentscheid je Flug.
+function computeTripCategories(){
+  const tripById={}; RT.trips.forEach(t=>{ tripById[t.tripid]=t; });
+  const idIndex={}, ringIndex={};
+  S.pigeons.forEach(p=>{
+    if(p.pigeonid) idIndex[p.pigeonid]=p;
+    if(p.ringnumber) ringIndex[normRing(p.ringnumber)]=p;
+  });
+  const counts={};
+  ZT.rows.forEach(r=>{
+    const trip=tripById[r.tripid]; if(!trip || trip.vintage==null) return;
+    let p = r.pigeonid ? idIndex[r.pigeonid] : null;
+    if(!p && r.ringnumber) p = ringIndex[normRing(r.ringnumber)];
+    if(!p || p.date_year==null) return;
+    const c = counts[r.tripid] = counts[r.tripid] || {jung:0, alt:0};
+    if(String(p.date_year)===String(trip.vintage)) c.jung++; else c.alt++;
+  });
+  const result = new Map();
+  Object.keys(counts).forEach(tripid=>{
+    const c = counts[tripid];
+    result.set(tripid, c.jung>=c.alt ? 'jungtier' : 'alttier');
+  });
+  return result;
+}
+
 function renderTripsList(){
   if(!ZT.loaded){ loadZuechterData().then(render); }
   if(!RT.collapsedSeasons) RT.collapsedSeasons=new Set();
@@ -8424,11 +8455,18 @@ function renderTripsList(){
   }
   if(!RT.expandedTripBreeders) RT.expandedTripBreeders=new Set();
   const anyComputedRV = RT.trips.some(t=>!t.pigeonsset_rv && t.pigeonsset_rv_calc>0);
+  const tripCategories = ZT.loaded ? computeTripCategories() : new Map();
   const grouped={};
-  RT.trips.forEach(t=>{ const yr=t.vintage||'?'; if(!grouped[yr]) grouped[yr]=[]; grouped[yr].push(t); });
-  const cards=Object.keys(grouped).sort((a,b)=>b-a).map(yr=>{
-    const seasonCollapsed=RT.collapsedSeasons.has(String(yr));
-    const rows=grouped[yr].map(tr=>{
+  RT.trips.forEach(t=>{
+    const yr=t.vintage||'?';
+    if(!grouped[yr]) grouped[yr]={jungtier:[],alttier:[],unklar:[]};
+    const cat = ZT.loaded ? (tripCategories.get(t.tripid)||'unklar') : 'unklar';
+    grouped[yr][cat].push(t);
+  });
+  // Baut die Tabelle für eine Gruppe von Flügen (Jungtier/Alttier/unklar) auf —
+  // identischer Zeilenaufbau wie vorher, nur wiederverwendbar je Untergruppe.
+  const buildTripTable = trips => {
+    const rows=trips.map(tr=>{
       const breeders=ZT.loaded?tripBreederRows(tr.tripid):[];
       const breedersOpen=RT.expandedTripBreeders.has(tr.tripid);
       const km=tr.averagedistance3!=null?Math.round(Number(tr.averagedistance3))+' km':'—';
@@ -8463,17 +8501,34 @@ function renderTripsList(){
           </div>
         </td></tr>`:''}`;
     }).join('');
+    return `<div class="table-wrap"><table>
+        <thead><tr><th>${t('trip_word')}-Nr.</th><th>Datum</th><th>Auflassort</th><th style="text-align:right">KM</th><th style="text-align:right">RV</th><th style="text-align:right">RegGr</th><th style="text-align:right">Reg</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
+  };
+  const cards=Object.keys(grouped).sort((a,b)=>b-a).map(yr=>{
+    const seasonCollapsed=RT.collapsedSeasons.has(String(yr));
+    const g = grouped[yr];
+    const totalCount = g.jungtier.length + g.alttier.length + g.unklar.length;
+    // Nur aufteilen, wenn tatsächlich beide Arten in dieser Saison vorkommen — sonst
+    // (z.B. nur Alttierflüge importiert) ganz normal eine einzelne Liste zeigen.
+    const isSplitSeason = g.jungtier.length>0 && g.alttier.length>0;
+    const subBlock = (label, trips) => trips.length ? `
+        <div style="margin:${label?'10px 0 6px':'0'}">
+          ${label?`<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px">${label} <span style="font-size:11px;font-weight:400;color:var(--text3)">(${trips.length})</span></div>`:''}
+          ${buildTripTable(trips)}
+        </div>` : '';
+    const body = isSplitSeason
+      ? subBlock('🐣 Jungtierflüge', g.jungtier) + subBlock('🦅 Alttierflüge', g.alttier) + subBlock('❔ Nicht eingeordnet', g.unklar)
+      : subBlock('', [...g.jungtier, ...g.alttier, ...g.unklar]);
     return `
     <div style="margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;user-select:none" onclick="toggleTripSeason('${yr}')">
         <span style="font-size:11px;color:var(--text3);transition:transform .15s;transform:rotate(${seasonCollapsed?'-90':'0'}deg);display:inline-block">▾</span>
         <span style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${t('season')} ${yr}</span>
-        <span style="font-size:11px;color:var(--text3)">(${grouped[yr].length})</span>
+        <span style="font-size:11px;color:var(--text3)">(${totalCount})</span>
       </div>
-      ${seasonCollapsed?'':`<div class="table-wrap"><table>
-        <thead><tr><th>${t('trip_word')}-Nr.</th><th>Datum</th><th>Auflassort</th><th style="text-align:right">KM</th><th style="text-align:right">RV</th><th style="text-align:right">RegGr</th><th style="text-align:right">Reg</th><th></th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table></div>`}
+      ${seasonCollapsed?'':body}
     </div>`;
   }).join('');
 
@@ -8514,6 +8569,20 @@ async function openTrip(tripid,breederKey){
 // "Pl." (r.placement) ist die Gesamtreihenfolge über alle Züchter der Reise.
 // Zusätzlich wird hier je Ergebnis die Platzierung INNERHALB des jeweiligen
 // Züchters berechnet (r._breederRank), unabhängig vom aktuellen Filter.
+// Taube zu einem Flugergebnis ermitteln (gleiche Zuordnungslogik wie beim Rendern der
+// Ergebniszeile) — wird für die Jungtier/Alttier-Trennung gebraucht.
+function pigeonForResult(r){
+  return S.pigeons.find(x=>x.pigeonid===r.pigeonid || (r.ringnumber && normRing(x.ringnumber)===normRing(r.ringnumber)))||null;
+}
+// Jungtier = Taube, deren Jahrgang (date_year) mit dem Reisejahr (trip.vintage) übereinstimmt,
+// fliegt also ihre erste Saison. Ohne bekannten Jahrgang (Taube nicht in der DB, z.B. fremder
+// Züchter) wird defensiv NICHT als Jungtier gewertet, um keine falschen Alttier-Ergebnisse in
+// die Jungtier-Konkurrenz zu ziehen.
+function isJungtierResult(r, trip){
+  const p = pigeonForResult(r);
+  return !!(p && p.date_year!=null && trip.vintage!=null && String(p.date_year)===String(trip.vintage));
+}
+
 function tripDetailRows(){
   const byBreeder={};
   RT.results.forEach(r=>{
@@ -8560,7 +8629,14 @@ function renderTripDetail(){
     const gesetzt = trip.pigeonsset_rv_calc!=null?trip.pigeonsset_rv_calc:(rvFallback && rvFallback.get(r)?.gesetzt);
     return '<span style="font-style:italic;color:var(--text2)" title="Berechnet: für diesen Flug liegt keine eigene RV-Liste aus dem Import vor (zu wenig Tauben). Rang '+rang+(gesetzt?' von '+gesetzt+' Tauben dieser RV':'')+', AS '+(as!=null?Number(as).toFixed(2):'—')+'">'+rang+' *</span>';
   };
-  const rows=sorted.map(r=>{
+  // Jungtier-Jahrgang = Reisejahr selbst (Tauben, die ihre erste Saison fliegen) — separat
+  // von allen anderen (Alttiere). Ergebnisse ohne bekannten Jahrgang (Taube nicht in der
+  // eigenen DB) werden konservativ zu den Alttieren gezählt (siehe isJungtierResult).
+  const jungtierRows = sorted.filter(r=>isJungtierResult(r, trip));
+  const alttierRows  = sorted.filter(r=>!isJungtierResult(r, trip));
+  const isSplit = jungtierRows.length>0 && alttierRows.length>0;
+
+  const rowHtml = r => {
     const p=S.pigeons.find(x=>x.pigeonid===r.pigeonid||(r.ringnumber&&x.ringnumber===r.ringnumber));
     return '<tr onclick="'+(p?'selectPigeon(\''+p.pigeonid+'\')':'')+'" style="'+(p?'cursor:pointer':'')+'">'
       +'<td style="font-weight:600;color:var(--green);font-size:12px">'+(r.placement||'—')+'</td>'
@@ -8575,7 +8651,24 @@ function renderTripDetail(){
       +'<td style="text-align:center">'+tripFlagCell(r,'v','V')+'</td>'
       +'<td style="text-align:center">'+tripFlagCell(r,'j','J')+'</td>'
       +'<td style="text-align:center">'+tripFlagCell(r,'m','M')+'</td></tr>';
-  }).join('');
+  };
+  const tableHtml = rowsForGroup => '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+      +'<thead><tr><th>'+t('th_placement')+'</th><th>'+t('th_placement_breeder')+'</th><th>'+t('th_ring')+'</th><th>'+t('th_name')+'</th>'+(RT.breederFilter?'':'<th>'+t('th_breeder')+'</th>')+'<th>'+t('th_speed')+'</th>'
+      +'<th>'+t('th_prize')+'RV</th><th>'+t('th_prize')+'FG</th><th>'+t('th_prize')+'RegGr</th><th>'+t('th_prize')+'Reg</th><th>'+t('th_as')+' Reg</th>'
+      +'<th title="Verbandsmeisterschaft-Vorbenennung">V</th><th title="Jährige">J</th><th title="Medaillen-Vorbenennung">M</th></tr></thead>'
+      +'<tbody>'+rowsForGroup.map(rowHtml).join('')+'</tbody></table></div>';
+
+  // Wenn beide Gruppen vorkommen: zwei separate Konkurrenzen anzeigen (Platzierung/AS
+  // je Gruppe NICHT neu berechnet, sondern die importierten Originalwerte übernommen —
+  // nur die Darstellung wird getrennt, damit Jungtier- und Alttier-Ergebnisse nicht in
+  // einer gemeinsamen Rangliste vermischt erscheinen). Ist nur eine Gruppe vorhanden,
+  // bleibt die Darstellung wie bisher eine einzelne Tabelle.
+  const resultsHtml = RT.results.length===0
+    ? '<div style="text-align:center;padding:24px;color:var(--text3)">'+t('loading_results')+'</div>'
+    : (isSplit
+        ? '<div style="margin-bottom:8px"><div class="serif" style="font-size:15px;margin-bottom:6px">🐣 Jungtiere · Jahrgang '+escH(String(trip.vintage||''))+' <span style="font-size:11px;font-weight:400;color:var(--text3)">('+jungtierRows.length+')</span></div>'+tableHtml(jungtierRows)+'</div>'
+        + '<div><div class="serif" style="font-size:15px;margin:18px 0 6px">🦅 Alttiere <span style="font-size:11px;font-weight:400;color:var(--text3)">('+alttierRows.length+')</span></div>'+tableHtml(alttierRows)+'</div>'
+        : tableHtml(sorted));
 
   // Züchter-Chips zum Umschalten des Filters (inkl. "Alle Züchter") — nach
   // Züchternummer dedupliziert (distinctBreeders), damit abweichende
@@ -8634,18 +8727,13 @@ function renderTripDetail(){
     +(reggrCount?'<span class="badge badge-u" title="Preise / gesamte gesetzte Taubenzahl der Reise in dieser Liste">RegGr: '+reggrCount+(reggrSet>0?' / '+reggrSet+' ges.':'')+'</span>':'')
     +(regCount?'<span class="badge badge-u" title="Preise / gesamte gesetzte Taubenzahl der Reise in dieser Liste">Reg: '+regCount+(regSet>0?' / '+regSet+' ges.':'')+'</span>':'')
     +(trip.averagedistance3?'<span class="badge badge-u">⌀ '+Number(trip.averagedistance3).toFixed(1)+' km</span>':'')
+    +(isSplit?'<span class="badge badge-u" title="Dieser Flug enthält sowohl Jungtiere (Jahrgang '+escH(String(trip.vintage||''))+') als auch Alttiere — beide Konkurrenzen werden getrennt ausgewiesen, nicht gemeinsam gerankt.">🐣/🦅 getrennte Konkurrenz</span>':'')
     +'</div>'
     +chips
     +rvChips
     +(rvFallback?'<div style="font-size:11px;color:var(--text3);margin-top:8px">* RV-Rang/AS-Punkte für diesen Flug selbst berechnet, da hierfür keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene) — Rang nach Geschwindigkeit unter allen Tauben dieser RV.</div>':'')
     +'</div>'
-    +(RT.results.length===0
-      ?'<div style="text-align:center;padding:24px;color:var(--text3)">'+t('loading_results')+'</div>'
-      :'<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-      +'<thead><tr><th>'+t('th_placement')+'</th><th>'+t('th_placement_breeder')+'</th><th>'+t('th_ring')+'</th><th>'+t('th_name')+'</th>'+(RT.breederFilter?'':'<th>'+t('th_breeder')+'</th>')+'<th>'+t('th_speed')+'</th>'
-      +'<th>'+t('th_prize')+'RV</th><th>'+t('th_prize')+'FG</th><th>'+t('th_prize')+'RegGr</th><th>'+t('th_prize')+'Reg</th><th>'+t('th_as')+' Reg</th>'
-      +'<th title="Verbandsmeisterschaft-Vorbenennung">V</th><th title="Jährige">J</th><th title="Medaillen-Vorbenennung">M</th></tr></thead>'
-      +'<tbody>'+rows+'</tbody></table></div>')
+    +resultsHtml
     +'</div></div>';
 }
 
@@ -10950,11 +11038,16 @@ function bestenliste(breederFilter, rvFilter){
 
   return {
     years,
-    gesamt:      build(()=>true),
-    tauber:      build(e=>e.sex==='M'),
-    taubinnen:   build(e=>e.sex==='F'),
-    tauberJg:    build((e,yr)=>e.sex==='M' && String(e.birthYear)===String(Number(yr)-1)),
-    taubinnenJg: build((e,yr)=>e.sex==='F' && String(e.birthYear)===String(Number(yr)-1))
+    // Jungtiere (Jahrgang === Saisonjahr, fliegen ihre erste Saison) bilden eine eigene
+    // Konkurrenz und werden bewusst aus "gesamt"/"tauber"/"taubinnen" herausgehalten,
+    // damit sie in der Bestenliste nicht mit den Alttier-Ergebnissen vermischt ranken —
+    // analog zur Trennung in der Flüge-Liste (siehe computeTripCategories).
+    gesamt:         build((e,yr)=>String(e.birthYear)!==String(yr)),
+    tauber:         build((e,yr)=>e.sex==='M' && String(e.birthYear)!==String(yr)),
+    taubinnen:      build((e,yr)=>e.sex==='F' && String(e.birthYear)!==String(yr)),
+    tauberJg:       build((e,yr)=>e.sex==='M' && String(e.birthYear)===String(Number(yr)-1)),
+    taubinnenJg:    build((e,yr)=>e.sex==='F' && String(e.birthYear)===String(Number(yr)-1)),
+    jungtiere:      build((e,yr)=>String(e.birthYear)===String(yr))
   };
 }
 
@@ -10969,7 +11062,8 @@ function renderBestenliste(){
     ['tauber',t('bl_tab_cocks')],
     ['taubinnen',t('bl_tab_hens')],
     ['tauberJg',t('bl_tab_cocks_yl')],
-    ['taubinnenJg',t('bl_tab_hens_yl')]
+    ['taubinnenJg',t('bl_tab_hens_yl')],
+    ['jungtiere',t('bl_tab_yb')]
   ];
   const groupsRaw=data[BL.cat]||[];
   // Ass-Kategorie-Filter (A/B/C/D/beliebig): kommt aus den Flugergebnissen
