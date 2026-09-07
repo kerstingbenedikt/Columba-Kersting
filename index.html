@@ -63,6 +63,7 @@ main{padding:18px 20px;max-width:1300px;margin:0 auto}
 select{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:8px 10px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;height:36px}
 select:focus{border-color:var(--green)}
 .count-label{font-size:12px;color:var(--text3);white-space:nowrap}
+.archive-hint{font-size:12px;color:var(--accent,#a67c00);background:var(--accent-bg,rgba(166,124,0,.12));border:1px solid var(--accent,#a67c00);border-radius:6px;padding:5px 10px;margin:4px 0 2px}
 /* Filter & Werkzeuge: eingeklappt per Default, damit die Ergebnisliste auf mobilen
    Geräten sofort sichtbar ist statt hinter langen Filterreihen zu verschwinden. */
 .filter-panel{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:0;background:var(--bg2);flex:0 0 auto;order:1;align-self:flex-start}
@@ -382,6 +383,7 @@ const I18N = {
     filter_sex_m:'♂ Täuber', filter_sex_f:'♀ Täubin',
     filter_all_years:'Alle Jahrgänge', filter_all_stock:'Alle Bestände',
     filter_instock:'Im Bestand', filter_not_instock:'Nicht im Bestand',
+    search_archive_hint:'🗄️ Kein Treffer im Bestand – zeige Ergebnis(se) aus dem Archiv.',
     filter_reset:'↺ Filter zurücksetzen', filter_all_colors:'🎨 Alle Farben',
     filter_all_status:'📋 Alle Status', filter_type_all:'🏁 Typ: Alle',
     filter_all_locations:'📍 Alle Standorte', col_picker_btn:'☰ Spalten',
@@ -496,6 +498,7 @@ const I18N = {
     filter_sex_m:'♂ Cock', filter_sex_f:'♀ Hen',
     filter_all_years:'All years', filter_all_stock:'All stock',
     filter_instock:'In stock', filter_not_instock:'Not in stock',
+    search_archive_hint:'🗄️ No match in stock – showing result(s) from the archive.',
     filter_reset:'↺ Reset filters', filter_all_colors:'🎨 All colors',
     filter_all_status:'📋 All statuses', filter_type_all:'🏁 Type: All',
     filter_all_locations:'📍 All locations', col_picker_btn:'☰ Columns',
@@ -1707,6 +1710,10 @@ function renderTableOnly() {
   const countEl = document.getElementById('count-label');
   if (countEl) countEl.textContent = `${S.filtered.length.toLocaleString('de')} / ${S.pigeons.length.toLocaleString('de')}`;
 
+  // Archiv-Fallback-Hinweis (Bestands-Filter für diese Suche übersteuert)
+  const hintEl = document.getElementById('stock-fallback-hint');
+  if (hintEl) hintEl.innerHTML = S._searchIgnoredStockFilter ? `<div class="archive-hint">${t('search_archive_hint')}</div>` : '';
+
   // Tabelle
   const tw = document.getElementById('table-wrap');
   if (tw) tw.innerHTML = buildTableHTML(page, si);
@@ -2175,12 +2182,25 @@ function applyFilter(){
 
   if(S.sexFilter!=='all') arr=arr.filter(p=>sex_(p)===S.sexFilter);
   if(S.yearFilter!=='all') arr=arr.filter(p=>String(p.date_year)===S.yearFilter);
-  if(S.inStockFilter==='yes') arr=arr.filter(p=>p.instock);
-  if(S.inStockFilter==='no') arr=arr.filter(p=>!p.instock);
   if(S.colorFilter!=='all') arr=arr.filter(p=>colorMatchesKeyword(p.color,S.colorFilter));
   if(S.stateFilter!=='all') arr=arr.filter(p=>pigeonStateName(p)===S.stateFilter);
   if(S.standortFilter!=='all') arr=arr.filter(p=>(p.standort||'')===S.standortFilter);
   if(S.typeFilter!=='all') arr=arr.filter(p=>p.pigeontype===S.typeFilter);
+
+  // Bestands-Filter: bei aktiver Textsuche automatisch übersteuern, falls er
+  // die Trefferliste auf 0 reduzieren würde — so werden Tauben aus dem Archiv
+  // (nicht im Bestand) gefunden, ohne den Filter manuell umstellen zu müssen.
+  // Ohne Suchtext (reines Filtern/Browsen) bleibt der Filter wie gewohnt aktiv.
+  S._searchIgnoredStockFilter = false;
+  if(S.inStockFilter!=='all'){
+    const wantInStock = S.inStockFilter==='yes';
+    const withStockFilter = arr.filter(p=>!!p.instock===wantInStock);
+    if(q && withStockFilter.length===0 && arr.length>0){
+      S._searchIgnoredStockFilter = true; // arr bleibt unverändert (alle Textsuche-Treffer)
+    } else {
+      arr = withStockFilter;
+    }
+  }
 
   // Fallback-Sortierung nur wenn KEIN Scoring aktiv war
   if(!q || !((/^\d/.test(q)) || q.match(/^(\d{2,4})[\/\-\s](\d{1,6})$/))){
@@ -2506,6 +2526,7 @@ function renderList(){
       </div>
       <span id="count-label" class="count-label">${S.filtered.length.toLocaleString('de')} / ${S.pigeons.length.toLocaleString('de')}</span>
     </div>
+    <div id="stock-fallback-hint">${S._searchIgnoredStockFilter?`<div class="archive-hint">${t('search_archive_hint')}</div>`:''}</div>
     <div id="bulk-bar">${renderBulkBar()}</div>
     <div id="table-wrap" class="table-wrap">${buildTableHTML(page, si)}</div>
     <div id="pagination-wrap">${totalPages>1?buildPagination(totalPages):''}</div>`;
