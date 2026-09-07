@@ -744,7 +744,11 @@ async function startApp(){
   loadRVenFromServer();
 }
 
-const DEFAULT_COLUMNS = ['ringnumber','endnumber','name','year','gender','color','strain','status','pigeontype','instock','standort','father','mother','breeder','owner','reiseleistung','top10'];
+// Default-Ansicht: bewusst auf die für einen schnellen Überblick auf dem
+// Smartphone wesentlichen Spalten reduziert. Alle übrigen Spalten bleiben über
+// den Spalten-Picker weiterhin einblendbar, wirken sich hier also nicht auf
+// bestehende Nutzer mit gespeicherter Auswahl aus (s.u. localStorage-Fallback).
+const DEFAULT_COLUMNS = ['ringnumber','name','year','gender','status'];
 
 const S = {
   tab: 'tauben', pigeons: [], filtered: [],
@@ -10886,7 +10890,9 @@ const BL_COLUMN_DEFS = [
   { key:'kmsum',    label:'Σ km (Preisflüge)' },
 ];
 const BL_COLUMN_BY_KEY = Object.fromEntries(BL_COLUMN_DEFS.map(c=>[c.key,c]));
-const BL_DEFAULT_COLUMNS = BL_COLUMN_DEFS.map(c=>c.key);
+// Default-Ansicht: auf die wesentlichen Kennzahlen reduziert (Ring, Name, Preise, Σ AS).
+// Jahrgang, Züchter, Ass A-D und Σ km bleiben über den Spalten-Picker einblendbar.
+const BL_DEFAULT_COLUMNS = ['ring','name','prizes','sumas'];
 try{
   const savedBL = JSON.parse(localStorage.getItem('bestenlisteCols')||'null');
   BL.columns = Array.isArray(savedBL) && savedBL.length ? savedBL.filter(k=>BL_COLUMN_BY_KEY[k]) : [...BL_DEFAULT_COLUMNS];
