@@ -64,6 +64,8 @@ select{background:var(--bg3);border:1px solid var(--border);border-radius:var(--
 select:focus{border-color:var(--green)}
 .count-label{font-size:12px;color:var(--text3);white-space:nowrap}
 .archive-hint{font-size:12px;color:var(--accent,#a67c00);background:var(--accent-bg,rgba(166,124,0,.12));border:1px solid var(--accent,#a67c00);border-radius:6px;padding:5px 10px;margin:4px 0 2px}
+.search-instock-toggle{order:2;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);white-space:nowrap;cursor:pointer;user-select:none}
+.search-instock-toggle input{cursor:pointer;width:15px;height:15px;accent-color:var(--green)}
 /* Filter & Werkzeuge: eingeklappt per Default, damit die Ergebnisliste auf mobilen
    Geräten sofort sichtbar ist statt hinter langen Filterreihen zu verschwinden. */
 .filter-panel{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:0;background:var(--bg2);flex:0 0 auto;order:1;align-self:flex-start}
@@ -383,7 +385,9 @@ const I18N = {
     filter_sex_m:'♂ Täuber', filter_sex_f:'♀ Täubin',
     filter_all_years:'Alle Jahrgänge', filter_all_stock:'Alle Bestände',
     filter_instock:'Im Bestand', filter_not_instock:'Nicht im Bestand',
-    search_archive_hint:'🗄️ Kein Treffer im Bestand – zeige Ergebnis(se) aus dem Archiv.',
+    search_archive_hint:'🗄️ inkl. {n} Ergebnis(se) aus dem Archiv (nicht im Bestand)',
+    search_only_instock_label:'📦 nur Bestand',
+    search_only_instock_title:'Suche auf Tauben im Bestand beschränken (Archiv ausblenden)',
     filter_reset:'↺ Filter zurücksetzen', filter_all_colors:'🎨 Alle Farben',
     filter_all_status:'📋 Alle Status', filter_type_all:'🏁 Typ: Alle',
     filter_all_locations:'📍 Alle Standorte', col_picker_btn:'☰ Spalten',
@@ -498,7 +502,9 @@ const I18N = {
     filter_sex_m:'♂ Cock', filter_sex_f:'♀ Hen',
     filter_all_years:'All years', filter_all_stock:'All stock',
     filter_instock:'In stock', filter_not_instock:'Not in stock',
-    search_archive_hint:'🗄️ No match in stock – showing result(s) from the archive.',
+    search_archive_hint:'🗄️ incl. {n} result(s) from the archive (not in stock)',
+    search_only_instock_label:'📦 stock only',
+    search_only_instock_title:'Restrict search to pigeons in stock (hide archive)',
     filter_reset:'↺ Reset filters', filter_all_colors:'🎨 All colors',
     filter_all_status:'📋 All statuses', filter_type_all:'🏁 Type: All',
     filter_all_locations:'📍 All locations', col_picker_btn:'☰ Columns',
@@ -757,6 +763,7 @@ const S = {
   tab: 'tauben', pigeons: [], filtered: [],
   page: 0, pageSize: 50,
   search: '', sexFilter: 'all', yearFilter: 'all', inStockFilter: 'yes', colorFilter: 'all', stateFilter: 'all', typeFilter: 'all', standortFilter: 'all',
+  searchOnlyInStock: false, // Schnellzugriff neben dem Suchfeld: bei aktiver Suche Archiv trotzdem ausblenden
   filtersOpen: false, taubenView: 'liste',
   pigeonStates: [],
   uniqueColors: [], uniqueRaces: [], uniqueStrains: [], uniqueBreeders: [],
@@ -1712,7 +1719,7 @@ function renderTableOnly() {
 
   // Archiv-Fallback-Hinweis (Bestands-Filter für diese Suche übersteuert)
   const hintEl = document.getElementById('stock-fallback-hint');
-  if (hintEl) hintEl.innerHTML = S._searchIgnoredStockFilter ? `<div class="archive-hint">${t('search_archive_hint')}</div>` : '';
+  if (hintEl) hintEl.innerHTML = S._searchArchiveCount>0 ? `<div class="archive-hint">${t('search_archive_hint').replace('{n}',S._searchArchiveCount)}</div>` : '';
 
   // Tabelle
   const tw = document.getElementById('table-wrap');
@@ -2187,19 +2194,27 @@ function applyFilter(){
   if(S.standortFilter!=='all') arr=arr.filter(p=>(p.standort||'')===S.standortFilter);
   if(S.typeFilter!=='all') arr=arr.filter(p=>p.pigeontype===S.typeFilter);
 
-  // Bestands-Filter: bei aktiver Textsuche automatisch übersteuern, falls er
-  // die Trefferliste auf 0 reduzieren würde — so werden Tauben aus dem Archiv
-  // (nicht im Bestand) gefunden, ohne den Filter manuell umstellen zu müssen.
-  // Ohne Suchtext (reines Filtern/Browsen) bleibt der Filter wie gewohnt aktiv.
-  S._searchIgnoredStockFilter = false;
-  if(S.inStockFilter!=='all'){
-    const wantInStock = S.inStockFilter==='yes';
-    const withStockFilter = arr.filter(p=>!!p.instock===wantInStock);
-    if(q && withStockFilter.length===0 && arr.length>0){
-      S._searchIgnoredStockFilter = true; // arr bleibt unverändert (alle Textsuche-Treffer)
+  // Bestands-Filter:
+  // - Ohne Suchtext: normales Browsen, der Bestands-Filter aus dem Filter-Panel
+  //   (S.inStockFilter) gilt wie bisher.
+  // - Mit Suchtext: Archiv wird grundsätzlich automatisch mit durchsucht, damit
+  //   nicht separat über die Filter umgeschaltet werden muss. Über den
+  //   Schnellzugriff "📦 nur Bestand" direkt am Suchfeld (S.searchOnlyInStock)
+  //   kann bei Bedarf trotzdem auf reinen Bestand eingeschränkt werden.
+  S._searchArchiveCount = 0;
+  if(q){
+    if(S.searchOnlyInStock){
+      arr = arr.filter(p=>p.instock);
     } else {
-      arr = withStockFilter;
+      S._searchArchiveCount = arr.filter(p=>!p.instock).length;
+      // Leichte Gruppierung: Treffer im Bestand zuerst, Archiv-Treffer danach.
+      // sort() ist stabil, die bisherige Reihenfolge/Sortierung bleibt innerhalb
+      // beider Gruppen erhalten.
+      if(S._searchArchiveCount>0) arr = [...arr].sort((a,b)=>(b.instock?1:0)-(a.instock?1:0));
     }
+  } else {
+    if(S.inStockFilter==='yes') arr=arr.filter(p=>p.instock);
+    if(S.inStockFilter==='no') arr=arr.filter(p=>!p.instock);
   }
 
   // Fallback-Sortierung nur wenn KEIN Scoring aktiv war
@@ -2524,9 +2539,13 @@ function renderList(){
         <input id="tauben-search" type="text" placeholder="${escH(t('search_placeholder'))}" title="${escH(t('search_title'))}" value="${escH(S.search)}" oninput="S.search=this.value;toggleSearchClear('tauben-search-clear',this.value);applyFilter()">
         <button type="button" id="tauben-search-clear" class="search-clear" style="display:${S.search?'flex':'none'}" onclick="clearTaubenSearch()" title="${escH(t('search_clear_title'))}" aria-label="${escH(t('search_clear_title'))}">✕</button>
       </div>
+      <label class="search-instock-toggle" title="${escH(t('search_only_instock_title'))}">
+        <input type="checkbox" ${S.searchOnlyInStock?'checked':''} onchange="S.searchOnlyInStock=this.checked;S.page=0;applyFilter()">
+        <span>${t('search_only_instock_label')}</span>
+      </label>
       <span id="count-label" class="count-label">${S.filtered.length.toLocaleString('de')} / ${S.pigeons.length.toLocaleString('de')}</span>
     </div>
-    <div id="stock-fallback-hint">${S._searchIgnoredStockFilter?`<div class="archive-hint">${t('search_archive_hint')}</div>`:''}</div>
+    <div id="stock-fallback-hint">${S._searchArchiveCount>0?`<div class="archive-hint">${t('search_archive_hint').replace('{n}',S._searchArchiveCount)}</div>`:''}</div>
     <div id="bulk-bar">${renderBulkBar()}</div>
     <div id="table-wrap" class="table-wrap">${buildTableHTML(page, si)}</div>
     <div id="pagination-wrap">${totalPages>1?buildPagination(totalPages):''}</div>`;
