@@ -11866,7 +11866,7 @@ async function aucUploadBlob(blob,name,ext){
   const path=`${name}-${Date.now()}.${ext||'jpg'}`;
   const base=SUPA_URL.replace('/rest/v1','/storage/v1/object/');
   const r=await fetch(base+AUC_BUCKET+'/'+path,{method:'POST',
-    headers:{apikey:SUPA_KEY,Authorization:'Bearer '+((typeof AUTH!=='undefined'&&AUTH.token)||SUPA_KEY),'Content-Type':blob.type||'image/jpeg','x-upsert':'true'},body:blob});
+    headers:{apikey:SUPA_KEY,Authorization:'Bearer '+((typeof AUTH!=='undefined'&&AUTH.token)||SUPA_KEY),'Content-Type':blob.type||'image/jpeg'},body:blob});
   if(!r.ok) throw new Error(await r.text());
   return base+'public/'+AUC_BUCKET+'/'+path;
 }
