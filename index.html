@@ -2621,6 +2621,7 @@ function renderDetail(p){
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-sm" onclick="startEdit('${p.pigeonid}')">${t('btn_edit_pigeon')}</button>
+          <button class="btn btn-sm btn-outline" onclick="openAuctionExport('${p.pigeonid}')">🕊 Auktion (HTML)</button>
         </div>
       </div>
 
@@ -11829,6 +11830,160 @@ function bindNachSearch(){
     renderLogin();
   }
 })();
+
+// ═══════════════════════════════════════════════════════════════
+// Auktions-Export für brieftauben-auction.de (erzeugt HTML-Quelltext)
+// Aufruf: Detailseite einer Taube → Button „🕊 Auktion (HTML)"
+// Fotos: Eigenfoto der Taube (Spalte photo) wird beim Erzeugen in den
+// öffentlichen Supabase-Storage-Bucket „auktion" hochgeladen → öffentliche URL.
+// ═══════════════════════════════════════════════════════════════
+const AUC_BUCKET='auktion';
+const AUC_DEF={
+  subtitle:'Versteigerung von Spitzentauben KERSTING-tauben.de LEIDEMAN, Neuhaus, Roeper,...',
+  icon:'https://kersting-tauben.de/wp/wp-content/uploads/2020/11/youtube_icon.jpeg',
+  vacc:'Die Tauben sind gegen Paramyxo/Rota geimpft.',
+  nogu:'Für das Geschlecht der Jungtauben wird keine Garantie übernommen.',
+  phone:'Bitte bei Rückfragen ab 17 Uhr unter 0152 53 45 48 27 anrufen !',
+  transport:'Hinweis zum Transport:\nDie ausgewiesenen Transportkosten in Höhe von 65,00 Euro sind ein Standardtarif und gelten für einen Versand innerhalb Deutschlands (max. zwei Tauben in einem Karton); jeder weitere Karton kostet 10,00 Euro. Andernfalls können Mehrkosten anfallen.\nAusländische Käufer müssen den Transport selber organisieren.\nWir befinden uns zwar in einem „Roten Gebiet“. Unser Spediteur hat aber bisher jeden Transport möglich gemacht.',
+  pickup:'Eine Übergabe in Kassel/DBA oder Abholung ab Schlag ist aber selbstverständlich auch möglich.'
+};
+let AUC=null;
+const aucLoad=k=>{try{return JSON.parse(localStorage.getItem('auc_'+k)||'null');}catch(e){return null;}};
+const aucSave=(k,v)=>{try{localStorage.setItem('auc_'+k,JSON.stringify(v));}catch(e){}};
+const aucRing=q=>String(ring(q)).replace(/^[A-Za-z]{1,3}[\s-]+(?=\d)/,'');
+function aucAnc(p){
+  const f=findFather(p), m=findMother(p);
+  return [['Vater',f],['Mutter',m],['Großvater väterlicherseits',f&&findFather(f)],['Großmutter väterlicherseits',f&&findMother(f)],
+          ['Großvater mütterlicherseits',m&&findFather(m)],['Großmutter mütterlicherseits',m&&findMother(m)]].filter(([,q])=>q);
+}
+async function aucPerf(q){
+  const parts=[]; if(q.info&&q.info.trim()) parts.push(q.info.trim());
+  try{ await loadPigeonTrips(q.pigeonid); const s=pigeonReiseSummary(q.pigeonid);
+    if(s&&s.gesetzt) parts.push(`Fliegt ${s.preise}/${s.gesetzt} Preise und ${Math.round(s.asSum)} AS-Pkt.`); }catch(e){}
+  return parts.join('\n');
+}
+async function aucUploadBlob(blob,name,ext){
+  const path=`${name}-${Date.now()}.${ext||'jpg'}`;
+  const base=SUPA_URL.replace('/rest/v1','/storage/v1/object/');
+  const r=await fetch(base+AUC_BUCKET+'/'+path,{method:'POST',
+    headers:{apikey:SUPA_KEY,Authorization:'Bearer '+((typeof AUTH!=='undefined'&&AUTH.token)||SUPA_KEY),'Content-Type':blob.type||'image/jpeg','x-upsert':'true'},body:blob});
+  if(!r.ok) throw new Error(await r.text());
+  return base+'public/'+AUC_BUCKET+'/'+path;
+}
+async function aucUpload(q){ return aucUploadBlob(await (await fetch(q.photo)).blob(),q.pigeonid,'jpg'); }
+// Familien-Stammbaum (4 Generationen) – dieselbe Vorlage wie „Druck → Bild (PNG)“
+async function aucPedPng(pid,withPhoto){
+  let iframe;
+  try{
+    await ensureHtml2Canvas();
+    const built=await buildFamilyPedigreeHtml(pid,4,!!withPhoto,await loadPrintErfolgeText());
+    if(!built) throw new Error('Stammbaum konnte nicht aufgebaut werden');
+    const pxW=Math.round(built.pageWmm*96/25.4), pxH=Math.round(built.pageHmm*96/25.4);
+    iframe=document.createElement('iframe');
+    iframe.style.cssText=`position:fixed;top:-10000px;left:-10000px;width:${pxW}px;height:${pxH}px;border:0`;
+    document.body.appendChild(iframe);
+    await new Promise((res,rej)=>{iframe.onload=res;iframe.onerror=()=>rej(new Error('Vorschau konnte nicht geladen werden'));iframe.srcdoc=built.html;});
+    await new Promise(r=>setTimeout(r,200));
+    const canvas=await window.html2canvas(iframe.contentDocument.body,{scale:2,backgroundColor:'#ffffff',useCORS:true,width:pxW,height:pxH,windowWidth:pxW,windowHeight:pxH});
+    const blob=await new Promise(res=>canvas.toBlob(res,'image/png'));
+    if(!blob) throw new Error('PNG konnte nicht erzeugt werden');
+    return blob;
+  } finally { if(iframe) iframe.remove(); }
+}
+function aucHtml(p,d,anc){
+  const e=escH, ln=t=>String(t||'').split('\n').map(s=>s.trim()).filter(Boolean);
+  const P=(inner,st)=>`<p><span style="${st}">${inner}</span></p>`;
+  const img=(k,alt)=>d.photos[k]?`<p><img alt="${e(alt)}" src="${e(d.photos[k])}" /></p>`:'';
+  const out=[];
+  out.push(P(`<strong>${e(aucRing(p))} ${sex_(p)==='F'?'W':'V'}${p.color?', '+e(String(p.color).toLowerCase()):''}</strong>`,'font-size:16px'));
+  ln(d.title).forEach(l=>out.push(P(e(l),'font-size:20px;color:#0070C0')));
+  if(d.sale.trim()) out.push(P(`<strong>${e(d.sale.trim())}</strong>`,'font-size:18px;color:#FF0000'));
+  anc.filter(([,q])=>d.inc[q.pigeonid]).forEach(([lab,q])=>{
+    out.push('<p>&nbsp;</p>');
+    out.push(P(`<strong>${e(lab)}: ${e(aucRing(q))}${q.name?' „'+e(q.name)+'“':''}</strong>`,'font-size:18px'));
+    ln(d.desc[q.pigeonid]).forEach(l=>out.push(P(`<strong>${e(l)}</strong>`,'font-size:14px;color:#0000FF')));
+    out.push(img(q.pigeonid,lab));
+  });
+  if(d.video.trim()){
+    const v=e(d.video.trim());
+    out.push(`<p><a href="${v}" target="_blank">${d.icon.trim()?`<img alt="Video" src="${e(d.icon.trim())}" />`:'Video ansehen'}</a></p>`);
+  }
+  out.push(img(p.pigeonid,aucRing(p)));
+  if(d.ped&&d.pedUrl){ out.push(P('<strong>Stammbaum</strong>','font-size:18px')); out.push(`<p><img alt="Stammbaum ${e(aucRing(p))}" src="${e(d.pedUrl)}" style="width:100%" /></p>`); }
+  ln(d.extra).forEach(l=>out.push(P(e(l),'font-size:18px')));
+  if(d.vacc.trim()) out.push(P(`<strong>${e(d.vacc.trim())}</strong>`,'font-size:18px'));
+  if(d.nogu.trim()) out.push(P(`<strong>${e(d.nogu.trim())}</strong>`,'font-size:18px'));
+  if(d.phone.trim()) out.push(P(`<strong><u>${e(d.phone.trim())}</u></strong>`,'font-size:20px;color:#FF0000'));
+  ln(d.transport).forEach((l,i)=>out.push(P(`<strong>${i===0?`<u>${e(l)}</u>`:e(l)}</strong>`,'font-size:14px;color:#0000FF')));
+  if(d.pickup.trim()) out.push(P(`<strong>${e(d.pickup.trim())}</strong>`,'font-size:18px;color:#FF0000'));
+  return out.filter(Boolean).join('\n\n');
+}
+async function openAuctionExport(id){
+  const p=findById(id); if(!p) return;
+  const anc=aucAnc(p), e=escH;
+  let d=aucLoad(id);
+  if(!d){
+    const f=findFather(p), m=findMother(p), nm=q=>q?(q.name||String(aucRing(q)).split('-').pop()):'?';
+    d=Object.assign({},AUC_DEF,aucLoad('defaults')||{},{atitle:'',title:'',video:'',extra:'',photos:{},desc:{},inc:{},
+      sale:(f||m)?`Sie bieten hier auf ${sex_(p)==='F'?'eine Tochter':'einen Sohn'} „${nm(f)} x ${nm(m)}“`:''});
+  }
+  d=Object.assign({atitle:'',subtitle:AUC_DEF.subtitle,ped:true,pedPhoto:true,pedUrl:''},d);
+  if(!d.atitle){ const f=findFather(p), m=findMother(p), nm=q=>q?(q.name||String(aucRing(q)).split('-').pop()):''; d.atitle=[f||m?nm(f)+' x '+nm(m):'',p.color||''].filter(Boolean).join(' ').slice(0,80); }
+  for(const [lab,q] of anc){ const k=q.pigeonid;
+    if(d.desc[k]==null) d.desc[k]=await aucPerf(q);
+    if(d.inc[k]==null) d.inc[k]=(lab==='Vater'||lab==='Mutter'); }
+  AUC={p,anc,d};
+  const inp=(k,lab,rows,max)=>`<div class="form-field" style="margin-bottom:8px"><label>${lab}${max?` <span id="auc_cnt_${k}" style="color:var(--text3)">${String(d[k]||'').length}/${max}</span>`:''}</label>${rows?`<textarea id="auc_${k}" rows="${rows}" style="width:100%">${e(d[k])}</textarea>`:`<input id="auc_${k}" value="${e(d[k])}" ${max?`maxlength="${max}" oninput="document.getElementById('auc_cnt_${k}').textContent=this.value.length+'/${max}'"`:''}>`}</div>`;
+  const photoRow=(q,k)=>`<input id="auc_ph_${k}" placeholder="Foto-URL (leer = Foto aus Verwaltung wird hochgeladen)" value="${e(d.photos[k]||'')}" style="width:100%;margin-top:4px"><div style="font-size:11px;color:var(--text3)">${q.photo?'📷 Foto in der Verwaltung vorhanden':'Kein Foto hinterlegt'}</div>`;
+  const wrap=document.createElement('div'); wrap.className='modal-overlay'; wrap.id='auc-modal';
+  wrap.innerHTML=`<div class="modal" style="max-width:820px;max-height:92vh;overflow:auto"><div class="modal-head"><div class="serif" style="font-size:19px">🕊 Auktions-HTML · ${e(aucRing(p))}</div><button class="modal-close" onclick="document.getElementById('auc-modal').remove()">×</button></div>
+    <div class="section-label">Felder der Auktionsseite</div>${inp('atitle','Titel',0,80)}${inp('subtitle','Untertitel',0,80)}
+    <div class="section-label">Beschreibung (CKEditor)</div>
+    ${inp('title','Überschrift / Besonderheiten (eine Zeile pro Absatz, blau)',3)}${inp('sale','Hauptzeile (rot)')}
+    <div class="section-label">Verkaufstaube – Foto</div><div style="margin-bottom:10px">${photoRow(p,p.pigeonid)}</div>
+    <div class="section-label">Stammbaum (4 Generationen, Familienansicht)</div>
+    <div style="margin-bottom:10px"><label><input type="checkbox" id="auc_ped" ${d.ped?'checked':''}> als Bild einfügen</label> &nbsp; <label><input type="checkbox" id="auc_pedPhoto" ${d.pedPhoto?'checked':''}> mit Fotos</label>
+      <input id="auc_pedUrl" placeholder="Bild-URL (leer = wird automatisch erzeugt und hochgeladen)" value="${e(d.pedUrl||'')}" style="width:100%;margin-top:4px"><div style="font-size:11px;color:var(--text3)">Nach Änderungen am Stammbaum oder an „mit Fotos“ die URL leeren, damit er neu erzeugt wird.</div></div>
+    <div class="section-label">Abstammung</div>
+    ${anc.map(([lab,q])=>{const k=q.pigeonid;return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px"><label style="font-weight:600"><input type="checkbox" id="auc_inc_${k}" ${d.inc[k]?'checked':''}> ${e(lab)}: ${e(aucRing(q))}${q.name?' „'+e(q.name)+'“':''}</label><textarea id="auc_desc_${k}" rows="3" style="width:100%;margin-top:6px">${e(d.desc[k])}</textarea>${photoRow(q,k)}</div>`;}).join('')||'<div style="font-size:12px;color:var(--text3)">Keine Eltern in der Verwaltung verknüpft.</div>'}
+    ${inp('video','Video-Link (YouTube o. ä.)')}${inp('extra','Weiterer Text (optional)',2)}
+    <div class="section-label">Standard-Bausteine (werden für die nächste Taube gemerkt)</div>
+    ${inp('icon','Video-Symbol (Bild-URL, leer = Textlink)')}${inp('vacc','Impfhinweis')}${inp('nogu','Garantie-Hinweis')}${inp('phone','Telefonhinweis (rot)')}${inp('transport','Transporthinweis (erste Zeile unterstrichen)',5)}${inp('pickup','Abholung / Übergabe (rot)')}
+    <div id="auc_msg" style="font-size:12px;margin:8px 0"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" onclick="aucGenerate()">HTML erzeugen</button></div>
+    <div id="auc_result" style="display:none;margin-top:14px"><div class="section-label">Vorschau</div><iframe id="auc_prev" style="width:100%;height:340px;background:#fff;border:1px solid var(--border);border-radius:8px"></iframe>
+      <div class="section-label" style="margin-top:10px">Titel / Untertitel für die Auktionsseite</div><div style="display:flex;gap:6px;margin-bottom:4px"><input id="auc_o_t" readonly style="flex:1"><button class="btn btn-outline btn-sm" onclick="aucCopyId('auc_o_t')">📋</button></div><div style="display:flex;gap:6px"><input id="auc_o_s" readonly style="flex:1"><button class="btn btn-outline btn-sm" onclick="aucCopyId('auc_o_s')">📋</button></div>
+      <div class="section-label" style="margin-top:10px">Quellcode – in CKEditor auf „Quelltext" klicken und dort einfügen</div><textarea id="auc_out" rows="8" readonly style="width:100%;font-family:monospace;font-size:11px"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn btn-outline" onclick="aucDownload()">⬇ .html</button><button class="btn" onclick="aucCopy()">📋 Quellcode kopieren</button></div></div></div>`;
+  document.body.appendChild(wrap);
+}
+async function aucGenerate(){
+  const {p,anc,d}=AUC, g=i=>document.getElementById(i), msg=g('auc_msg');
+  ['atitle','subtitle','title','sale','video','extra','icon','vacc','nogu','phone','transport','pickup'].forEach(k=>d[k]=g('auc_'+k).value);
+  d.ped=g('auc_ped').checked; d.pedPhoto=g('auc_pedPhoto').checked; d.pedUrl=g('auc_pedUrl').value.trim();
+  [p,...anc.map(a=>a[1])].forEach(q=>{const k=q.pigeonid; d.photos[k]=g('auc_ph_'+k).value.trim();
+    if(q!==p){d.desc[k]=g('auc_desc_'+k).value; d.inc[k]=g('auc_inc_'+k).checked;}});
+  try{
+    for(const q of [p,...anc.map(a=>a[1]).filter(q=>d.inc[q.pigeonid])]){
+      if(!d.photos[q.pigeonid]&&q.photo){ msg.style.color='var(--text3)'; msg.textContent='Lade Foto hoch: '+aucRing(q)+' …';
+        d.photos[q.pigeonid]=await aucUpload(q); g('auc_ph_'+q.pigeonid).value=d.photos[q.pigeonid]; }
+    }
+    if(d.ped&&!d.pedUrl){ msg.style.color='var(--text3)'; msg.textContent='Erzeuge Stammbaum-Bild …';
+      d.pedUrl=await aucUploadBlob(await aucPedPng(p.pigeonid,d.pedPhoto),'stammbaum-'+p.pigeonid,'png'); g('auc_pedUrl').value=d.pedUrl; }
+    msg.textContent='';
+  }catch(err){ msg.style.color='#e0a050';
+    msg.textContent='Foto-/Stammbaum-Upload nicht möglich (Storage-Bucket „'+AUC_BUCKET+'" einrichten – siehe Hinweis) – HTML wurde ohne dieses Foto erzeugt. Fehler: '+String(err.message||err).slice(0,160); }
+  aucSave(p.pigeonid,d); aucSave('defaults',{subtitle:d.subtitle,icon:d.icon,vacc:d.vacc,nogu:d.nogu,phone:d.phone,transport:d.transport,pickup:d.pickup});
+  const html=aucHtml(p,d,anc);
+  g('auc_out').value=html; g('auc_o_t').value=d.atitle; g('auc_o_s').value=d.subtitle; g('auc_prev').srcdoc='<body style="font-family:Arial;max-width:760px;margin:12px"><style>img{max-width:100%}</style>'+html;
+  g('auc_result').style.display='block';
+}
+function aucCopyId(i){ const t=document.getElementById(i); t.select(); navigator.clipboard?navigator.clipboard.writeText(t.value):document.execCommand('copy'); }
+function aucCopy(){ const t=document.getElementById('auc_out'); t.select();
+  (navigator.clipboard?navigator.clipboard.writeText(t.value):Promise.reject()).catch(()=>document.execCommand('copy')); }
+function aucDownload(){ const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([document.getElementById('auc_out').value],{type:'text/html'}));
+  a.download='auktion-'+aucRing(AUC.p)+'.html'; a.click(); }
 </script>
 </body>
 </html>
