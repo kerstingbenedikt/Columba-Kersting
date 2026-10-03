@@ -11890,12 +11890,17 @@ async function aucUploadBlob(blob,name,ext){
 }
 async function aucUpload(q){ return aucUploadBlob(await (await fetch(q.photo)).blob(),q.pigeonid,'jpg'); }
 // Familien-Stammbaum (4 Generationen) – dieselbe Vorlage wie „Druck → Bild (PNG)“
-async function aucPedPng(pid,withPhoto){
+async function aucPedBuild(pid,withPhoto){
+  const built=await buildFamilyPedigreeHtml(pid,4,!!withPhoto,await loadPrintErfolgeText());
+  if(!built) throw new Error('Stammbaum konnte nicht aufgebaut werden');
+  return built;
+}
+// Fingerabdruck des Stammbaum-HTML (enthält Namen, Ringe, Farben, Fotos): ändert sich etwas, wird neu erzeugt
+function aucHash(str){ let h=5381; for(let i=0;i<str.length;i++) h=((h<<5)+h+str.charCodeAt(i))|0; return h+'-'+str.length; }
+async function aucPedPng(built){
   let iframe;
   try{
     await ensureHtml2Canvas();
-    const built=await buildFamilyPedigreeHtml(pid,4,!!withPhoto,await loadPrintErfolgeText());
-    if(!built) throw new Error('Stammbaum konnte nicht aufgebaut werden');
     const pxW=Math.round(built.pageWmm*96/25.4), pxH=Math.round(built.pageHmm*96/25.4);
     iframe=document.createElement('iframe');
     iframe.style.cssText=`position:fixed;top:-10000px;left:-10000px;width:${pxW}px;height:${pxH}px;border:0`;
@@ -11945,7 +11950,7 @@ async function openAuctionExport(id){
     d=Object.assign({},AUC_DEF,aucLoad('defaults')||{},{atitle:'',title:'',video:'',extra:'',photos:{},desc:{},inc:{},
       sale:(f||m)?`Sie bieten hier auf ${sex_(p)==='F'?'eine Tochter':'einen Sohn'} „${nm(f)} x ${nm(m)}“`:''});
   }
-  d=Object.assign({atitle:'',subtitle:AUC_DEF.subtitle,ped:true,pedPhoto:true,pedUrl:''},d);
+  d=Object.assign({atitle:'',subtitle:AUC_DEF.subtitle,ped:true,pedPhoto:true,pedUrl:'',pedSig:'',pedAuto:''},d);
   if(String(d.transport||'').includes('Die ausgewiesenen Transportkosten')) d.transport=AUC_DEF.transport;
   if(!d.atitle){ const f=findFather(p), m=findMother(p), nm=q=>q?(q.name||String(aucRing(q)).split('-').pop()):''; d.atitle=[f||m?nm(f)+' x '+nm(m):'',p.color||''].filter(Boolean).join(' ').slice(0,80); }
   for(const [lab,q] of anc){ const k=q.pigeonid;
@@ -11962,7 +11967,7 @@ async function openAuctionExport(id){
     <div class="section-label">Verkaufstaube – Foto</div><div style="margin-bottom:10px">${photoRow(p,p.pigeonid)}</div>
     <div class="section-label">Stammbaum (4 Generationen, Familienansicht)</div>
     <div style="margin-bottom:10px"><label><input type="checkbox" id="auc_ped" ${d.ped?'checked':''}> als Bild einfügen</label> &nbsp; <label><input type="checkbox" id="auc_pedPhoto" ${d.pedPhoto?'checked':''}> mit Fotos</label>
-      <input id="auc_pedUrl" placeholder="Bild-URL (leer = wird automatisch erzeugt und hochgeladen)" value="${e(d.pedUrl||'')}" style="width:100%;margin-top:4px"><div style="font-size:11px;color:var(--text3)">Nach Änderungen am Stammbaum oder an „mit Fotos“ die URL leeren, damit er neu erzeugt wird.</div></div>
+      <input id="auc_pedUrl" placeholder="Bild-URL (leer = wird automatisch erzeugt und hochgeladen)" value="${e(d.pedUrl||'')}" style="width:100%;margin-top:4px"><div style="font-size:11px;color:var(--text3)">Bei jedem „HTML erzeugen“ wird geprüft, ob sich der Stammbaum geändert hat (Fotos, Namen, Eltern) – dann wird das Bild automatisch neu erzeugt. Eine selbst eingetragene URL bleibt unverändert.</div></div>
     <div class="section-label">Abstammung</div>
     ${anc.map(([lab,q])=>{const k=q.pigeonid;return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px"><label style="font-weight:600"><input type="checkbox" id="auc_inc_${k}" ${d.inc[k]?'checked':''}> ${e(lab)}: ${e(aucRing(q))}${q.name?' „'+e(q.name)+'“':''}</label><textarea id="auc_desc_${k}" rows="3" style="width:100%;margin-top:6px">${e(d.desc[k])}</textarea>${photoRow(q,k)}</div>`;}).join('')||'<div style="font-size:12px;color:var(--text3)">Keine Eltern in der Verwaltung verknüpft.</div>'}
     ${inp('video','Video-Link (YouTube o. ä.)')}${inp('extra','Weiterer Text (optional)',2)}
@@ -11987,8 +11992,13 @@ async function aucGenerate(){
       if(!d.photos[q.pigeonid]&&q.photo){ msg.style.color='var(--text3)'; msg.textContent='Lade Foto hoch: '+aucRing(q)+' …';
         d.photos[q.pigeonid]=await aucUpload(q); g('auc_ph_'+q.pigeonid).value=d.photos[q.pigeonid]; }
     }
-    if(d.ped&&!d.pedUrl){ msg.style.color='var(--text3)'; msg.textContent='Erzeuge Stammbaum-Bild …';
-      d.pedUrl=await aucUploadBlob(await aucPedPng(p.pigeonid,d.pedPhoto),'stammbaum-'+p.pigeonid,'png'); g('auc_pedUrl').value=d.pedUrl; }
+    if(d.ped&&!(d.pedUrl&&d.pedUrl!==d.pedAuto)){ // eigene URL im Feld = nicht automatisch ersetzen
+      msg.style.color='var(--text3)'; msg.textContent='Prüfe Stammbaum …';
+      const built=await aucPedBuild(p.pigeonid,d.pedPhoto), sig=aucHash(built.html);
+      if(!d.pedUrl||d.pedSig!==sig){ msg.textContent='Stammbaum hat sich geändert – erzeuge neues Bild …';
+        d.pedUrl=await aucUploadBlob(await aucPedPng(built),'stammbaum-'+p.pigeonid,'png');
+        d.pedAuto=d.pedUrl; d.pedSig=sig; g('auc_pedUrl').value=d.pedUrl; }
+    }
     msg.textContent='';
   }catch(err){ msg.style.color='#e0a050';
     msg.textContent='Foto-/Stammbaum-Upload nicht möglich (Storage-Bucket „'+AUC_BUCKET+'" einrichten – siehe Hinweis) – HTML wurde ohne dieses Foto erzeugt. Fehler: '+String(err.message||err).slice(0,160); }
