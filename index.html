@@ -11844,7 +11844,7 @@ const AUC_DEF={
   vacc:'Die Tauben sind gegen Paramyxo/Rota geimpft.',
   nogu:'Für das Geschlecht der Jungtauben wird keine Garantie übernommen.',
   phone:'Bitte bei Rückfragen ab 17 Uhr unter 0152 53 45 48 27 anrufen !',
-  transport:'Hinweis zum Transport:\nDie ausgewiesenen Transportkosten in Höhe von 65,00 Euro sind ein Standardtarif und gelten für einen Versand innerhalb Deutschlands (max. zwei Tauben in einem Karton); jeder weitere Karton kostet 10,00 Euro. Andernfalls können Mehrkosten anfallen.\nAusländische Käufer müssen den Transport selber organisieren.\nWir befinden uns zwar in einem „Roten Gebiet“. Unser Spediteur hat aber bisher jeden Transport möglich gemacht.',
+  transport:'Hinweis zum Transport:\nDer Käufer kümmert sich selber um den Transport. Gerne kann dabei unterstützt werden.',
   pickup:'Eine Übergabe in Kassel/DBA oder Abholung ab Schlag ist aber selbstverständlich auch möglich.'
 };
 let AUC=null;
@@ -11898,18 +11898,18 @@ function aucHtml(p,d,anc){
   out.push(P(`<strong>${e(aucRing(p))} ${sex_(p)==='F'?'W':'V'}${p.color?', '+e(String(p.color).toLowerCase()):''}</strong>`,'font-size:16px'));
   ln(d.title).forEach(l=>out.push(P(e(l),'font-size:20px;color:#0070C0')));
   if(d.sale.trim()) out.push(P(`<strong>${e(d.sale.trim())}</strong>`,'font-size:18px;color:#FF0000'));
+  out.push(img(p.pigeonid,aucRing(p)));
+  if(d.video.trim()){
+    const v=e(d.video.trim());
+    out.push(`<p><a href="${v}" target="_blank">${d.icon.trim()?`<img alt="Video" src="${e(d.icon.trim())}" />`:'Video ansehen'}</a></p>`);
+  }
   anc.filter(([,q])=>d.inc[q.pigeonid]).forEach(([lab,q])=>{
     out.push('<p>&nbsp;</p>');
     out.push(P(`<strong>${e(lab)}: ${e(aucRing(q))}${q.name?' „'+e(q.name)+'“':''}</strong>`,'font-size:18px'));
     ln(d.desc[q.pigeonid]).forEach(l=>out.push(P(`<strong>${e(l)}</strong>`,'font-size:14px;color:#0000FF')));
     out.push(img(q.pigeonid,lab));
   });
-  if(d.video.trim()){
-    const v=e(d.video.trim());
-    out.push(`<p><a href="${v}" target="_blank">${d.icon.trim()?`<img alt="Video" src="${e(d.icon.trim())}" />`:'Video ansehen'}</a></p>`);
-  }
-  out.push(img(p.pigeonid,aucRing(p)));
-  if(d.ped&&d.pedUrl){ out.push(P('<strong>Stammbaum</strong>','font-size:18px')); out.push(`<p><img alt="Stammbaum ${e(aucRing(p))}" src="${e(d.pedUrl)}" style="width:100%" /></p>`); }
+  if(d.ped&&d.pedUrl){ out.push(P('<strong>Stammbaum</strong>','font-size:18px')); out.push(`<p><a href="${e(d.pedUrl)}" target="_blank"><img alt="Stammbaum ${e(aucRing(p))}" src="${e(d.pedUrl)}" style="width:100%" /></a></p>`); out.push(P('Zum Vergrößern auf den Stammbaum klicken','font-size:12px;color:#808080')); }
   ln(d.extra).forEach(l=>out.push(P(e(l),'font-size:18px')));
   if(d.vacc.trim()) out.push(P(`<strong>${e(d.vacc.trim())}</strong>`,'font-size:18px'));
   if(d.nogu.trim()) out.push(P(`<strong>${e(d.nogu.trim())}</strong>`,'font-size:18px'));
@@ -11928,6 +11928,7 @@ async function openAuctionExport(id){
       sale:(f||m)?`Sie bieten hier auf ${sex_(p)==='F'?'eine Tochter':'einen Sohn'} „${nm(f)} x ${nm(m)}“`:''});
   }
   d=Object.assign({atitle:'',subtitle:AUC_DEF.subtitle,ped:true,pedPhoto:true,pedUrl:''},d);
+  if(String(d.transport||'').includes('Die ausgewiesenen Transportkosten')) d.transport=AUC_DEF.transport;
   if(!d.atitle){ const f=findFather(p), m=findMother(p), nm=q=>q?(q.name||String(aucRing(q)).split('-').pop()):''; d.atitle=[f||m?nm(f)+' x '+nm(m):'',p.color||''].filter(Boolean).join(' ').slice(0,80); }
   for(const [lab,q] of anc){ const k=q.pigeonid;
     if(d.desc[k]==null) d.desc[k]=await aucPerf(q);
