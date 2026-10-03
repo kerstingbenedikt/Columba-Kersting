@@ -363,7 +363,7 @@ const I18N = {
     fld_country:'Land', fld_assocno:'Verbandsnr.', fld_birthday:'Geburtstag', fld_died:'Verstorben',
     fld_bought:'Gekauft', fld_sold:'Verkauft', fld_instock:'Im Bestand', yes_word:'Ja', no_word:'Nein',
     fld_pigeontype:'Taubentyp', type_unset:'— nicht festgelegt —', type_racing:'Reisetaube',
-    type_breeding:'Zuchttaube', type_home:'Heimtaube',
+    type_breeding:'Zuchttaube', type_home:'Heimtaube', type_sale:'Verkauf',
     fld_info:'Info', fld_internal_info:'Interne Info', sec_parents:'Eltern',
     fld_father_ring:'Vater (Ringnummer)', fld_mother_ring:'Mutter (Ringnummer)', ph_ring_input:'Ringnummer eingeben…',
     edit_title:'Taube bearbeiten', btn_save:'Speichern', btn_cancel:'Abbrechen', btn_back_cancel:'← Abbrechen',
@@ -480,7 +480,7 @@ const I18N = {
     fld_country:'Country', fld_assocno:'Association No.', fld_birthday:'Birthday', fld_died:'Died',
     fld_bought:'Bought', fld_sold:'Sold', fld_instock:'In Stock', yes_word:'Yes', no_word:'No',
     fld_pigeontype:'Pigeon Type', type_unset:'— not set —', type_racing:'Racing Pigeon',
-    type_breeding:'Breeding Pigeon', type_home:'Home Pigeon',
+    type_breeding:'Breeding Pigeon', type_home:'Home Pigeon', type_sale:'For Sale',
     fld_info:'Info', fld_internal_info:'Internal Info', sec_parents:'Parents',
     fld_father_ring:'Father (Ring Number)', fld_mother_ring:'Mother (Ring Number)', ph_ring_input:'Enter ring number…',
     edit_title:'Edit Pigeon', btn_save:'Save', btn_cancel:'Cancel', btn_back_cancel:'← Cancel',
@@ -962,7 +962,8 @@ const COLUMN_DEFS = [
     val:p=>p.pigeontype||'', cell:p=>{
       const pt=p.pigeontype;
       const extra = pt==='Zuchttaube' ? `<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25);margin-left:6px">🥚 ${t('type_breeding')}</span>`
-        : pt==='Heimtaube' ? `<span class="badge badge-u" style="margin-left:6px">🏠 ${t('type_home')}</span>` : '';
+        : pt==='Heimtaube' ? `<span class="badge badge-u" style="margin-left:6px">🏠 ${t('type_home')}</span>`
+        : pt==='Verkauf' ? `<span class="badge" style="background:rgba(224,160,80,.12);color:#e0a050;border:1px solid rgba(224,160,80,.3);margin-left:6px">💰 ${t('type_sale')}</span>` : '';
       return qeReiseSwitchHtml(p) + extra;
     } },
   { key:'instock', get label(){return t('fld_instock');}, sortKey:'instock',
@@ -1011,7 +1012,7 @@ const BULK_FIELDS = [
     options:()=>[{v:'',l:'— leer —'}].concat(S.pigeonStates.map(s=>({v:s.pigeonstateid,l:s.name}))) },
   { key:'instock', label:'Im Bestand', type:'bool' },
   { key:'pigeontype', label:'Taubentyp', type:'select',
-    options:()=>[{v:'',l:'— leer —'},{v:'Reisetaube',l:'✈ Reisetaube'},{v:'Zuchttaube',l:'🥚 Zuchttaube'},{v:'Heimtaube',l:'🏠 Heimtaube'}] },
+    options:()=>[{v:'',l:'— leer —'},{v:'Reisetaube',l:'✈ Reisetaube'},{v:'Zuchttaube',l:'🥚 Zuchttaube'},{v:'Heimtaube',l:'🏠 Heimtaube'},{v:'Verkauf',l:'💰 Verkauf'}] },
   { key:'sold',    label:'Verkauft',   type:'bool' },
   { key:'died',    label:'Verstorben', type:'bool' },
   { key:'color',   label:'Farbe',      type:'text', list:'dl-colors' },
@@ -1430,6 +1431,18 @@ function qeReiseSwitchHtml(p){
       <span class="qe-track"></span>
     </label>
     <span class="qe-label">✈ ${t('type_racing')}</span>
+  </div>`;
+}
+
+// "Verkauf"-Schalter: AN setzt pigeontype='Verkauf', AUS setzt pigeontype=null.
+function qeSaleSwitchHtml(p){
+  const isSale = p.pigeontype==='Verkauf';
+  return `<div class="qe-row">
+    <label class="qe-switch" onclick="event.stopPropagation()" title="${escH(t('type_sale'))}">
+      <input type="checkbox" ${isSale?'checked':''} onchange="quickEditPigeonField('${p.pigeonid}','pigeontype',this.checked?'Verkauf':null,event)">
+      <span class="qe-track"></span>
+    </label>
+    <span class="qe-label">💰 ${t('type_sale')}</span>
   </div>`;
 }
 
@@ -2519,6 +2532,7 @@ function renderList(){
               <option value="Reisetaube"${S.typeFilter==='Reisetaube'?' selected':''}>✈ ${t('type_racing')}</option>
               <option value="Zuchttaube"${S.typeFilter==='Zuchttaube'?' selected':''}>🥚 ${t('type_breeding')}</option>
               <option value="Heimtaube"${S.typeFilter==='Heimtaube'?' selected':''}>🏠 ${t('type_home')}</option>
+              <option value="Verkauf"${S.typeFilter==='Verkauf'?' selected':''}>💰 ${t('type_sale')}</option>
             </select>
             <select id="standort-filter" onchange="S.standortFilter=this.value;S.page=0;applyFilter()">
               <option value="all">${t('filter_all_locations')}</option>
@@ -2582,7 +2596,7 @@ function renderDetail(p){
     [t('fld_birthday'),p.birthday],[t('fld_died'),p.died],
     [t('fld_bought'),p.bought],[t('fld_sold'),p.sold],
     [t('fld_instock'),p.instock!=null?(p.instock?t('yes_word'):t('no_word')):null],
-    [t('fld_pigeontype'),p.pigeontype?(p.pigeontype==='Reisetaube'?t('type_racing'):p.pigeontype==='Zuchttaube'?t('type_breeding'):p.pigeontype==='Heimtaube'?t('type_home'):p.pigeontype):null],
+    [t('fld_pigeontype'),p.pigeontype?(p.pigeontype==='Reisetaube'?t('type_racing'):p.pigeontype==='Zuchttaube'?t('type_breeding'):p.pigeontype==='Heimtaube'?t('type_home'):p.pigeontype==='Verkauf'?t('type_sale'):p.pigeontype):null],
     [t('fld_status'),stateName?tStatus(stateName):null],
     [t('fld_inbreedcoeff'),p.inbreedcoefficient!=null?Number(p.inbreedcoefficient).toFixed(4):null],
     [t('fld_calc_inbreed'),ib>0?`${(ib*100).toFixed(2)} %`:null],
@@ -2615,6 +2629,7 @@ function renderDetail(p){
               ${p.pigeontype==='Reisetaube'?`<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25)">✈ ${t('type_racing')}</span>`:''}
               ${p.pigeontype==='Zuchttaube'?`<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25)">🥚 ${t('type_breeding')}</span>`:''}
               ${p.pigeontype==='Heimtaube'?`<span class="badge badge-u">🏠 ${t('type_home')}</span>`:''}
+              ${p.pigeontype==='Verkauf'?`<span class="badge" style="background:rgba(224,160,80,.12);color:#e0a050;border:1px solid rgba(224,160,80,.3)">💰 ${t('type_sale')}</span>`:''}
               ${p.instock===false?`<span class="badge" style="background:#2a1a0a;color:#c8883a">${t('detail_not_instock')}</span>`:''}
             </div>
           </div>
@@ -2634,6 +2649,7 @@ function renderDetail(p){
         <div class="qe-group">
           <span class="qe-group-label">${t('fld_pigeontype')}</span>
           ${qeReiseSwitchHtml(p)}
+          ${qeSaleSwitchHtml(p)}
         </div>
         <div class="qe-group">
           <span class="qe-group-label">${t('fld_status')}</span>
@@ -2947,6 +2963,7 @@ function renderDetailEdit(p){
             <option value="Reisetaube" ${p.pigeontype==='Reisetaube'?'selected':''}>✈ ${t('type_racing')}</option>
             <option value="Zuchttaube" ${p.pigeontype==='Zuchttaube'?'selected':''}>🥚 ${t('type_breeding')}</option>
             <option value="Heimtaube" ${p.pigeontype==='Heimtaube'?'selected':''}>🏠 ${t('type_home')}</option>
+            <option value="Verkauf" ${p.pigeontype==='Verkauf'?'selected':''}>💰 ${t('type_sale')}</option>
           </select>
         </div>
         <div class="form-field" style="grid-column:1/-1"><label>${t('fld_info')}</label><textarea id="e_info" rows="3" style="width:100%;resize:vertical">${fv(p,'info')}</textarea></div>
@@ -5162,6 +5179,7 @@ function renderNeu(){
           <option value="Reisetaube">✈ ${t('type_racing')}</option>
           <option value="Zuchttaube">🥚 ${t('type_breeding')}</option>
           <option value="Heimtaube">🏠 ${t('type_home')}</option>
+          <option value="Verkauf">💰 ${t('type_sale')}</option>
         </select>
       </div>
     </div>
