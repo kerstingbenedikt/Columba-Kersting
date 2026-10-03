@@ -351,7 +351,7 @@ const I18N = {
     ped_virtual_label:'Virtueller Nachkomme', ped_virtual_badge:'Prognose',
     cock:'Täuber', hen:'Täubin', ped_unknown:'Unbekannt', year_abbr:'Jg.', breeder_abbr:'Z:',
     inbreeding_label:'Inzuchtkoeff. (ber.):', inbreeding_suffix:'Inzucht',
-    print_label:'Druck:', with_photo:'Mit Foto', breeder_data_btn:'Züchterdaten',
+    print_label:'Druck:', with_photo:'Mit Foto', with_travel:'Mit Reisedaten', breeder_data_btn:'Züchterdaten',
     legend_click:'Klick → Stammbaum wechseln', pedigree_not_found:'Taube nicht gefunden.',
     gens:'Gen.',
     sub_details:'Details', sub_pedigree:'Stammbaum', sub_offspring:'Nachkommen', sub_pairing:'Paarungscheck',
@@ -468,7 +468,7 @@ const I18N = {
     ped_virtual_label:'Virtual Offspring', ped_virtual_badge:'Forecast',
     cock:'Cock', hen:'Hen', ped_unknown:'Unknown', year_abbr:'Yr.', breeder_abbr:'Br:',
     inbreeding_label:'Inbreeding coeff. (calc.):', inbreeding_suffix:'inbreeding',
-    print_label:'Print:', with_photo:'With photo', breeder_data_btn:'Breeder data',
+    print_label:'Print:', with_photo:'With photo', with_travel:'With race data', breeder_data_btn:'Breeder data',
     legend_click:'Click → switch pedigree', pedigree_not_found:'Pigeon not found.',
     gens:'gen.',
     sub_details:'Details', sub_pedigree:'Pedigree', sub_offspring:'Offspring', sub_pairing:'Pairing Check',
@@ -3191,6 +3191,9 @@ function renderPedigreeInner(root, opts, embedded){
             <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);cursor:pointer">
               <input type="checkbox" id="ped-print-photo" checked style="width:14px;height:14px;cursor:pointer"> ${t('with_photo')}
             </label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);cursor:pointer" title="Flugergebnisse (Preise, Top-Platzierungen) automatisch aus den Flügen in den Stammbaum drucken">
+              <input type="checkbox" id="ped-print-travel" checked style="width:14px;height:14px;cursor:pointer"> ${t('with_travel')}
+            </label>
             <button class="btn btn-outline btn-sm" onclick="openPedigreePrintMenu(event,'${root.pigeonid}',4)">🖨 4 ${t('gens')}</button>
             <button class="btn btn-outline btn-sm" onclick="openPedigreePrintMenu(event,'${root.pigeonid}',5)">🖨 5 ${t('gens')}</button>
             <button class="btn btn-outline btn-sm" onclick="openFamilyPedigreePrintMenu(event,'${root.pigeonid}',4)" title="Proband klein links in der Mitte, Vater/Mutter je 2/5, 4 Ahnengenerationen rechts">🖨 Familienstil</button>
@@ -3401,6 +3404,15 @@ async function buildPedigreeTreeData(pid, gens){
   return { root, gens, tree, rows, landscape, pageWmm, pageHmm, totalConn, datWmm, conWmm, breederProf, filenameBase, _ring, _sex, _father, _mother };
 }
 
+// Reisedaten (Flugergebnisse) im Stammbaum: Häkchen „Mit Reisedaten“ im Druckdialog;
+// PED_TRAVEL_OVERRIDE erlaubt anderen Funktionen (z. B. Auktions-Export), den Wert fest vorzugeben.
+let PED_TRAVEL_OVERRIDE = null;
+function pedPrintTravel(){
+  if(typeof PED_TRAVEL_OVERRIDE==='boolean') return PED_TRAVEL_OVERRIDE;
+  const el = document.getElementById('ped-print-travel');
+  return el ? el.checked : true;
+}
+
 // Gemeinsame Box-Rendering-Funktion für alle Stammbaum-Exportformate (Fächer-Stil
 // und Familien-Stil) — Infomenge abhängig von Generation und verfügbarem Platz.
 function pedigreeBoxHtml(p, gen, ctx){
@@ -3421,10 +3433,10 @@ function pedigreeBoxHtml(p, gen, ctx){
   const showName = gen<=3 || !landscape;
 
   const travelMaxYears = gen===0?3:gen===1?2:1;
-  const travelLines = (gen<=2 && p.pigeonid) ? pigeonTravelCompactLines(p.pigeonid, travelMaxYears) : [];
+  const travelLines = (gen<=2 && p.pigeonid && pedPrintTravel()) ? pigeonTravelCompactLines(p.pigeonid, travelMaxYears) : [];
   const szTravel = gen===0?'7pt':gen===1?'6.5pt':'6pt';
 
-  const topLines = (gen<=1 && p.pigeonid) ? pigeonTopPlacementsCompactLines(p.pigeonid) : [];
+  const topLines = (gen<=1 && p.pigeonid && pedPrintTravel()) ? pigeonTopPlacementsCompactLines(p.pigeonid) : [];
   const szTop = gen===0?'7pt':'6.5pt';
 
   const photoSize = gen===0?'15mm':gen===1?'11mm':'8mm';
@@ -3893,8 +3905,8 @@ function _pdfDrawBox(doc, p, gen, x, y, w, h, landscape, withPhoto, mmPerPt, _se
   const showInfo = gen<=2 && info;
   const showName = gen<=3 || !landscape;
   const travelMaxYears = gen===0?3:gen===1?2:1;
-  const travelLines = (gen<=2 && p.pigeonid) ? pigeonTravelCompactLines(p.pigeonid, travelMaxYears) : [];
-  const topLines    = (gen<=1 && p.pigeonid) ? pigeonTopPlacementsCompactLines(p.pigeonid) : [];
+  const travelLines = (gen<=2 && p.pigeonid && pedPrintTravel()) ? pigeonTravelCompactLines(p.pigeonid, travelMaxYears) : [];
+  const topLines    = (gen<=1 && p.pigeonid && pedPrintTravel()) ? pigeonTopPlacementsCompactLines(p.pigeonid) : [];
 
   const photoSize = withPhoto && p.photo ? (gen===0?15:gen===1?11:8) : 0;
   if(photoSize){
@@ -11890,10 +11902,13 @@ async function aucUploadBlob(blob,name,ext){
 }
 async function aucUpload(q){ return aucUploadBlob(await (await fetch(q.photo)).blob(),q.pigeonid,'jpg'); }
 // Familien-Stammbaum (4 Generationen) – dieselbe Vorlage wie „Druck → Bild (PNG)“
-async function aucPedBuild(pid,withPhoto){
-  const built=await buildFamilyPedigreeHtml(pid,4,!!withPhoto,await loadPrintErfolgeText());
-  if(!built) throw new Error('Stammbaum konnte nicht aufgebaut werden');
-  return built;
+async function aucPedBuild(pid,withPhoto,withTravel){
+  PED_TRAVEL_OVERRIDE=!!withTravel;
+  try{
+    const built=await buildFamilyPedigreeHtml(pid,4,!!withPhoto,await loadPrintErfolgeText());
+    if(!built) throw new Error('Stammbaum konnte nicht aufgebaut werden');
+    return built;
+  } finally { PED_TRAVEL_OVERRIDE=null; }
 }
 // Fingerabdruck des Stammbaum-HTML (enthält Namen, Ringe, Farben, Fotos): ändert sich etwas, wird neu erzeugt
 function aucHash(str){ let h=5381; for(let i=0;i<str.length;i++) h=((h<<5)+h+str.charCodeAt(i))|0; return h+'-'+str.length; }
@@ -11950,7 +11965,7 @@ async function openAuctionExport(id){
     d=Object.assign({},AUC_DEF,aucLoad('defaults')||{},{atitle:'',title:'',video:'',extra:'',photos:{},desc:{},inc:{},
       sale:(f||m)?`Sie bieten hier auf ${sex_(p)==='F'?'eine Tochter':'einen Sohn'} „${nm(f)} x ${nm(m)}“`:''});
   }
-  d=Object.assign({atitle:'',subtitle:AUC_DEF.subtitle,ped:true,pedPhoto:true,pedUrl:'',pedSig:'',pedAuto:''},d);
+  d=Object.assign({atitle:'',subtitle:AUC_DEF.subtitle,ped:true,pedPhoto:true,pedTravel:true,pedUrl:'',pedSig:'',pedAuto:''},d);
   if(String(d.transport||'').includes('Die ausgewiesenen Transportkosten')) d.transport=AUC_DEF.transport;
   if(!d.atitle){ const f=findFather(p), m=findMother(p), nm=q=>q?(q.name||String(aucRing(q)).split('-').pop()):''; d.atitle=[f||m?nm(f)+' x '+nm(m):'',p.color||''].filter(Boolean).join(' ').slice(0,80); }
   for(const [lab,q] of anc){ const k=q.pigeonid;
@@ -11966,7 +11981,7 @@ async function openAuctionExport(id){
     ${inp('title','Überschrift / Besonderheiten (eine Zeile pro Absatz, blau)',3)}${inp('sale','Hauptzeile (rot)')}
     <div class="section-label">Verkaufstaube – Foto</div><div style="margin-bottom:10px">${photoRow(p,p.pigeonid)}</div>
     <div class="section-label">Stammbaum (4 Generationen, Familienansicht)</div>
-    <div style="margin-bottom:10px"><label><input type="checkbox" id="auc_ped" ${d.ped?'checked':''}> als Bild einfügen</label> &nbsp; <label><input type="checkbox" id="auc_pedPhoto" ${d.pedPhoto?'checked':''}> mit Fotos</label>
+    <div style="margin-bottom:10px"><label><input type="checkbox" id="auc_ped" ${d.ped?'checked':''}> als Bild einfügen</label> &nbsp; <label><input type="checkbox" id="auc_pedPhoto" ${d.pedPhoto?'checked':''}> mit Fotos</label> &nbsp; <label><input type="checkbox" id="auc_pedTravel" ${d.pedTravel?'checked':''}> mit Reisedaten aus den Flügen</label>
       <input id="auc_pedUrl" placeholder="Bild-URL (leer = wird automatisch erzeugt und hochgeladen)" value="${e(d.pedUrl||'')}" style="width:100%;margin-top:4px"><div style="font-size:11px;color:var(--text3)">Bei jedem „HTML erzeugen“ wird geprüft, ob sich der Stammbaum geändert hat (Fotos, Namen, Eltern) – dann wird das Bild automatisch neu erzeugt. Eine selbst eingetragene URL bleibt unverändert.</div></div>
     <div class="section-label">Abstammung</div>
     ${anc.map(([lab,q])=>{const k=q.pigeonid;return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px"><label style="font-weight:600"><input type="checkbox" id="auc_inc_${k}" ${d.inc[k]?'checked':''}> ${e(lab)}: ${e(aucRing(q))}${q.name?' „'+e(q.name)+'“':''}</label><textarea id="auc_desc_${k}" rows="3" style="width:100%;margin-top:6px">${e(d.desc[k])}</textarea>${photoRow(q,k)}</div>`;}).join('')||'<div style="font-size:12px;color:var(--text3)">Keine Eltern in der Verwaltung verknüpft.</div>'}
@@ -11984,7 +11999,7 @@ async function openAuctionExport(id){
 async function aucGenerate(){
   const {p,anc,d}=AUC, g=i=>document.getElementById(i), msg=g('auc_msg');
   ['atitle','subtitle','title','sale','video','extra','icon','vacc','nogu','phone','transport','pickup'].forEach(k=>d[k]=g('auc_'+k).value);
-  d.ped=g('auc_ped').checked; d.pedPhoto=g('auc_pedPhoto').checked; d.pedUrl=g('auc_pedUrl').value.trim();
+  d.ped=g('auc_ped').checked; d.pedPhoto=g('auc_pedPhoto').checked; d.pedTravel=g('auc_pedTravel').checked; d.pedUrl=g('auc_pedUrl').value.trim();
   [p,...anc.map(a=>a[1])].forEach(q=>{const k=q.pigeonid; d.photos[k]=g('auc_ph_'+k).value.trim();
     if(q!==p){d.desc[k]=g('auc_desc_'+k).value; d.inc[k]=g('auc_inc_'+k).checked;}});
   try{
@@ -11994,7 +12009,7 @@ async function aucGenerate(){
     }
     if(d.ped&&!(d.pedUrl&&d.pedUrl!==d.pedAuto)){ // eigene URL im Feld = nicht automatisch ersetzen
       msg.style.color='var(--text3)'; msg.textContent='Prüfe Stammbaum …';
-      const built=await aucPedBuild(p.pigeonid,d.pedPhoto), sig=aucHash(built.html);
+      const built=await aucPedBuild(p.pigeonid,d.pedPhoto,d.pedTravel), sig=aucHash(built.html);
       if(!d.pedUrl||d.pedSig!==sig){ msg.textContent='Stammbaum hat sich geändert – erzeuge neues Bild …';
         d.pedUrl=await aucUploadBlob(await aucPedPng(built),'stammbaum-'+p.pigeonid,'png');
         d.pedAuto=d.pedUrl; d.pedSig=sig; g('auc_pedUrl').value=d.pedUrl; }
