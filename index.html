@@ -3753,6 +3753,54 @@ function pedLogoAccent(src){
   });
 }
 
+// Bis zu 5 deutlich verschiedene Textfarben aus dem Züchter-Logo (für Text auf Weiß abgedunkelt).
+const PED_PAL_CACHE = {};
+const PED_PAL_DEFAULT = ['#e0509c','#2a9ab8','#3f6fc8','#1a6b1a','#9a5b00'];
+function pedLogoPalette(src){
+  if(!src) return Promise.resolve(PED_PAL_DEFAULT.slice());
+  const ck = src.length+':'+src.slice(-40);
+  if(PED_PAL_CACHE[ck]) return Promise.resolve(PED_PAL_CACHE[ck]);
+  return new Promise(res=>{
+    const done = a=>{ const out=(a||[]).slice(0,5); for(const d of PED_PAL_DEFAULT){ if(out.length>=5) break; if(!out.includes(d)) out.push(d); } PED_PAL_CACHE[ck]=out; res(out); };
+    const img = new Image();
+    img.onload = ()=>{
+      try{
+        const W=64, H=Math.max(1,Math.round(64*img.height/Math.max(1,img.width)));
+        const c=document.createElement('canvas'); c.width=W; c.height=H;
+        const x=c.getContext('2d'); x.drawImage(img,0,0,W,H);
+        const d=x.getImageData(0,0,W,H).data, B={};
+        for(let i=0;i<d.length;i+=4){
+          const r=d[i],g=d[i+1],b=d[i+2],a=d[i+3];
+          if(a<128) continue;
+          const mx=Math.max(r,g,b), mn=Math.min(r,g,b), l=(mx+mn)/510;
+          if(l>0.95||l<0.08) continue;
+          const sat = mx===0?0:(mx-mn)/mx;
+          if(sat<0.2 && l>0.3) continue;            // Grautöne nur wenn dunkel (Schwarz/Anthrazit des Logos zulassen)
+          const key=(r>>4)+','+(g>>4)+','+(b>>4);
+          const o=B[key]||(B[key]={w:0,n:0,r:0,g:0,b:0});
+          o.w+= (sat<0.2 ? 0.25 : sat); o.n++; o.r+=r; o.g+=g; o.b+=b;
+        }
+        const list = Object.values(B).sort((a,b)=>b.w-a.w).map(o=>({r:o.r/o.n,g:o.g/o.n,b:o.b/o.n}));
+        const hsl=(r,g,b)=>{ r/=255;g/=255;b/=255; const mx=Math.max(r,g,b),mn=Math.min(r,g,b); let h=0,s=0,l=(mx+mn)/2;
+          if(mx!==mn){ const dd=mx-mn; s=l>0.5?dd/(2-mx-mn):dd/(mx+mn); h=mx===r?(g-b)/dd+(g<b?6:0):mx===g?(b-r)/dd+2:(r-g)/dd+4; h/=6; } return {h,s,l}; };
+        const toHex=(h,sl,l)=>{ const f=(p,q,t)=>{ if(t<0)t+=1; if(t>1)t-=1; return t<1/6?p+(q-p)*6*t:t<1/2?q:t<2/3?p+(q-p)*(2/3-t)*6:p; };
+          const q=l<0.5?l*(1+sl):l+sl-l*sl, p=2*l-q; const hx=v=>('0'+Math.round(v*255).toString(16)).slice(-2);
+          return '#'+hx(f(p,q,h+1/3))+hx(f(p,q,h))+hx(f(p,q,h-1/3)); };
+        const picked=[];
+        for(const c of list){
+          const k=hsl(c.r,c.g,c.b);
+          const near = picked.some(p=>{ const dh=Math.min(Math.abs(p.h-k.h),1-Math.abs(p.h-k.h)); return (k.s<0.2||p.s<0.2) ? (k.s<0.2&&p.s<0.2) : dh<0.06; });
+          if(near) continue;
+          picked.push(k); if(picked.length>=5) break;
+        }
+        done(picked.map(k=> k.s<0.2 ? toHex(k.h,k.s,Math.min(k.l,0.3)) : toHex(k.h,Math.max(k.s,0.45),Math.min(k.l,0.38))));
+      }catch(e){ done([]); }
+    };
+    img.onerror = ()=>done([]);
+    img.src = src;
+  });
+}
+
 // ── Standard-Stammbaum: ein Layout, Optionen im Druckdialog ──────────────────
 // Eltern in Spalte 1 (Proband dazwischen), weitere Ahnen in eigenen Spalten nach rechts.
 // Optionen (PP): gens 3/4/5 Ahnengenerationen, orient hoch/quer, color standard/geschlecht/sw,
@@ -3763,6 +3811,10 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
     const G = parseInt(gens)||4;
     const landscape = o.orient==='quer';
     const colorMode = o.color||'standard', frameMode = o.frame||'neutral';
+    const pal = (o.palette && o.palette.length>=5) ? o.palette : PED_PAL_DEFAULT;
+    const IT = o.items || {travel:{on:true,c:0}, breeder:{on:true,c:1}, line:{on:false,c:2}, info:{on:true,c:3}};
+    const itOn = k => !!(IT[k] && IT[k].on);
+    const itCol = k => (colorMode==='sw') ? (k==='travel'?'#333':'#444') : (pal[(IT[k]&&IT[k].c)||0] || '#555');
     const data = await buildPedigreeTreeData(pid, G+1);
     if(!data){ alert('Taube nicht gefunden'); return null; }
     const { root, tree, breederProf, _ring, _sex } = data;
@@ -3774,8 +3826,8 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
     const innerW = pageWmm - 2*mX;
     const U = Math.pow(2, G+1);                 // Rastereinheiten (tiefste Spalte = 2 je Box)
     const logoAcc = (colorMode==='sw') ? null : await pedLogoAccent(breederProf && breederProf.logo);
-    const hdrHtml = pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc, logoAcc || (colorMode==='sw'?'#333':null), true);
-    const gridH = pageHmm - mTop - mBot - (hdrHtml?24:0) - 5;   // grobe Höhe des Rasters (mm)
+    const hdrHtml = pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc, logoAcc || (colorMode==='sw'?'#333':null));
+    const gridH = pageHmm - mTop - mBot - (hdrHtml?30:0) - 5;   // grobe Höhe des Rasters (mm)
 
     // Ahnen in beiden Linien erkennen (Ahnenverlust)
     const keyOf = p => p ? (p.pigeonid || ('r:'+_ring(p))) : null;
@@ -3794,10 +3846,11 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
     const SEXC = {M:'#3a7bd5', F:'#8e44ad', '?':'#888'};
     const INK='#1a1a1a';
     const COLC = colorMode==='sw' ? '#222' : '#3f6fc8';   // Gefiederfarbe: eigene Zeile, farblich abgesetzt
-    const scheme = (sx)=>{
-      if(colorMode==='sw')        return {ring:INK, name:'#222', brd:'#444', gray:'#555', trv:'#333', top:'#333'};
-      if(colorMode==='geschlecht')return {ring:SEXC[sx]||SEXC['?'], name:INK, brd:logoAcc||'#666', gray:'#555', trv:logoAcc||'#1a6b1a', top:logoAcc||'#333'};
-      return {ring:INK, name:'#2a9ab8', brd:'#e0509c', gray:'#555', trv:logoAcc||'#1a6b1a', top:logoAcc||'#333'};
+    const scheme = (sx)=>{  // Elementfarben (Züchter/Linie/Info/Reisedaten) kommen aus itCol()
+      const el = {brd:itCol('breeder'), line:itCol('line'), gray:itCol('info'), trv:itCol('travel'), top:itCol('travel')};
+      if(colorMode==='sw')        return Object.assign({ring:INK, name:'#222'}, el);
+      if(colorMode==='geschlecht')return Object.assign({ring:SEXC[sx]||SEXC['?'], name:INK}, el);
+      return Object.assign({ring:INK, name:'#2a9ab8'}, el);
     };
     // Schriftgrößen je Spalte; bei 5 Generationen etwas kleiner
     const k = G>=5 ? .88 : 1;
@@ -3827,8 +3880,9 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
       // wie viele Zeilen passen in die Box?
       const lineH = z.txt*k*MM*1.3, ringH = z.ring*k*MM*1.25;
       const n = Math.floor((boxH - 2.4 - ringH)/lineH);
-      const gray = T(p.info);
-      const zl = T(p.breeder) || T(p.race);   // Züchter, ersatzweise Rasse
+      const infoStr = T(p.info);
+      const zl = itOn('breeder') ? (T(p.breeder) || T(p.race)) : '';   // Züchter, ersatzweise Rasse
+      const lineStr = itOn('line') ? T(p.strain) : '';
       const phH = g===1?'17mm':g===2?'11mm':'';
       const photo = (withPhoto && p.photo && phH && boxH>=(g===1?40:34))
         ? `<img src="${p.photo}" style="display:block;height:${phH};max-width:100%;object-fit:cover;border-radius:.8mm;border:.2mm solid #ddd;margin:.8mm 0 1mm">`
@@ -3837,8 +3891,14 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
         ? `<div style="font-size:7pt;color:#666">🧬 Prognose</div>`
         : `<div style="font-weight:700;font-size:${pt(z.ring)};color:${sc.ring};${one};line-height:1.2">${_esc(_ring(p))}${letter}</div>`;
       const txt = pt(z.txt);
-      const body = `${(p.name&&n>=1)?`<div style="font-style:italic;font-weight:${colorMode==='standard'?700:400};color:${sc.name};font-size:${txt};${one};line-height:1.3">„${_esc(p.name)}“</div>`:''}
-        ${(zl&&n>=2)?`<div style="font-weight:${colorMode==='standard'?700:400};color:${sc.brd};font-size:${txt};${one};line-height:1.3">${_esc(zl)}</div>`:''}`;
+      let left = n;                                   // verfügbare Textzeilen unter dem Ring
+      const take = ()=>{ if(left>0){ left--; return true; } return false; };
+      const bold = colorMode==='standard'?700:400;
+      let body = '';
+      if(p.name && take())  body += `<div style="font-style:italic;font-weight:${bold};color:${sc.name};font-size:${txt};${one};line-height:1.3">„${_esc(p.name)}“</div>`;
+      if(zl && take())      body += `<div style="font-weight:${bold};color:${sc.brd};font-size:${txt};${one};line-height:1.3">${_esc(zl)}</div>`;
+      if(lineStr && take()) body += `<div style="color:${sc.line};font-size:${txt};${one};line-height:1.3">${_esc(lineStr)}</div>`;
+      if(T(p.color) && take()) body += `<div style="color:${COLC};font-size:${txt};${one};line-height:1.3">${_esc(T(p.color))}</div>`;
       // Reisedaten (Häkchen „Mit Reisedaten“)
       let trv = '';
       if(showTravel && g<=2 && p.pigeonid && boxH>=26){
@@ -3847,12 +3907,16 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
         if(lines.length) trv += `<div style="font-size:${pt(Math.max(6,z.txt-.5))};color:${sc.trv};margin-top:.8mm;padding-top:.2mm;line-height:1.35">${lines.map(_esc).join('<br>')}</div>`;
         if(top.length)   trv += `<div style="font-size:${pt(Math.max(6,z.txt-.5))};color:${sc.top};margin-top:.5mm;line-height:1.35">${top.map(_esc).join('<br>')}</div>`;
       }
-      const colLine = (T(p.color) && n>=3) ? `<div style="color:${COLC};font-size:${pt(z.txt)};${one};line-height:1.3">${_esc(T(p.color))}</div>` : '';
-      const infoTxt = (g<=3 && gray && n>=4) ? `<div style="color:${sc.gray};${trv?'margin-top:.8mm;border-top:.2mm solid #ddd;padding-top:.5mm;':''}font-size:${txt};line-height:1.3;word-break:break-word;overflow:hidden">${_esc(gray)}</div>` : '';
-      return `<div style="height:100%;${border};border-radius:1.2mm;background:#fff;padding:1mm 1.6mm;overflow:hidden">${head}${body}${colLine}${photo}${trv}${infoTxt}</div>`;
+      const infoTxt = (itOn('info') && g<=3 && infoStr && left>=1) ? `<div style="color:${sc.gray};font-size:${txt};line-height:1.3;word-break:break-word;overflow:hidden;${trv?'margin-top:.8mm;border-top:.2mm solid #ddd;padding-top:.5mm;':''}">${_esc(infoStr)}</div>` : '';
+      return `<div style="height:100%;${border};border-radius:1.2mm;background:#fff;padding:1mm 1.6mm;overflow:hidden">${head}${body}${photo}${trv}${infoTxt}</div>`;
     };
 
-    const pr = Math.max(3, Math.round(U*0.19));        // Höhe der Proband-Box (Rastereinheiten)
+    // Reisedaten des Probanden (mind. 2 Jahre, bis 3) – die Proband-Box wächst dafür etwas mit
+    const proB = tree[0][0];
+    const probTrv = (showTravel && proB && proB.pigeonid && !proB._virtual) ? (pigeonTravelCompactLines(proB.pigeonid, 3)||[]) : [];
+    const probTop = (showTravel && proB && proB.pigeonid && !proB._virtual) ? (pigeonTopPlacementsCompactLines(proB.pigeonid)||[]) : [];
+    const extra = Math.min(0.14, 0.014*(probTrv.length+probTop.length));
+    const pr = Math.max(3, Math.round(U*(0.19+extra)));        // Höhe der Proband-Box (Rastereinheiten)
     const fa = Math.floor((U-pr)/2), mo = U-pr-fa;
     // Proband-Box
     const probH = gridH*pr/U;
@@ -3861,7 +3925,8 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
       const sx=_sex(p), sc=scheme(sx), letter = sx==='M'?' V':sx==='F'?' W':'';
       const one = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
       const gray = T(p.color);
-      const zl = T(p.breeder) || T(p.race);
+      const zl = itOn('breeder') ? (T(p.breeder) || T(p.race)) : '';
+      const lineStr = itOn('line') ? T(p.strain) : '';
       const photo = (withPhoto && p.photo && probH>=40) ? `<img src="${p.photo}" style="display:block;width:21mm;height:15mm;object-fit:cover;border-radius:.8mm;margin:1.2mm 0 1.5mm">` : '';
       const bc = frameMode==='geschlecht' ? (SEXC[sx]||SEXC['?']) : '#4a5568';
       const txt = pt(SZ[0].txt);
@@ -3871,7 +3936,11 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
         <div style="font-weight:700;font-size:${pt(SZ[0].ring)};color:${sc.ring};${one};line-height:1.25;${photo?'':'margin-top:1mm'}">${_esc(_ring(p))}${letter}</div>
         ${p.name?`<div style="font-style:italic;font-weight:${colorMode==='standard'?700:400};color:${sc.name};font-size:${txt};${one}">„${_esc(p.name)}“</div>`:''}
         ${zl?`<div style="font-weight:${colorMode==='standard'?700:400};color:${sc.brd};font-size:${txt};${one}">${_esc(zl)}</div>`:''}
+        ${lineStr?`<div style="color:${sc.line};font-size:${txt};${one}">${_esc(lineStr)}</div>`:''}
         ${gray?`<div style="color:${COLC};font-size:${txt};${one}">${_esc(gray)}</div>`:''}
+        ${probTrv.length?`<div style="font-size:${pt(7.5)};color:${sc.trv};margin-top:1mm;line-height:1.35">${probTrv.map(_esc).join('<br>')}</div>`:''}
+        ${probTop.length?`<div style="font-size:${pt(7.5)};color:${sc.top};margin-top:.5mm;line-height:1.35">${probTop.map(_esc).join('<br>')}</div>`:''}
+        ${(itOn('info')&&T(p.info))?`<div style="color:${sc.gray};font-size:${txt};line-height:1.3;margin-top:1mm;overflow:hidden">${_esc(T(p.info))}</div>`:''}
       </div>`;
     };
 
@@ -7260,7 +7329,8 @@ async function triggerPdfExport(pid, gens, withPhoto){
 let PP = null;
 function pedPrintOpen(pid){
   pedPrintClose();
-  PP = { pid, gens:4, orient:'hoch', orientManual:false, color:'standard', frame:'neutral', timer:null, built:null };
+  PP = { pid, gens:4, orient:'hoch', orientManual:false, color:'standard', frame:'neutral', timer:null, built:null,
+         palette: PED_PAL_DEFAULT.slice(), items:{travel:{on:true,c:0}, breeder:{on:true,c:1}, line:{on:false,c:2}, info:{on:true,c:3}} };
   const o = document.createElement('div');
   o.id = 'pp-overlay';
   o.style.cssText = 'position:fixed;inset:0;z-index:700;background:var(--bg);display:flex;flex-direction:column';
@@ -7280,19 +7350,42 @@ function pedPrintOpen(pid){
     <div id="pp-opts" style="display:${window.innerWidth<700?'none':'flex'};flex-wrap:wrap;gap:8px 16px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--border)">
       ${grp('Generationen', seg('gens',[[3,'3'],[4,'4'],[5,'5']]))}
       ${grp('Format', seg('orient',[['hoch','A4 hoch'],['quer','A4 quer']]))}
-      ${grp('Farben', seg('color',[['standard','Standard'],['geschlecht','Geschlecht'],['sw','S/W']]))}
+      ${grp('Schriftfarbe', seg('color',[['standard','1 · Standard'],['sw','2 · S/W'],['geschlecht','3 · Version 3']]))}
       ${grp('Rahmen', seg('frame',[['neutral','Neutral'],['geschlecht','Geschlecht']]))}
       <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="ped-print-photo" checked onchange="pedPrintPreview()"> ${t('with_photo')}</label>
-      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="ped-print-travel" checked onchange="pedPrintPreview()"> ${t('with_travel')}</label>
+    </div>
+    <div id="pp-items" style="display:${window.innerWidth<700?'none':'flex'};flex-wrap:wrap;gap:8px 18px;align-items:center;padding:6px 14px;border-bottom:1px solid var(--border)">
+      <span style="font-size:11px;color:var(--text3)">Mit andrucken (je mit Farbe):</span>
+      ${[['travel','id="ped-print-travel"',t('with_travel')],['breeder','id="pp-it-breeder"','Züchter'],['line','id="pp-it-line"','Linie'],['info','id="pp-it-info"','Info']].map(([k,idAttr,lab])=>`
+      <div style="display:flex;align-items:center;gap:6px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" ${idAttr} ${PP.items[k].on?'checked':''} onchange="pedPrintItem('${k}',this.checked)"> ${lab}</label>
+        <span class="pp-sw" id="pp-sw-${k}"></span>
+      </div>`).join('')}
     </div>
     <div id="pp-status" style="font-size:11px;color:var(--text3);padding:2px 14px;min-height:16px"></div>
     <iframe id="pp-frame" style="flex:1;width:100%;min-width:0;max-width:100vw;border:0;background:#cfcfcf"></iframe>`;
   document.body.appendChild(o);
+  pedPrintSwatches();
+  const _pp = PP;
+  pedLogoPalette((typeof BREEDER_PROFILE!=='undefined' && BREEDER_PROFILE) ? BREEDER_PROFILE.logo : null).then(pal=>{
+    if(PP!==_pp) return; PP.palette = pal; pedPrintSwatches(); pedPrintPreview();
+  });
   pedPrintSet('gens', PP.gens);
 }
 function pedPrintToggleOpts(){
   const o = document.getElementById('pp-opts'); if(!o) return;
-  o.style.display = (o.style.display==='none') ? 'flex' : 'none';
+  const show = (o.style.display==='none');
+  o.style.display = show ? 'flex' : 'none';
+  const it = document.getElementById('pp-items'); if(it) it.style.display = show ? 'flex' : 'none';
+}
+function pedPrintItem(k, on){ if(!PP) return; PP.items[k].on = !!on; pedPrintPreview(); }
+function pedPrintItemColor(k, i){ if(!PP) return; PP.items[k].c = i; pedPrintSwatches(); pedPrintPreview(); }
+function pedPrintSwatches(){
+  if(!PP) return;
+  Object.keys(PP.items).forEach(k=>{
+    const el = document.getElementById('pp-sw-'+k); if(!el) return;
+    el.innerHTML = PP.palette.map((c,i)=>`<button type="button" title="${c}" onclick="pedPrintItemColor('${k}',${i})" style="width:18px;height:18px;border-radius:50%;background:${c};border:2px solid ${PP.items[k].c===i?'#fff':'transparent'};outline:1px solid var(--border);margin-left:3px;padding:0;cursor:pointer"></button>`).join('');
+  });
 }
 function pedPrintClose(){ const o=document.getElementById('pp-overlay'); if(o) o.remove(); PP=null; }
 function pedPrintSet(name, v){
@@ -7321,9 +7414,9 @@ async function pedPrintBuild(){
   try{
     const photo = !!document.getElementById('ped-print-photo')?.checked;
     const erfolge = await loadPrintErfolgeText();
-    const sig = [PP.gens,PP.orient,PP.color,PP.frame].join('|');
+    const sig = JSON.stringify([PP.gens,PP.orient,PP.color,PP.frame,PP.items,PP.palette]);
     const built = await buildStandardPedigreeHtml(PP.pid, PP.gens, photo, erfolge);
-    if(!PP || sig!==[PP.gens,PP.orient,PP.color,PP.frame].join('|')) return;   // inzwischen geändert
+    if(!PP || sig!==JSON.stringify([PP.gens,PP.orient,PP.color,PP.frame,PP.items,PP.palette])) return;   // inzwischen geändert
     if(!built){ if(st) st.textContent=''; return; }
     PP.built = built;
     const fr = document.getElementById('pp-frame');
