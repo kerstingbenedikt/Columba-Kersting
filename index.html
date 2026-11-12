@@ -6,6 +6,17 @@
 <title>Brieftauben-Verwaltung</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
+/* Smartphone-Formulare: Felder dürfen nie breiter als ihre Spalte sein, Selects/Notizen bekommen genug Platz */
+.form-field,.pf-block>*{min-width:0}
+.form-field input,.form-field select,.form-field textarea{min-width:0;max-width:100%;box-sizing:border-box}
+@media (max-width:700px){
+  .bp-grid{grid-template-columns:1fr !important}
+  .form-field input[type=file]{width:100%;font-size:13px !important}
+  .form-field textarea{min-height:150px !important}
+  .form-field select{width:100%;height:auto;min-height:46px;line-height:1.35;padding:10px 32px 10px 12px;text-overflow:ellipsis}
+}
+@media (pointer:coarse){select{height:auto;min-height:46px;line-height:1.35}}
+
 /* iOS zoomt beim Fokussieren von Feldern unter 16px automatisch hinein – auf Touch-Geräten daher mind. 16px */
 @media (pointer:coarse){input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea{font-size:16px !important}}
 /* Handy/PWA: keine seitliche Verschiebung der ganzen Seite (Inhalte scrollen nur in ihren eigenen Containern) */
@@ -309,6 +320,7 @@ main.main-wide{max-width:1840px}
   .pf-id{grid-template-columns:repeat(2,minmax(0,1fr))}
   .pf-parents{grid-template-columns:1fr}
   .pf-3,.pf-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pf-4>:nth-child(n+3){grid-column:1/-1}   /* Taubentyp + Status: volle Breite, damit der Text lesbar bleibt */
 }
 .form-msg{font-size:12px;padding:8px 12px;border-radius:var(--radius-sm);margin-bottom:10px}
 .form-msg.ok{background:color-mix(in srgb,var(--green) 10%,var(--bg3));color:var(--green);border:1px solid color-mix(in srgb,var(--green) 30%,var(--border))}
@@ -7078,7 +7090,7 @@ function renderBreederProfileForm(){
   return `<div class="card" style="margin-bottom:14px">
     <div class="card-title">🧑‍🌾 Züchterdaten für die Druck-Kopfzeile</div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Name/Adresse für die Kopfzeile des Abstammungsdrucks (geräteübergreifend gespeichert). Weiter unten verwaltest du die Züchtererfolge und legst fest, welche davon standardmäßig mitgedruckt werden.</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="bp-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="form-field"><label>Name</label><input id="bp_name" value="${escH(p.name||'')}"></div>
       <div class="form-field"><label>Verein / Verband</label><input id="bp_verein" value="${escH(p.verein||'')}"></div>
       <div class="form-field"><label>Straße</label><input id="bp_strasse" value="${escH(p.strasse||'')}"></div>
