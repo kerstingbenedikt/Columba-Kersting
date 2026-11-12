@@ -6,6 +6,7 @@
 <title>Brieftauben-Verwaltung</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
+@media(max-width:700px){.pp-lbl,.pp-title{display:none}}
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#0F1117;--bg2:#161B22;--bg3:#1C2333;--bg4:#242B3D;
@@ -3996,25 +3997,55 @@ ${pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc)}
 // Auf Touch-Geräten daher zuerst der System-Teilen-Dialog (Speichern, Drucken, Mail …);
 // geht das nicht, Download – und bei Bildern zusätzlich eine Vollbild-Ansicht zum Lange-Drücken.
 function pedIsTouch(){ return window.matchMedia && matchMedia('(pointer:coarse)').matches; }
+function pedIsStandalone(){ return (window.matchMedia && matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches) || navigator.standalone===true; }
 async function pedSaveBlob(blob, filename){
+  const touch = pedIsTouch() || pedIsStandalone();
   const file = (typeof File==='function') ? new File([blob], filename, {type: blob.type}) : null;
-  if(file && pedIsTouch() && navigator.canShare && navigator.canShare({files:[file]})){
-    try{ await navigator.share({files:[file], title: filename}); return 'shared'; }
-    catch(e){ if(e && e.name==='AbortError') return 'cancelled'; /* sonst weiter mit Download */ }
+  const canShare = !!(file && navigator.share && navigator.canShare && navigator.canShare({files:[file]}));
+  if(touch){
+    // Der Teilen-Dialog braucht eine frische Berührung; nach der langen Erzeugung ist sie meist abgelaufen.
+    // Darum: nur direkt teilen, wenn die Berührung noch aktiv ist – sonst Overlay mit eigenem Button.
+    const active = navigator.userActivation ? navigator.userActivation.isActive : false;
+    if(canShare && active){
+      try{ await navigator.share({files:[file], title: filename}); return 'shared'; }
+      catch(e){ if(e && e.name==='AbortError') return 'cancelled'; }
+    }
+    pedShowSaveOverlay(blob, filename, file, canShare);
+    return 'overlay';
   }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.rel = 'noopener';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  if(pedIsTouch() && blob.type.indexOf('image/')===0){ pedShowImageOverlay(url, filename); return 'overlay'; }
   setTimeout(()=>URL.revokeObjectURL(url), 30000);
   return 'download';
 }
-function pedShowImageOverlay(url, filename){
+let PED_SAVE_FILE = null;
+function pedShareSaved(){
+  const f = PED_SAVE_FILE; if(!f) return;
+  navigator.share({files:[f], title:f.name}).catch(e=>{ if(e && e.name!=='AbortError') alert('Teilen nicht möglich: '+e.message); });
+}
+function pedCloseSaveOverlay(){
+  const o = document.getElementById('ped-save-overlay');
+  if(o){ const u=o.dataset.url; o.remove(); if(u) setTimeout(()=>URL.revokeObjectURL(u), 60000); }
+  PED_SAVE_FILE = null;
+}
+function pedShowSaveOverlay(blob, filename, file, canShare){
+  pedCloseSaveOverlay();
+  PED_SAVE_FILE = canShare ? file : null;
+  const url = URL.createObjectURL(blob);
+  const isImg = blob.type.indexOf('image/')===0;
   const o = document.createElement('div');
-  o.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;padding:12px;overflow:auto';
-  o.innerHTML = '<div style="color:#fff;font-size:13px;margin-bottom:8px;text-align:center">Bild lange gedrückt halten → „Bild speichern“ / Teilen<br><span style="opacity:.7">'+escH(filename)+'</span></div>'
-    + '<img src="'+url+'" style="max-width:100%;background:#fff"><button class="btn" style="margin:12px 0" onclick="this.parentNode.remove()">Schließen</button>';
+  o.id = 'ped-save-overlay'; o.dataset.url = url;
+  o.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;padding:14px;overflow:auto';
+  const bs = 'display:block;width:100%;max-width:340px;text-align:center;margin:6px 0;padding:12px 14px;font-size:15px;box-sizing:border-box;text-decoration:none';
+  o.innerHTML = '<div style="color:#fff;font-size:15px;margin:8px 0 2px;text-align:center">'+(isImg?'Bild':'PDF')+' ist fertig</div>'
+    + '<div style="color:#bbb;font-size:12px;margin-bottom:10px;text-align:center;word-break:break-all">'+escH(filename)+'</div>'
+    + (canShare ? '<button class="btn" style="'+bs+'" onclick="pedShareSaved()">📤 Teilen / Speichern / Drucken</button>' : '')
+    + '<a class="btn '+(canShare?'btn-outline':'')+'" style="'+bs+'" href="'+url+'" download="'+escH(filename)+'">⬇ Herunterladen</a>'
+    + '<a class="btn btn-outline" style="'+bs+'" href="'+url+'" target="_blank" rel="noopener">↗ Öffnen</a>'
+    + (isImg ? '<img src="'+url+'" style="max-width:100%;background:#fff;margin-top:8px"><div style="color:#aaa;font-size:11px;margin:6px 0">Bild lange drücken → „Bild sichern“</div>' : '')
+    + '<button class="btn btn-outline" style="'+bs+'" onclick="pedCloseSaveOverlay()">Schließen</button>';
   document.body.appendChild(o);
 }
 
@@ -7209,15 +7240,16 @@ function pedPrintOpen(pid){
   const grp = (label, inner) => `<div style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--text3)">${label} ${inner}</div>`;
   o.innerHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg2)">
-      <div class="serif" style="font-size:16px">🖨 Stammbaum drucken / exportieren</div>
+      <div class="serif pp-title" style="font-size:16px">🖨 Stammbaum</div>
+      <button class="btn btn-outline btn-sm" id="pp-opt-btn" onclick="pedPrintToggleOpts()">⚙ Optionen</button>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">
         <button class="btn btn-sm" onclick="pedPrintDo('print')">🖨 Drucken</button>
         <button class="btn btn-outline btn-sm" onclick="pedPrintDo('pdf')">📄 PDF</button>
         <button class="btn btn-outline btn-sm" onclick="pedPrintDo('png')">🖼 PNG</button>
-        <button class="btn btn-outline btn-sm" onclick="pedPrintClose()">✕ Schließen</button>
+        <button class="btn btn-outline btn-sm" onclick="pedPrintClose()">✕<span class="pp-lbl"> Schließen</span></button>
       </div>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--border)">
+    <div id="pp-opts" style="display:${window.innerWidth<700?'none':'flex'};flex-wrap:wrap;gap:8px 16px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--border)">
       ${grp('Generationen', seg('gens',[[3,'3'],[4,'4'],[5,'5']]))}
       ${grp('Format', seg('orient',[['hoch','A4 hoch'],['quer','A4 quer']]))}
       ${grp('Farben', seg('color',[['standard','Standard'],['geschlecht','Geschlecht'],['sw','S/W']]))}
@@ -7225,10 +7257,14 @@ function pedPrintOpen(pid){
       <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="ped-print-photo" checked onchange="pedPrintPreview()"> ${t('with_photo')}</label>
       <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="ped-print-travel" checked onchange="pedPrintPreview()"> ${t('with_travel')}</label>
     </div>
-    <div id="pp-status" style="font-size:12px;color:var(--text3);padding:4px 14px;min-height:22px"></div>
+    <div id="pp-status" style="font-size:11px;color:var(--text3);padding:2px 14px;min-height:16px"></div>
     <iframe id="pp-frame" style="flex:1;width:100%;border:0;background:#cfcfcf"></iframe>`;
   document.body.appendChild(o);
   pedPrintSet('gens', PP.gens);
+}
+function pedPrintToggleOpts(){
+  const o = document.getElementById('pp-opts'); if(!o) return;
+  o.style.display = (o.style.display==='none') ? 'flex' : 'none';
 }
 function pedPrintClose(){ const o=document.getElementById('pp-overlay'); if(o) o.remove(); PP=null; }
 function pedPrintSet(name, v){
@@ -7273,7 +7309,7 @@ function pedPrintFit(){
   if(!fr || !PP || !PP.built) return;
   const d = fr.contentDocument; if(!d) return;
   d.documentElement.classList.add('pv');
-  const pw = PP.built.pageWmm*96/25.4 + 28;
+  const pw = PP.built.pageWmm*96/25.4 + (fr.clientWidth<700?4:28);
   d.body.style.zoom = Math.min(1, fr.clientWidth/pw);
 }
 async function pedPrintDo(kind){
@@ -7282,6 +7318,7 @@ async function pedPrintDo(kind){
   const photo = !!document.getElementById('ped-print-photo')?.checked;
   const erfolge = await loadPrintErfolgeText();
   const bld = buildStandardPedigreeHtml;
+  if(kind==='print' && (pedIsTouch() || pedIsStandalone())) kind = 'pdf';   // window.print() geht im Kiosk-/App-Modus nicht
   if(kind==='print'){
     const fr = document.getElementById('pp-frame'); const d = fr.contentDocument;
     const restore = ()=>pedPrintFit();
@@ -7290,7 +7327,7 @@ async function pedPrintDo(kind){
     setTimeout(restore, 800);
     return;
   }
-  if(st) st.textContent = kind==='pdf' ? 'PDF wird erstellt…' : 'Bild wird erstellt…';
+  if(st) st.textContent = kind==='pdf' ? 'PDF wird erstellt… (bitte kurz warten)' : 'Bild wird erstellt…';
   try{
     if(kind==='pdf') await exportFamilyPedigreePdf(PP.pid, PP.gens, photo, erfolge, bld);
     else             await exportFamilyPedigreeImage(PP.pid, PP.gens, photo, erfolge, bld);
