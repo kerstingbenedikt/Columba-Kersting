@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
 <title>PIGMAN PigeonManager</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -51,13 +52,33 @@ header{background:var(--bg2);border-bottom:2px solid transparent;border-image:va
 .profile-overlay input[type=password]:focus,.line-overlay input[type=text]:focus{outline:none;border-color:var(--gold)}
 .profile-btn{width:34px;height:34px;border-radius:50%;border:1.5px solid transparent;background:linear-gradient(var(--bg3),var(--bg3)) padding-box,var(--grad) border-box;color:var(--text);font-weight:600;font-size:14px;cursor:pointer;margin-left:10px;flex-shrink:0;font-family:inherit}
 .profile-btn:hover{color:var(--gold)}
+
+th .colf-btn{margin-left:6px;background:transparent;border:1px solid transparent;color:var(--text3);border-radius:4px;font-size:11px;line-height:1;padding:2px 4px;cursor:pointer}
+th .colf-btn:hover{color:var(--text);border-color:var(--border2)}
+th .colf-btn.on,th.colf-on{color:var(--gold)}
+th .colf-btn.on{border-color:var(--gold);background:rgba(201,162,39,.15)}
+.colf-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--text3);padding:8px 12px}
+.colf-chip{background:rgba(201,162,39,.14);border:1px solid var(--gold);color:var(--text);border-radius:12px;padding:2px 8px}
+.colf-chip b{cursor:pointer;margin-left:4px;color:var(--gold)}
+.colf-bar a{color:var(--text2);text-decoration:underline}
+.colf-pop{position:fixed;z-index:9999;width:260px;max-width:94vw;display:flex;flex-direction:column;box-sizing:border-box;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;box-shadow:0 10px 40px #000a;padding:10px;font-size:13px}
+.colf-title{font-weight:600;margin-bottom:6px;color:var(--gold)}
+.colf-pop input[type=text]{width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:7px 9px;font-size:14px;font-family:inherit}
+.colf-tools{margin:6px 0;font-size:12px;color:var(--text3);display:flex;gap:4px;align-items:center}
+.colf-tools a{color:var(--text2)}.colf-tools span{margin-left:auto}
+.colf-list{flex:1 1 auto;min-height:60px;max-height:min(260px,45vh);overflow:auto;border:1px solid var(--border);border-radius:6px;background:var(--bg3)}
+.colf-row{display:flex;align-items:center;gap:8px;padding:5px 8px;cursor:pointer}
+.colf-row:hover{background:var(--bg4)}.colf-row span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.colf-row em{font-style:normal;color:var(--text3);font-size:11px}
+.colf-foot{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;flex:0 0 auto}
+.colf-title,.colf-tools,.colf-pop input[type=text]{flex:0 0 auto}
 .pg-ico{vertical-align:-3px;color:var(--gold)}
 .app-sub{font-family:'DM Sans',sans-serif;font-weight:400;font-size:.55em;letter-spacing:.2em;text-transform:uppercase;color:var(--text3);margin-left:8px}
 header h1{font-family:'Playfair Display',serif;font-size:18px;font-weight:600}
 .db-status{font-size:11px;color:var(--text3);margin-top:1px}
 .header-right{display:flex;align-items:center;gap:8px}
 .stat-pill{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:12px;color:var(--text2);white-space:nowrap}
-.stat-pill span{color:var(--green);font-weight:500;font-family:monospace}
+.stat-pill span{color:var(--green);font-weight:600;font-family:monospace}
 
 /* ── Nav ── */
 nav{background:var(--bg2);border-bottom:1px solid var(--border);display:flex;padding:0 16px;overflow-x:auto}
@@ -84,11 +105,14 @@ main{padding:18px 20px;max-width:1300px;margin:0 auto}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
 .search-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
 .search-wrap{position:relative;flex:1 1 110px;min-width:110px;order:2}
-.search-wrap input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px 9px 36px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .15s}
+.search-wrap input{width:100%;background:#f4f7fc;color:#000 !important;-webkit-text-fill-color:#000;caret-color:#000;border:2px solid var(--gold);box-shadow:0 0 0 3px rgba(201,162,39,.18);font-weight:500;border-radius:var(--radius-sm);padding:9px 12px 9px 36px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .15s}
 .search-wrap input:focus{border-color:var(--green)}
 .search-wrap input::placeholder{color:var(--text3)}
 .search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none}
 .search-wrap input{padding-right:30px}
+.search-wrap input::placeholder{color:#4a5a75;-webkit-text-fill-color:#4a5a75;opacity:1}
+.search-wrap .search-icon{color:#0a1220;opacity:.7}
+.search-wrap input:focus{box-shadow:0 0 0 4px rgba(201,162,39,.4)}
 .search-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:20px;height:20px;border-radius:50%;display:none;align-items:center;justify-content:center;color:var(--text3);font-size:13px;cursor:pointer;background:none;border:none;line-height:1}
 .search-clear:hover{background:var(--bg4);color:var(--text)}
 select{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:8px 10px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;height:36px}
@@ -1014,13 +1038,16 @@ async function saveReset(){
     // Danach direkt angemeldet
     localStorage.setItem('bv_session',JSON.stringify({token:rec.tok,refresh:rec.refresh,user:d}));
     idleTouch();
-    history.replaceState(null,'',location.pathname+location.search);
+    try{ (window.parent!==window?window.parent:window).history.replaceState(null,'',location.pathname+location.search); }catch(e){ history.replaceState(null,'',location.pathname+location.search); }
     location.reload();
   }catch(e){ renderReset(rec.tok,rec.refresh,'Verbindungsfehler – bitte erneut versuchen.'); }
 }
 // Rückkehr über den Link aus der E-Mail
 function handleAuthHash(){
-  const h=location.hash.replace(/^#/,''); if(!h||h.indexOf('=')<0) return false;
+  let h=location.hash;
+  // Läuft die App eingebettet (iframe) auf derselben Domain, steckt der Link-Teil in der Adresse der Elternseite
+  if((!h||h.indexOf('=')<0) && window.parent!==window){ try{ h=window.parent.location.hash||h; }catch(e){} }
+  h=String(h||'').replace(/^#/,''); if(!h||h.indexOf('=')<0) return false;
   const q=new URLSearchParams(h);
   if(q.get('type')==='recovery' && q.get('access_token')){ renderReset(q.get('access_token'),q.get('refresh_token')||''); return true; }
   if(q.get('error')||q.get('error_code')){
@@ -1084,7 +1111,7 @@ const S = {
   _archiveLoaded: false, _archiveLoading: false,
   // Paarungsliste (Tabelle "matings" in Supabase) — null = noch nicht geladen
   matings: null, matingsLoading: false, matingsError: null,
-  paarungM: null, paarungF: null, selectedNach: null, nachStatusFilter: null, nachGenFilter: null, nachPerfFilter: null, nachExpanded: {},
+  paarungM: null, paarungF: null, selectedNach: null, nachStatusFilter: null, nachGenFilter: null, nachPerfFilter: null, nachPartnerFilter: null, colFilters: {}, nachPartnerOpen: false, nachExpanded: {},
   // Automatische Paarungsempfehlungen (Empfehlungsliste im Paarungscheck)
   pairRecOpen: false, pairRecTopN: 15, pairRecMaxInzucht: 6.5, pairRecMinScore: 0, pairRecIncludeReise: false,
   neuMode: 'full',
@@ -1326,6 +1353,7 @@ const BULK_FIELDS = [
   { key:'died',    label:'Verstorben', type:'bool' },
   { key:'color',   label:'Farbe',      type:'text', list:'dl-colors' },
   { key:'strain',  label:'Linie / Stamm', type:'text', list:'dl-strains' },
+  { key:'race',    label:'Rasse',      type:'text' },
   { key:'breeder', label:'Züchter',    type:'text' },
   { key:'owner',   label:'Besitzer',   type:'text' },
   { key:'standort', label:'Standort / akt. Besitzer', type:'text' },
@@ -1917,7 +1945,7 @@ async function loadData(){
     // folgende Neuzeichnungen beim Start.
     let offset=0;
     while(true){
-      const batch = await apiGet('/pigeons?deleted=eq.false&or=(instock.eq.true,pigeontype.eq.Reisetaube)&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc');
+      const batch = await apiGet('/pigeons?deleted=eq.false&or=(instock.eq.true,pigeontype.eq.Reisetaube)&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc,pigeonid.asc');
       if(!batch||!batch.length) break;
       addBatch(batch);
       if(batch.length<BATCH) break;
@@ -1999,7 +2027,7 @@ async function ensureArchiveLoaded(){
     const BATCH=500;
     let offset=0;
     while(true){
-      const batch = await apiGet('/pigeons?deleted=eq.false&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc');
+      const batch = await apiGet('/pigeons?deleted=eq.false&limit='+BATCH+'&offset='+offset+'&order=date_year.desc,number.asc,pigeonid.asc');
       if(!batch||!batch.length) break;
       addBatch(batch);
       if(batch.length<BATCH) break;
@@ -2081,6 +2109,7 @@ function colorMatchesKeyword(colorText, keyword){
 function resetTaubenFilter(){
   S.search=''; S.sexFilter='all'; S.yearFilter='all';
   S.inStockFilter='all'; S.colorFilter='all'; S.stateFilter='all'; S.typeFilter='all'; S.standortFilter='all';
+  S.colFilters={};
   S.page=0;
   ['sex-filter','year-filter','stock-filter','color-filter','state-filter','type-filter','standort-filter']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.value='all'; });
@@ -2141,8 +2170,10 @@ function renderBulkValueInput(){
     </select>`;
   }
   // text
-  const listAttr = f.list ? ` list="${f.list}"` : '';
-  return `<input id="bulk-value-input" type="text" value="${escH(S.bulkValue||'')}" placeholder="Neuer Wert (leer = Feld löschen)…"${listAttr} oninput="S.bulkValue=this.value">`;
+  // Vorschlagsliste aus den vorhandenen Werten der Datenbank (z. B. alle bisherigen Rassen)
+  const uniqVals=[...new Set(S.pigeons.map(p=>p[f.key]).filter(v=>v!=null&&String(v).trim()!==''&&typeof v!=='object').map(v=>String(v).trim()))].sort((a,b)=>a.localeCompare(b,'de')).slice(0,400);
+  const dl = `<datalist id="bulk-dl-${f.key}">${uniqVals.map(v=>`<option value="${escH(v)}">`).join('')}</datalist>`;
+  return `<input id="bulk-value-input" type="text" value="${escH(S.bulkValue||'')}" placeholder="Neuer Wert (leer = Feld löschen)…" list="bulk-dl-${f.key}" oninput="S.bulkValue=this.value">${dl}`;
 }
 
 function bulkFieldChanged(key){
@@ -2374,7 +2405,7 @@ function applyFilter(){
   // wenn tatsächlich danach gesucht/gefiltert wird — nicht automatisch beim Start.
   const needsArchive = !!S.search.trim() || S.inStockFilter!=='yes' || S.sexFilter!=='all'
     || S.yearFilter!=='all' || S.colorFilter!=='all' || S.stateFilter!=='all'
-    || S.standortFilter!=='all' || S.typeFilter!=='all';
+    || S.standortFilter!=='all' || S.typeFilter!=='all' || Object.keys(S.colFilters||{}).length>0;
   if(needsArchive && !S._archiveLoaded && !S._archiveLoading) ensureArchiveLoaded();
 
   let arr=[...S.pigeons];
@@ -2552,6 +2583,8 @@ function applyFilter(){
     });
   }
 
+  S._preColArr=arr;
+  arr=applyColFilters(arr);
   S.filtered=arr;
   const totalPages=Math.max(1,Math.ceil(S.filtered.length/S.pageSize));
   if(S.page>totalPages-1) S.page=0;
@@ -2559,6 +2592,94 @@ function applyFilter(){
     if(document.getElementById('table-wrap')) renderTableOnly();
     else render();
   } else { render(); }
+}
+
+
+// ── Spaltenfilter (wie Autofilter in Excel) ────────────────────
+// S.colFilters[key] = Array erlaubter Werte (Klartext aus col.val(); '' = leer)
+function colFilterable(c){ return c.key!=='reiseleistung' && c.key!=='top10'; }
+function colValOf(c,p){ const v=c.val(p); return (v==null)?'':String(v); }
+function applyColFilters(arr, exceptKey){
+  const cf=S.colFilters||{};
+  for(const k of Object.keys(cf)){
+    if(k===exceptKey) continue;
+    const c=COLUMN_BY_KEY[k]; if(!c||!cf[k]) continue;
+    const set=new Set(cf[k]);
+    arr=arr.filter(p=>set.has(colValOf(c,p)));
+  }
+  return arr;
+}
+function colFilterBarHtml(){
+  const ks=Object.keys(S.colFilters||{}).filter(k=>COLUMN_BY_KEY[k]);
+  if(!ks.length) return '';
+  return '<div class="colf-bar"><span>Spaltenfilter aktiv:</span> '
+    +ks.map(k=>'<span class="colf-chip">'+escH(COLUMN_BY_KEY[k].label)+' ('+S.colFilters[k].length+') <b onclick="event.stopPropagation();clearColFilter(\''+k+'\')" title="Filter entfernen">×</b></span>').join(' ')
+    +' <a href="#" onclick="clearAllColFilters();return false">Alle entfernen</a></div>';
+}
+function clearColFilter(k){ delete S.colFilters[k]; S.page=0; applyFilter(); }
+function clearAllColFilters(){ S.colFilters={}; S.page=0; applyFilter(); }
+function closeColFilter(){ const o=document.getElementById('colf-pop'); if(o) o.remove(); document.removeEventListener('pointerdown',_colfOutside,true); document.removeEventListener('keydown',_colfKey,true); }
+function _colfOutside(e){
+  const o=document.getElementById('colf-pop');
+  if(o && !o.contains(e.target) && !(e.target.classList&&e.target.classList.contains('colf-btn'))){
+    closeColFilter();
+    // Der Klick, der das Fenster schließt, darf nichts darunter auslösen (z. B. Zeile öffnen)
+    const block=ev=>{ ev.stopPropagation(); ev.preventDefault(); document.removeEventListener('click',block,true); };
+    document.addEventListener('click',block,true);
+    setTimeout(()=>document.removeEventListener('click',block,true),500);
+  }
+}
+function _colfKey(e){ if(e.key==='Escape') closeColFilter(); }
+let COLF = null;
+function openColFilter(key, btn){
+  closeColFilter();
+  const c=COLUMN_BY_KEY[key]; if(!c) return;
+  const base=applyColFilters(S._preColArr||S.pigeons, key);
+  const counts=new Map();
+  base.forEach(p=>{ const v=colValOf(c,p); counts.set(v,(counts.get(v)||0)+1); });
+  // Bereits gesetzte Werte, die im aktuellen Ausschnitt nicht mehr vorkommen, bleiben sichtbar (Anzahl 0)
+  (S.colFilters[key]||[]).forEach(v=>{ if(!counts.has(v)) counts.set(v,0); });
+  const vals=[...counts.keys()].sort((a,b)=>{
+    if(a==='') return 1; if(b==='') return -1;
+    return String(a).localeCompare(String(b),'de',{numeric:true});
+  });
+  const sel=new Set(S.colFilters[key]?S.colFilters[key]:vals);
+  COLF={key,vals,counts,sel,q:''};
+  const pop=document.createElement('div'); pop.id='colf-pop'; pop.className='colf-pop';
+  pop.innerHTML='<div class="colf-title">'+escH(c.label)+'</div>'
+    +'<input type="text" id="colf-q" placeholder="Suchen …" oninput="colfSearch(this.value)" autocomplete="off">'
+    +'<div class="colf-tools"><a href="#" onclick="colfAll(true);return false">Alle</a> · <a href="#" onclick="colfAll(false);return false">Keine</a><span id="colf-info"></span></div>'
+    +'<div class="colf-list" id="colf-list"></div>'
+    +'<div class="colf-foot"><button class="btn btn-sm" onclick="colfApply()">OK</button><button class="btn btn-outline btn-sm" onclick="closeColFilter()">Abbrechen</button>'
+    +(S.colFilters[key]?'<button class="btn btn-outline btn-sm" onclick="clearColFilter(\''+key+'\');closeColFilter()">Filter löschen</button>':'')+'</div>';
+  document.body.appendChild(pop);
+  colfRenderList();
+  const r=btn.getBoundingClientRect(); const w=pop.offsetWidth||260;
+  // Immer vollständig im sichtbaren Bereich: Höhe begrenzen, Liste scrollt, OK-Leiste bleibt sichtbar
+  const maxH=window.innerHeight-16;
+  pop.style.maxHeight=maxH+'px';
+  const h=Math.min(pop.offsetHeight,maxH);
+  pop.style.top=Math.max(8,Math.min(window.innerHeight-h-8, r.bottom+4))+'px';
+  pop.style.left=Math.max(8,Math.min(window.innerWidth-w-8, r.left-w+r.width))+'px';
+  setTimeout(()=>{ const q=document.getElementById('colf-q'); if(q) q.focus(); },0);
+  document.addEventListener('pointerdown',_colfOutside,true);
+  document.addEventListener('keydown',_colfKey,true);
+}
+function colfVisible(){ const q=COLF.q.toLowerCase(); return COLF.vals.filter(v=>!q || (v===''?'(leer)':String(v)).toLowerCase().indexOf(q)>=0); }
+function colfRenderList(){
+  const list=document.getElementById('colf-list'); if(!list||!COLF) return;
+  const vis=colfVisible();
+  list.innerHTML=vis.length?vis.slice(0,500).map((v,i)=>'<label class="colf-row"><input type="checkbox" '+(COLF.sel.has(v)?'checked':'')+' onchange="colfToggle('+COLF.vals.indexOf(v)+',this.checked)"><span>'+(v===''?'<i style="color:var(--text3)">(leer)</i>':escH(v))+'</span><em>'+COLF.counts.get(v)+'</em></label>').join('')+(vis.length>500?'<div style="padding:6px;color:var(--text3);font-size:12px">… '+(vis.length-500)+' weitere – Suche eingrenzen</div>':''):'<div style="padding:8px;color:var(--text3);font-size:13px">Keine Treffer</div>';
+  const inf=document.getElementById('colf-info'); if(inf) inf.textContent=COLF.sel.size+' / '+COLF.vals.length;
+}
+function colfToggle(i,on){ const v=COLF.vals[i]; on?COLF.sel.add(v):COLF.sel.delete(v); const inf=document.getElementById('colf-info'); if(inf) inf.textContent=COLF.sel.size+' / '+COLF.vals.length; }
+function colfSearch(q){ COLF.q=q; colfRenderList(); }
+function colfAll(on){ colfVisible().forEach(v=>on?COLF.sel.add(v):COLF.sel.delete(v)); colfRenderList(); }
+function colfApply(){
+  const key=COLF.key;
+  if(COLF.sel.size===COLF.vals.length) delete S.colFilters[key];      // alles gewählt = kein Filter
+  else S.colFilters[key]=[...COLF.sel];
+  closeColFilter(); S.page=0; applyFilter();
 }
 
 function sortBy(col){ S.sortCol===col ? S.sortDir*=-1 : (S.sortCol=col,S.sortDir=1); applyFilter(); }
@@ -2745,7 +2866,7 @@ function splitMarkRow(id){
 function splitSelect(id, tab){
   const p = findById(id);
   if(!p) return;
-  if(S.selectedNach!==id){ S.nachStatusFilter=null; S.nachGenFilter=null; S.nachPerfFilter=null; }
+  if(S.selectedNach!==id){ S.nachStatusFilter=null; S.nachGenFilter=null; S.nachPerfFilter=null; S.nachPartnerFilter=null; S.nachPartnerOpen=false; }
   S.selected = p; S.selectedNach = id; S.selectedPed = id; S.pigeonTripYear = null;
   if(tab){ S.splitTab = tab; S.splitPaarung = (tab==='paarung'); } else if(!S.splitTab) S.splitTab = 'detail';
   const wasSplit = !!document.getElementById('split-root');
@@ -2911,12 +3032,14 @@ function buildTableHTML(page, si){
   if(splitActive()) return buildSplitRows(page);
   const allOnPageSelected = S.bulkMode && page.length>0 && page.every(p=>S.bulkSelected.has(p.pigeonid));
   const headCb = S.bulkMode ? `<th class="bulk-th"><input type="checkbox" id="bulk-select-all" ${allOnPageSelected?'checked':''} onclick="event.stopPropagation()" onchange="toggleBulkPage(this.checked)"></th>` : '';
-  return buildCardsHTML(page) + `<table>
+  return colFilterBarHtml() + buildCardsHTML(page) + `<table>
       <thead><tr>
         ${headCb}
-        ${cols.map(c=>c.sortKey
-          ? `<th onclick="sortBy('${c.sortKey}')">${escH(c.label)}${si(c.sortKey)}</th>`
-          : `<th>${escH(c.label)}</th>`).join('')}
+        ${cols.map(c=>{
+          const fb = colFilterable(c) ? `<button type="button" class="colf-btn${S.colFilters&&S.colFilters[c.key]?' on':''}" title="Filtern" onclick="event.stopPropagation();openColFilter('${c.key}',this)">▾</button>` : '';
+          return c.sortKey
+            ? `<th class="${S.colFilters&&S.colFilters[c.key]?'colf-on':''}" onclick="sortBy('${c.sortKey}')">${escH(c.label)}${si(c.sortKey)}${fb}</th>`
+            : `<th class="${S.colFilters&&S.colFilters[c.key]?'colf-on':''}">${escH(c.label)}${fb}</th>`;}).join('')}
       </tr></thead>
       <tbody>${page.map(p=>{
         const sel = S.bulkMode && S.bulkSelected.has(p.pigeonid);
@@ -6583,7 +6706,45 @@ async function submitQuick(){
   }
 }
 
+// Gleicht S.pigeons mit der Datenbank ab: lädt alle nicht gelöschten Tauben, die lokal fehlen
+// (z. B. weil seitenweises Nachladen bei gleichen Sortierwerten Zeilen übersprungen hat).
+async function loadMissingPigeons(){
+  const ids=[]; let off=0;
+  while(true){
+    const page=await apiGet('/pigeons?deleted=eq.false&select=pigeonid&order=pigeonid.asc&limit=1000&offset='+off);
+    if(!page||!page.length) break;
+    page.forEach(r=>ids.push(r.pigeonid));
+    if(page.length<1000) break; off+=1000;
+  }
+  const missing=ids.filter(id=>id && !LOADED_PIGEON_IDS.has(id));
+  for(let i=0;i<missing.length;i+=40){
+    const chunk=missing.slice(i,i+40).map(id=>'"'+String(id).replace(/"/g,'')+'"').join(',');
+    const rows=await apiGet('/pigeons?deleted=eq.false&pigeonid=in.('+encodeURIComponent(chunk)+')');
+    (rows||[]).forEach(p=>{ if(p&&p.pigeonid&&!LOADED_PIGEON_IDS.has(p.pigeonid)){ LOADED_PIGEON_IDS.add(p.pigeonid); S.pigeons.push(p); } });
+  }
+  if(missing.length) invalidatePedigreeCache();
+  return missing.length;
+}
+async function waitArchiveLoaded(){
+  if(!S._archiveLoaded) ensureArchiveLoaded();
+  while(S._archiveLoading) await new Promise(r=>setTimeout(r,300));
+  return !!S._archiveLoaded;
+}
+// Ringnummer-Schlüssel OHNE Länderkennung (Segmente ohne führende Nullen, 4-stelliger Jahrgang → 2-stellig)
+function ringKeyNoCountry(fmt){
+  let f=String(fmt||''); const m=f.match(/^[A-Za-z]{1,3}[\s\-\u2010-\u2015\u2212\.\/]+(.*)$/); if(m) f=m[1];
+  return f.split(/[\s\-\u2010-\u2015\u2212\.\/]+/).filter(Boolean).map(seg=>{
+    if(!/^\d+$/.test(seg)) return seg.toLowerCase();
+    let n=seg.replace(/^0+(?=\d)/,''); if(/^(19|20)\d{2}$/.test(n)) n=n.slice(-2); return n;
+  }).join('-');
+}
 async function cleanupRingnumbers(){
+  // Archiv (nicht im Bestand) muss vollständig geladen sein, sonst werden Duplikate zwischen Bestand und Archiv übersehen
+  if(!S._archiveLoaded){
+    const ok=await waitArchiveLoaded();
+    if(!ok && !confirm('Das Archiv (Tauben außerhalb des Bestands) konnte nicht vollständig geladen werden. Duplikate dorthin werden dann nicht erkannt.\n\nTrotzdem fortfahren?')) return;
+  }
+  try{ await loadMissingPigeons(); }catch(e){ console.warn('Abgleich mit der Datenbank fehlgeschlagen', e); }
   // Phase 1: Welche Tauben hätten nach Formatierung eine andere ringnumber/ringnumberold?
   const changes = [];
   S.pigeons.forEach(p => {
@@ -6605,10 +6766,12 @@ async function cleanupRingnumbers(){
   // mit derselben toleranten Normalisierung (normRing) wie bei der Import-Dublettenprüfung,
   // damit z.B. "004" und "4" auch hier als dasselbe erkannt werden.
   const fmtOf = p => { const c = changes.find(c=>c.p===p); return (c && c.updates.ringnumber) || p.ringnumber || ''; };
+  // Schlüssel ohne Länderkennung: erkennt auch "BE-15-1029362" gegen "15-1029362"/"B-15-1029362"
   const groups = {};
   S.pigeons.forEach(p=>{
-    const key = normRing(fmtOf(p));
-    if(!key) return;
+    if(p.deleted) return;
+    const key = ringKeyNoCountry(fmtOf(p));
+    if(!key || key.length<5) return;
     (groups[key] = groups[key] || []).push(p);
   });
   const dupGroups = Object.values(groups).filter(g=>g.length>1);
@@ -6626,9 +6789,10 @@ async function cleanupRingnumbers(){
   }
   if(dupGroups.length){
     if(preview) preview += '\n\n';
-    preview += `Duplikate (${dupGroups.length} Gruppen):\n` + dupGroups.slice(0,5).map(g =>
+    preview += `Duplikate (${dupGroups.length} Gruppen):\n` + dupGroups.slice(0,12).map(g =>
       `${escH(ring(g[0]))}${g[0].name?' · '+g[0].name:''}  ×${g.length}`
-    ).join('\n') + (dupGroups.length>5 ? `\n… und ${dupGroups.length-5} weitere Gruppen` : '');
+    ).join('\n') + (dupGroups.length>12 ? `\n… und ${dupGroups.length-12} weitere Gruppen` : '');
+    preview += '\n(geprüft: '+S.pigeons.length+' Tauben inkl. Archiv)';
   }
 
   const dupNote = dupGroups.length
@@ -6650,13 +6814,13 @@ async function cleanupRingnumbers(){
   }
 
   // Schritt B: Duplikate zusammenführen
-  let merged=0, mergeFail=0;
+  let merged=0, mergeFail=0; const mergeErrs=[];
   for(const group of dupGroups){
     try {
-      const removed = await mergeDuplicateGroup(group);
+      const removed = await mergeDuplicatePigeons(group);
       merged += removed;
     } catch(e){
-      mergeFail++;
+      mergeFail++; mergeErrs.push(ring(group[0])+': '+String(e.message).slice(0,160));
       console.error('Merge fehlgeschlagen für', ring(group[0]), e.message);
     }
   }
@@ -6666,7 +6830,7 @@ async function cleanupRingnumbers(){
   alert(
     `✅ ${ok} Ringnummer(n) formatiert.${fail?` ⚠️ ${fail} Formatierungs-Fehler.`:''}` +
     (merged ? ` 🔗 ${merged} Duplikat(e) zusammengeführt.` : '') +
-    (mergeFail ? ` ⚠️ ${mergeFail} Merge-Fehler (siehe Konsole).` : '')
+    (mergeFail ? ` ⚠️ ${mergeFail} Merge-Fehler:\n${mergeErrs.slice(0,5).join('\n')}` : '')
   );
 }
 
@@ -6675,34 +6839,41 @@ async function cleanupRingnumbers(){
 // Duplikaten ergänzt, Eltern-Verweise (fatherid/motherid) anderer Tauben werden umgehängt,
 // und die überflüssigen Datensätze werden per Soft-Delete entfernt (gleiche Konvention wie deletePigeon()).
 // Gibt die Anzahl der entfernten Duplikate zurück.
-async function mergeDuplicateGroup(group){
-  const FILL_KEYS = ['name','color','race','strain','breeder','owner','standort','pigeontype','countrycode','associationno',
-    'birthday','died','bought','sold','info','internalinfo','pigeonstateid','gender','date_year',
-    'ringnumberold','ringnumberfather','ringnumbermother','fatherid','motherid',
-    'userdefined1','userdefined2','userdefined3'];
+async function mergeDuplicatePigeons(group){
+  const SKIP=new Set(['pigeonid','id','created_at','updated_at','deleted','number','_status','_action']);
+  const APPEND=new Set(['info','internalinfo']);
   const filled = v => v!==null && v!==undefined && v!=='';
-  const score = p => FILL_KEYS.filter(k=>filled(p[k])).length + (p.instock?1:0);
+  // Alle tatsächlich vorhandenen Spalten (nicht nur eine feste Liste) berücksichtigen
+  const keys=new Set(); group.forEach(p=>Object.keys(p).forEach(k=>{ if(!SKIP.has(k) && k.charAt(0)!=='_') keys.add(k); }));
+  const score = p => [...keys].filter(k=>filled(p[k])).length + (p.instock?1:0);
 
   const sorted = [...group].sort((a,b)=>score(b)-score(a));
   const primary = sorted[0];
   const dups = sorted.slice(1);
 
-  // Fehlende Felder im Primär-Datensatz aus den Duplikaten ergänzen (bestehende Werte bleiben unangetastet)
+  // Fehlende Felder im Primär-Datensatz aus den Duplikaten ergänzen; abweichende Info-Texte werden angehängt
   const patch = {};
   dups.forEach(d=>{
-    FILL_KEYS.forEach(k=>{
-      if(!filled(primary[k]) && !filled(patch[k]) && filled(d[k])) patch[k]=d[k];
+    keys.forEach(k=>{
+      const cur = filled(patch[k]) ? patch[k] : primary[k];
+      if(!filled(cur) && filled(d[k])) patch[k]=d[k];
+      else if(APPEND.has(k) && filled(cur) && filled(d[k]) && String(cur).indexOf(String(d[k]).trim())<0) patch[k]=String(cur)+'\n'+String(d[k]).trim();
     });
   });
   if(group.some(p=>p.instock) && !primary.instock) patch.instock = true;
-
+  // Ringnummer: wurde ein ausländischer Ring ohne Länderkennung fälschlich zu "DE-…" ergänzt, gewinnt die Schreibweise mit echter Länderkennung
+  const isBareDE = p => /^DE-/.test(p.ringnumber||'') && (String(p.ringnumber).split('-').length!==4);
+  if(isBareDE(primary)){
+    const good = dups.find(d=>d.ringnumber && !/^DE-/.test(d.ringnumber));
+    if(good){ patch.ringnumber=good.ringnumber; if(filled(good.countrycode)) patch.countrycode=good.countrycode; }
+  }
   if(Object.keys(patch).length){
     await apiPatch('pigeons', primary.pigeonid, patch);
     Object.assign(primary, patch);
   }
 
-  // Andere Tauben, die eines der Duplikate als Vater/Mutter referenzieren, auf den Primär-Datensatz umhängen
   const dupIds = new Set(dups.map(d=>d.pigeonid));
+  // Eltern-Verweise anderer Tauben auf den Primär-Datensatz umhängen
   for(const other of S.pigeons){
     if(dupIds.has(other.pigeonid)) continue;
     const upd={};
@@ -6713,17 +6884,27 @@ async function mergeDuplicateGroup(group){
       Object.assign(other, upd);
     }
   }
-
+  // Verknüpfte Tabellen: Reisedaten, Fotos, Jahresleistungen, Paarungen, Website-Einstellungen
+  for(const d of dups){
+    const id=encodeURIComponent(d.pigeonid);
+    await apiPatchBy('pigeontrips','pigeonid=eq.'+id,{pigeonid:primary.pigeonid});
+    await apiPatchBy('pigeon_photos','pigeonid=eq.'+id,{pigeonid:primary.pigeonid});
+    try{ await apiPatchBy('pigeon_manual_seasons','pigeonid=eq.'+id,{pigeonid:primary.pigeonid}); }catch(e){ console.warn('pigeon_manual_seasons',e.message); }
+    try{ await apiPatchBy('matings','fatherid=eq.'+id,{fatherid:primary.pigeonid}); await apiPatchBy('matings','motherid=eq.'+id,{motherid:primary.pigeonid}); }catch(e){ console.warn('matings',e.message); }
+    try{
+      const has=await apiGet('/website_pigeon_settings?pigeonid=eq.'+encodeURIComponent(primary.pigeonid)+'&select=pigeonid&limit=1');
+      if(!has.length) await apiPatchBy('website_pigeon_settings','pigeonid=eq.'+id,{pigeonid:primary.pigeonid});
+      else await apiDeleteBy('website_pigeon_settings','pigeonid=eq.'+id);
+    }catch(e){ console.warn('website_pigeon_settings',e.message); }
+  }
   // Duplikate als gelöscht markieren (Soft-Delete)
   for(const d of dups){
     await apiPatch('pigeons', d.pigeonid, {deleted:true, instock:false});
   }
-
+  try{ dupIds.forEach(id=>{ if(typeof PT_CACHE!=='undefined' && PT_CACHE) delete PT_CACHE[id]; if(typeof PHOTO_CACHE!=='undefined' && PHOTO_CACHE && PHOTO_CACHE.delete) PHOTO_CACHE.delete(id); }); }catch(e){}
   S.pigeons = S.pigeons.filter(p=>!dupIds.has(p.pigeonid)); invalidatePedigreeCache();
   return dups.length;
 }
-
-
 
 // ── IMPORT-MODUL ─────────────────────────────────────────────────
 // Spalten-Felder die wir kennen und importieren
@@ -12971,7 +13152,7 @@ function escH(s){ if(s===null||s===undefined)return''; return String(s).replace(
 function showNachkommen(id){
   if(splitActive() && document.getElementById('split-detail')){ splitSelect(id,'nachkommen'); return; }
   pushPigeonNavIfNeeded();
-  if(S.selectedNach!==id){ S.nachStatusFilter=null; S.nachGenFilter=null; S.nachPerfFilter=null; }
+  if(S.selectedNach!==id){ S.nachStatusFilter=null; S.nachGenFilter=null; S.nachPerfFilter=null; S.nachPartnerFilter=null; S.nachPartnerOpen=false; }
   S.selectedNach=id; S.tab='nachkommen';
   setActiveNav('nachkommen');
   render(); window.scrollTo(0,0);
@@ -12981,6 +13162,8 @@ function showNachkommen(id){
 // Priorität: zuerst Bestandsstatus (Im Bestand/Verstorben/Verkauft), danach
 // Generation (Kinder/Enkel/Urenkel). Innerhalb der gefilterten Ergebnisse
 // gruppiert renderGen() weiterhin nach Status/Geschlecht (Täuber/Täubin aktiv).
+function toggleNachPartnerList(){ S.nachPartnerOpen=!S.nachPartnerOpen; render(); }
+function setNachPartner(key){ S.nachPartnerFilter=(S.nachPartnerFilter===key)?null:key; render(); }
 function toggleNachStatusFilter(key){
   S.nachStatusFilter = (S.nachStatusFilter===key) ? null : key;
   render();
@@ -13215,8 +13398,27 @@ function renderNachkommen(pid){
   // (Im Bestand/Verstorben/Verkauft), die Generations-Kacheln (Kinder/Enkel/
   // Urenkel) und die Erfolgs-Kacheln (Erfolgreich/Elite) sind einzeln
   // anklickbar und togglen den jeweiligen Filter.
+  // Partner: alle anderen Elternteile der direkten Kinder (mit Anzahl gemeinsamer Kinder)
+  var partnerMap={}; var partnerOrder=[];
+  children.forEach(function(c){
+    var pt=findPartner(c,pid); var key=pt?pt.pigeonid:'_none';
+    if(!partnerMap[key]){ partnerMap[key]={key:key,p:pt,kids:[]}; partnerOrder.push(key); }
+    partnerMap[key].kids.push(c);
+  });
+  var partners=partnerOrder.map(function(k){return partnerMap[k];}).sort(function(a,b){ if(a.key==='_none')return 1; if(b.key==='_none')return -1; return b.kids.length-a.kids.length; });
+  var partnerCount=partners.filter(function(x){return x.key!=='_none';}).length;
+  var partnerSet=null;
+  if(S.nachPartnerFilter && partnerMap[S.nachPartnerFilter]){
+    partnerSet=new Set();
+    var frontier=partnerMap[S.nachPartnerFilter].kids;
+    for(var lv=0;lv<3 && frontier.length;lv++){
+      frontier.forEach(function(c){partnerSet.add(c.pigeonid);});
+      frontier=frontier.flatMap(function(c){return findChildren(c.pigeonid);});
+    }
+  } else if(S.nachPartnerFilter){ S.nachPartnerFilter=null; }
   var kpis=[
     ['Nachkommen',total,'var(--green)',null,null],
+    ['Partner',partnerCount,'var(--blue)','partner','list'],
     ['Kinder',children.length,'var(--blue)','gen','children'],
     ['Enkel',gc.length,'var(--purple)','gen','gc'],
     ['Urenkel',ggc.length,'var(--text2)','gen','ggc'],
@@ -13227,10 +13429,12 @@ function renderNachkommen(pid){
     ['Elite',eliteCount,'#f0c419','perf','elite']
   ];
   var kpiHtml=kpis.map(function(k){
-    var isActive = k[3]==='status' ? S.nachStatusFilter===k[4] : (k[3]==='gen' ? S.nachGenFilter===k[4] : (k[3]==='perf' ? S.nachPerfFilter===k[4] : (!S.nachStatusFilter&&!S.nachGenFilter&&!S.nachPerfFilter)));
-    var onclick = k[3]===null ? "S.nachStatusFilter=null;S.nachGenFilter=null;S.nachPerfFilter=null;render();"
+    var isActive = k[3]==='partner' ? (S.nachPartnerOpen||!!S.nachPartnerFilter) : k[3]==='status' ? S.nachStatusFilter===k[4] : (k[3]==='gen' ? S.nachGenFilter===k[4] : (k[3]==='perf' ? S.nachPerfFilter===k[4] : (!S.nachStatusFilter&&!S.nachGenFilter&&!S.nachPerfFilter&&!S.nachPartnerFilter&&!S.nachPartnerOpen)));
+    var onclick = k[3]===null ? "S.nachStatusFilter=null;S.nachGenFilter=null;S.nachPerfFilter=null;S.nachPartnerFilter=null;S.nachPartnerOpen=false;render();"
+      : k[3]==='partner' ? "toggleNachPartnerList()"
       : (k[3]==='status' ? "toggleNachStatusFilter('"+k[4]+"')" : (k[3]==='gen' ? "toggleNachGenFilter('"+k[4]+"')" : "toggleNachPerfFilter('"+k[4]+"')"));
     var tip = k[3]===null ? 'Alle Filter zurücksetzen'
+      : k[3]==='partner' ? 'Partner mit gemeinsamen Nachkommen anzeigen / filtern'
       : k[3]==='perf' ? (k[4]==='erfolgreich' ? 'Nachkommen mit erfolgreicher Preisquote (Kinder+Enkel im Bestand)' : 'Elite-Nachkommen (Kinder+Enkel)')
       : (isActive ? 'Filter "'+k[0]+'" entfernen' : 'Nach "'+k[0]+'" filtern');
     return '<div onclick="'+onclick+'" title="'+tip+'" style="cursor:pointer;background:var(--bg3);border:1px solid '+(isActive?k[2]:'var(--border)')+';border-radius:var(--radius-sm);padding:12px;text-align:center;transition:border-color .15s'+(isActive?';box-shadow:0 0 0 1px '+k[2]+' inset':'')+'">'
@@ -13247,25 +13451,27 @@ function renderNachkommen(pid){
     if(S.nachStatusFilter==='instock') out=out.filter(function(p){return p.instock;});
     if(S.nachStatusFilter==='died') out=out.filter(function(p){return p.died;});
     if(S.nachStatusFilter==='sold') out=out.filter(function(p){return p.sold;});
+    if(partnerSet) out=out.filter(function(p){return partnerSet.has(p.pigeonid);});
     if(S.nachPerfFilter==='erfolgreich') out=out.filter(function(p){return perfMap[p.pigeonid]&&perfMap[p.pigeonid].erfolgreich;});
     if(S.nachPerfFilter==='elite') out=out.filter(function(p){return perfMap[p.pigeonid]&&perfMap[p.pigeonid].elite;});
     return out;
   }
   var statusLabel = S.nachStatusFilter==='instock'?'Im Bestand':S.nachStatusFilter==='died'?'Verstorben':S.nachStatusFilter==='sold'?'Verkauft':null;
   var perfLabel = S.nachPerfFilter==='erfolgreich'?'Erfolgreich':S.nachPerfFilter==='elite'?'Elite':null;
-  var filterLabel = [statusLabel,perfLabel].filter(Boolean).join(' + ');
+  var partnerLbl = (S.nachPartnerFilter && partnerMap[S.nachPartnerFilter]) ? 'Partner '+(partnerMap[S.nachPartnerFilter].p ? (partnerMap[S.nachPartnerFilter].p.name||ring(partnerMap[S.nachPartnerFilter].p)) : 'unbekannt') : null;
+  var filterLabel = [statusLabel,perfLabel,partnerLbl].filter(Boolean).join(' + ');
 
   // Sobald gefiltert wird (Status, Erfolg und/oder Generation), klappen die
   // betroffenen Abschnitte automatisch auf und werden als Tabelle (inkl.
   // Partner- und Generations-Spalte) statt als Karten-Raster dargestellt —
   // manuelles Zuklappen bleibt weiterhin per Klick möglich und wird dann
   // respektiert (S.nachExpanded überschreibt den Auto-Expand-Default).
-  var isFiltering = !!(S.nachStatusFilter || S.nachGenFilter || S.nachPerfFilter);
+  var isFiltering = !!(S.nachStatusFilter || S.nachGenFilter || S.nachPerfFilter || S.nachPartnerFilter);
   var gens=[['🐣 Kinder (1. Generation)',children,'Kinder','children'],['🐓 Enkel (2. Generation)',gc,'Enkel','gc'],['🥚 Urenkel (3. Generation)',ggc,'Urenkel','ggc']];
   if(S.nachGenFilter) gens=gens.filter(function(g){return g[3]===S.nachGenFilter;});
   var genHtml=gens.map(function(g){
     var birds=applyStatusFilter(g[1]);
-    var emptyMsg = filterLabel ? 'Keine '+g[2]+' mit Status "'+filterLabel+'".' : null;
+    var emptyMsg = filterLabel ? 'Keine '+g[2]+' für den Filter "'+filterLabel+'".' : null;
     var genKey='gen:'+g[3];
     var genCollapsed = S.nachExpanded[genKey]===undefined ? !isFiltering : !S.nachExpanded[genKey];
     var body = genCollapsed ? '' : (isFiltering ? renderGenTable(birds,g[3],pid,emptyMsg) : renderGen(birds,g[2],emptyMsg,genKey));
@@ -13276,6 +13482,25 @@ function renderNachkommen(pid){
       +body+'</div>';
   }).join('');
 
+  var partnerHtml='';
+  if(S.nachPartnerOpen || S.nachPartnerFilter){
+    var prow=partners.map(function(x){
+      var pt=x.p, active=x.kids.filter(function(k){return k.instock;}).length;
+      var sel=S.nachPartnerFilter===x.key;
+      var sxp=pt?sex_(pt):null;
+      return '<tr onclick="setNachPartner(\''+x.key+'\')" style="cursor:pointer;'+(sel?'background:color-mix(in srgb,var(--gold) 14%,var(--bg3))':'')+'">'
+        +'<td style="width:28px">'+(sel?'✔':'')+'</td>'
+        +'<td>'+(pt?'<span class="ring">'+escH(ring(pt))+'</span> '+escH(pt.name||''):'<span style="color:var(--text3)">Partner unbekannt</span>')+'</td>'
+        +'<td>'+(sxp==='M'?'♂ Vogel':sxp==='F'?'♀ Weibchen':'—')+'</td>'
+        +'<td>'+(pt&&pt.date_year||'—')+'</td>'
+        +'<td style="text-align:right;font-weight:600">'+x.kids.length+'</td>'
+        +'<td style="text-align:right">'+active+'</td></tr>';
+    }).join('');
+    partnerHtml='<div class="card" style="margin-bottom:12px"><div class="card-title">💑 Partner mit Nachkommen <span style="color:var(--text3);font-weight:400">('+partnerCount+')</span>'
+      +(S.nachPartnerFilter?' <button class="btn btn-outline btn-sm" style="margin-left:10px" onclick="S.nachPartnerFilter=null;render()">Filter entfernen ✕</button>':'')+'</div>'
+      +(partners.length?'<div style="overflow:auto"><table class="data-table" style="width:100%"><thead><tr><th></th><th>Partner</th><th>Geschlecht</th><th>Jg.</th><th style="text-align:right">Kinder</th><th style="text-align:right">im Bestand</th></tr></thead><tbody>'+prow+'</tbody></table></div><div style="font-size:12px;color:var(--text3);margin-top:8px">Zeile anklicken, um die Nachkommen (Kinder, Enkel, Urenkel) dieses Paares unten zu filtern.</div>':'<div style="color:var(--text3);font-size:13px">Keine Nachkommen vorhanden.</div>')
+      +'</div>';
+  }
   return '<div class="card" style="margin-bottom:12px">'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">'
     +'<div>'
@@ -13286,7 +13511,7 @@ function renderNachkommen(pid){
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">'+kpiHtml+'</div>'
     +renderVererbungCard(pid, er)
-    +'</div>'+genHtml;
+    +'</div>'+partnerHtml+genHtml;
 }
 
 function bindNachSearch(){
