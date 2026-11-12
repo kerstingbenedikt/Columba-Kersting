@@ -6,6 +6,8 @@
 <title>Brieftauben-Verwaltung</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
+/* iOS zoomt beim Fokussieren von Feldern unter 16px automatisch hinein – auf Touch-Geräten daher mind. 16px */
+@media (pointer:coarse){input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea{font-size:16px !important}}
 /* Handy/PWA: keine seitliche Verschiebung der ganzen Seite (Inhalte scrollen nur in ihren eigenen Containern) */
 html,body{overflow-x:hidden;max-width:100%}
 #main{min-width:0;max-width:100%}
