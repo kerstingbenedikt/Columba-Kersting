@@ -230,6 +230,8 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .scan-node-err{border-color:#8a3a3a!important;background:rgba(192,80,77,.12)!important}
 .scan-node-warn{border-color:#a3792f!important;background:rgba(212,168,67,.1)!important}
 .scan-node-active{outline:2px solid var(--green);outline-offset:1px}
+.scan-dd{cursor:grab;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.scan-drop-target{outline:2px dashed var(--gold,#c9a227)!important;outline-offset:2px;background:rgba(201,162,39,.18)!important}
 .ped-ring{font-family:monospace;font-size:11px;color:var(--green);font-weight:600}
 .ped-name{font-size:12px;color:var(--text);margin-top:2px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ped-info{font-size:11px;color:var(--text3);margin-top:1px}
@@ -5455,7 +5457,68 @@ function findInDb(ringnumber){
   return S.pigeons.find(x => normRing(x.ringnumber)===n || normRing(x.ringnumberold||'')===n) || null;
 }
 
-function toggleScanEdit(k){ SCAN.expandedKey = (SCAN.expandedKey===k) ? null : k; render(); }
+let SCAN_BRANCH=false, SCAN_NOCLICK=0;
+function scanImgZoom(z){ const i=document.getElementById('scan-img'); if(i) i.style.width=z+'%'; }
+// ── Drag & Drop der Stammbaum-Kästchen im Scan-Ergebnis (Maus: ziehen; Touch: gedrückt halten, dann ziehen) ──
+(function(){
+  let st=null, timer=null, lastTouch=0;
+  const keyAt=(x,y)=>{ if(st&&st.ghost) st.ghost.style.display='none'; const e=document.elementFromPoint(x,y); if(st&&st.ghost) st.ghost.style.display=''; const n=e&&e.closest&&e.closest('[data-skey]'); return n?n.getAttribute('data-skey'):null; };
+  const mark=(k,on)=>{ if(!k) return; document.querySelectorAll('[data-skey="'+k+'"]').forEach(e=>e.classList.toggle('scan-drop-target',on)); };
+  function begin(el,x,y){ st={key:el.getAttribute('data-skey'),el,x0:x,y0:y,active:false,over:null,ghost:null}; }
+  function activate(x,y){
+    if(!st) return; st.active=true;
+    const g=st.el.cloneNode(true); g.removeAttribute('onclick'); g.removeAttribute('data-skey');
+    g.style.cssText='position:fixed;pointer-events:none;z-index:9999;opacity:.9;width:'+st.el.offsetWidth+'px;box-shadow:0 8px 24px rgba(0,0,0,.55)';
+    document.body.appendChild(g); st.ghost=g; st.el.style.opacity='.35'; move(x,y);
+  }
+  function move(x,y){
+    if(!st||!st.ghost) return;
+    st.ghost.style.left=(x-st.el.offsetWidth/2)+'px'; st.ghost.style.top=(y-24)+'px';
+    const k=keyAt(x,y); if(k!==st.over){ mark(st.over,false); st.over=(k&&k!==st.key)?k:null; mark(st.over,true); }
+    const wrap=document.querySelector('.ped-wrap');
+    if(wrap){ const r=wrap.getBoundingClientRect(); if(x>r.right-40) wrap.scrollLeft+=14; else if(x<r.left+40) wrap.scrollLeft-=14; }
+    if(y<80) window.scrollBy(0,-14); else if(y>window.innerHeight-80) window.scrollBy(0,14);
+  }
+  function finish(drop){
+    clearTimeout(timer); timer=null;
+    if(!st) return;
+    const s0=st; st=null;
+    if(s0.ghost) s0.ghost.remove();
+    s0.el.style.opacity=''; mark(s0.over,false);
+    if(s0.active){
+      SCAN_NOCLICK=Date.now();
+      if(drop && s0.over){ if(SCAN_BRANCH) swapScanSubtree(s0.key,s0.over); else swapScanPositions(s0.key,s0.over); }
+    }
+  }
+  const nodeOf=t=>t&&t.closest&&t.closest('.ped-wrap [data-skey]');
+  document.addEventListener('mousedown',e=>{
+    if(e.button!==0 || Date.now()-lastTouch<600) return;
+    const n=nodeOf(e.target); if(n) begin(n,e.clientX,e.clientY);
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!st) return;
+    if(!st.active){ if(Math.hypot(e.clientX-st.x0,e.clientY-st.y0)>6) activate(e.clientX,e.clientY); }
+    else { e.preventDefault(); move(e.clientX,e.clientY); }
+  });
+  document.addEventListener('mouseup',()=>finish(true));
+  document.addEventListener('touchstart',e=>{
+    lastTouch=Date.now();
+    const n=nodeOf(e.target); if(!n||e.touches.length!==1) return;
+    const t=e.touches[0]; begin(n,t.clientX,t.clientY);
+    timer=setTimeout(()=>{ if(!st) return; activate(st.x0,st.y0); try{ navigator.vibrate&&navigator.vibrate(25); }catch(_){} },350);
+  },{passive:true});
+  document.addEventListener('touchmove',e=>{
+    lastTouch=Date.now();
+    if(!st) return;
+    const t=e.touches[0];
+    if(!st.active){ if(Math.hypot(t.clientX-st.x0,t.clientY-st.y0)>10){ clearTimeout(timer); st=null; } return; }
+    e.preventDefault(); move(t.clientX,t.clientY);
+  },{passive:false});
+  document.addEventListener('touchend',()=>{ lastTouch=Date.now(); finish(true); });
+  document.addEventListener('touchcancel',()=>finish(false));
+})();
+
+function toggleScanEdit(k){ if(Date.now()-SCAN_NOCLICK<500) return; SCAN.expandedKey = (SCAN.expandedKey===k) ? null : k; render(); }
 
 function updateScanField(k, field, value){
   if(!SCAN.pigeons[k]) return;
@@ -5653,7 +5716,7 @@ function renderScanResult(){
   function scanNode(k){
     const p = SCAN.pigeons[k];
     if(!p || !p.ringnumber){
-      return `<div class="ped-box empty" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:11px">—<br>Nr. ${pedSlot(k)} leer</div></div>`;
+      return `<div class="ped-box empty scan-dd" data-skey="${k}" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:11px">—<br>Nr. ${pedSlot(k)} leer</div></div>`;
     }
     const m   = SCAN.matches[k];
     const act = SCAN.actions[k] ?? (m?'update':'new');
@@ -5669,13 +5732,14 @@ function renderScanResult(){
     ].filter(Boolean).join(' ');
     const statusIcon = hasError ? '🚫' : hasWarn ? '⚠️' : (m ? '✅' : '🆕');
     const instockOn = !!SCAN.instock[k];
-    return `<div class="${boxCls}" style="width:100%;box-sizing:border-box" onclick="toggleScanEdit('${k}')">
+    return `<div class="${boxCls} scan-dd" data-skey="${k}" style="width:100%;box-sizing:border-box" onclick="toggleScanEdit('${k}')">
       <div style="display:flex;align-items:center;gap:4px;margin-bottom:1px">
-        <span style="font-size:9px;font-weight:700;flex-shrink:0;color:${sx==='M'?'var(--blue)':sx==='F'?'var(--purple)':'var(--text3)'}">${sx==='M'?'♂':sx==='F'?'♀':'?'}</span>
-        <div class="ped-ring" style="font-size:${k==='proband'?'12px':'10px'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escH(p.ringnumber)}</div>
+        <span style="font-size:11px;font-weight:700;flex-shrink:0;color:${sx==='M'?'var(--blue)':sx==='F'?'var(--purple)':'var(--text3)'}">${sx==='M'?'♂':sx==='F'?'♀':'?'}</span>
+        <span style="flex:1"></span>
         <span title="${m?'In Datenbank':'Neu'}" style="font-size:11px;flex-shrink:0">${statusIcon}</span>
         <span title="Position Nr. ${pedSlot(k)}" style="font-size:9px;font-weight:700;flex-shrink:0;color:#1a1200;background:var(--gold,#c9a227);border-radius:8px;padding:0 5px">${pedSlot(k)}</span>
       </div>
+      <div class="ped-ring" style="font-size:10px;white-space:normal;word-break:break-all;line-height:1.25">${escH(p.ringnumber)}</div>
       ${p.name?`<div class="ped-name" style="font-size:${k==='proband'?'13px':'11px'}">${escH(p.name)}</div>`:''}
       <div style="font-size:9px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[p.date_year,tColor(p.color),p.strain].filter(Boolean).join(' · ')}</div>
       <div style="margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
@@ -5760,7 +5824,8 @@ function renderScanResult(){
 
   const legend = `<div style="display:flex;gap:12px;margin:10px 0 14px;flex-wrap:wrap;font-size:11px;color:var(--text3)">
     <span>✅ in DB</span><span>🆕 neu</span><span>⚠️ Warnung</span><span>🚫 Datenfehler (wird übersprungen)</span>
-    <span style="margin-left:auto">Klick auf eine Taube → bearbeiten</span>
+    <span style="margin-left:auto">Klick = bearbeiten · Ziehen (am Handy: gedrückt halten) = Platz tauschen</span>
+    <label style="display:flex;align-items:center;gap:5px;color:var(--text2);cursor:pointer"><input type="checkbox" ${SCAN_BRANCH?'checked':''} onchange="SCAN_BRANCH=this.checked"> ganzen Zweig mitziehen</label>
   </div>`;
 
   const editHtml = SCAN.expandedKey && SCAN.pigeons[SCAN.expandedKey]
@@ -5777,12 +5842,19 @@ function renderScanResult(){
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
       <div class="card-title serif" style="font-size:18px;margin:0">📷 Scan-Ergebnis</div>
       <div style="display:flex;gap:8px">
-        ${SCAN.imagePreview?`<button class="btn btn-outline btn-sm" onclick="
-          const i=document.getElementById('scan-img');i.style.display=i.style.display==='none'?'block':'none'">🖼 Bild</button>`:''}
+        ${SCAN.imagePreview?`<button class="btn btn-outline btn-sm" onclick="const b=document.getElementById('scan-imgbox');b.style.display=b.style.display==='none'?'block':'none'">🖼 Bild</button>`:''}
         <button class="btn btn-outline btn-sm" onclick="scanReset();render()">🔄 Neuer Scan</button>
       </div>
     </div>
-    ${SCAN.imagePreview?`<img id="scan-img" src="${SCAN.imagePreview}" class="scan-preview" style="display:none" alt="Scan">`:''}
+    ${SCAN.imagePreview?`<div id="scan-imgbox" style="display:none;margin:10px 0">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:12px;color:var(--text3);flex-wrap:wrap">Zoom:
+        <button class="btn btn-outline btn-sm" onclick="scanImgZoom(100)">Einpassen</button>
+        <button class="btn btn-outline btn-sm" onclick="scanImgZoom(200)">200 %</button>
+        <button class="btn btn-outline btn-sm" onclick="scanImgZoom(350)">350 %</button>
+        <span style="margin-left:auto">Im Bild wischen / scrollen zum Verschieben</span></div>
+      <div style="overflow:auto;max-height:70vh;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;-webkit-overflow-scrolling:touch">
+        <img id="scan-img" src="${SCAN.imagePreview}" style="width:100%;max-width:none;display:block" alt="Scan">
+      </div></div>`:''}
     <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap">
       <div style="background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
         <strong style="color:var(--green)">${inDb}</strong> <span style="color:var(--text2)">in DB</span>
@@ -5884,12 +5956,21 @@ function handleScanFile(file){
   reader.readAsDataURL(file);
 }
 
+// Abschließendes V/W hinter der Ringnummer (Vogel/Weibchen) gehört nicht zur Ringnummer, sondern ist das Geschlecht
+function splitRingSex(r){
+  if(!r) return {ring:r, sex:null};
+  const m = String(r).trim().match(/^(.*\d)\s*[-\/]?\s*([VWvw])\.?$/);
+  return m ? {ring:m[1].trim(), sex: m[2].toUpperCase()==='V'?'M':'F'} : {ring:String(r).trim(), sex:null};
+}
 function normalizePigeonData(d){
+  const rs = splitRingSex(d.ringnumber||d.ring||null);
+  const fs = splitRingSex(d.ringnumberfather||d.father_ring||d.father?.ringnumber||null);
+  const ms = splitRingSex(d.ringnumbermother||d.mother_ring||d.mother?.ringnumber||null);
   return {
-    ringnumber:       d.ringnumber||d.ring||null,
+    ringnumber:       rs.ring,
     name:             d.name||null,
     date_year:        d.date_year||d.year||d.vintage||d.jahrgang||null,
-    gender:           normalizeScanGender(d.gender||d.sex||d.geschlecht||null),
+    gender:           rs.sex || normalizeScanGender(d.gender||d.sex||d.geschlecht||null),
     color:            d.color||d.colour||d.farbe||null,
     race:             d.race||d.rasse||null,
     strain:           d.strain||d.linie||d.stamm||null,
@@ -5897,8 +5978,8 @@ function normalizePigeonData(d){
     owner:            d.owner||d.besitzer||null,
     countrycode:      d.countrycode||d.country||d.land||null,
     associationno:    d.associationno||d.verband||null,
-    ringnumberfather: d.ringnumberfather||d.father_ring||d.father?.ringnumber||null,
-    ringnumbermother: d.ringnumbermother||d.mother_ring||d.mother?.ringnumber||null,
+    ringnumberfather: fs.ring,
+    ringnumbermother: ms.ring,
     info:             d.info||d.notes||d.notizen||d._raw_info||null,
   };
 }
