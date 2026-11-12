@@ -3,9 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Brieftauben-Verwaltung</title>
+<title>PIGMAN PigeonManager</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
+/* Druckdialog: Elemente als kompakte Chips mit einem Farbpunkt */
+.pp-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:16px;padding:3px 8px 3px 4px;background:var(--bg3);opacity:.55}
+.pp-chip.on{opacity:1;border-color:color-mix(in srgb,var(--green) 55%,var(--border))}
+.pp-chip label{display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;margin:0}
+.pp-dot{width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,.45);padding:0;cursor:pointer}
+
 /* Smartphone-Formulare: Felder dürfen nie breiter als ihre Spalte sein, Selects/Notizen bekommen genug Platz */
 .form-field,.pf-block>*{min-width:0}
 .form-field input,.form-field select,.form-field textarea{min-width:0;max-width:100%;box-sizing:border-box}
@@ -25,20 +31,25 @@ html,body{overflow-x:hidden;max-width:100%}
 @media(max-width:700px){.pp-lbl,.pp-title{display:none}}
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0F1117;--bg2:#161B22;--bg3:#1C2333;--bg4:#242B3D;
-  --green:#5B8659;--green2:#4a6e48;--green3:#3d5c3b;
+  --bg:#0a1220;--bg2:#0f1a2e;--bg3:#152340;--bg4:#1c2e4f;
+  --green:#c9a227;--green2:#a8871c;--green3:#3a3216;--gold:#c9a227;
+  --grad:linear-gradient(90deg,#f5a623,#e8301c,#8b2fc9,#2a6ad8);
   --text:#E8EAF0;--text2:#9BA3AF;--text3:#6B7280;
-  --border:#2A3347;--border2:#3A4560;
-  --blue:#4A90D9;--purple:#a855f7;--orange:#e8893a;--amber:#d4a843;
+  --border:#22365a;--border2:#34507f;
+  --blue:#2080e0;--purple:#a855f7;--orange:#e8893a;--amber:#d4a843;
   --radius:12px;--radius-sm:8px;
 }
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh}
 .serif{font-family:'Playfair Display',serif}
 
 /* ── Header ── */
-header{background:var(--bg2);border-bottom:1px solid var(--border);padding:13px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100}
+header{background:var(--bg2);border-bottom:2px solid transparent;border-image:var(--grad) 1;padding:13px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100}
 .header-left{display:flex;align-items:center;gap:12px}
-.logo{width:34px;height:34px;background:var(--green3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.logo{width:38px;height:38px;background:transparent;border-radius:0;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.line-overlay input[type=text]{background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:inherit}
+.line-overlay input[type=text]:focus{outline:none;border-color:var(--gold)}
+.pg-ico{vertical-align:-3px;color:var(--gold)}
+.app-sub{font-family:'DM Sans',sans-serif;font-weight:400;font-size:.55em;letter-spacing:.2em;text-transform:uppercase;color:var(--text3);margin-left:8px}
 header h1{font-family:'Playfair Display',serif;font-size:18px;font-weight:600}
 .db-status{font-size:11px;color:var(--text3);margin-top:1px}
 .header-right{display:flex;align-items:center;gap:8px}
@@ -56,7 +67,7 @@ nav button.active{color:var(--green);border-bottom-color:var(--green);font-weigh
 .subnav::-webkit-scrollbar{display:none}
 .subnav-btn{background:var(--bg2);border:1px solid var(--border);color:var(--text2);padding:7px 14px;border-radius:20px;cursor:pointer;font-size:12.5px;font-family:'DM Sans',sans-serif;white-space:nowrap;transition:all .15s;display:inline-flex;align-items:center;gap:5px;flex-shrink:0}
 .subnav-btn:hover{border-color:var(--green);color:var(--text)}
-.subnav-btn.active{background:var(--green3);border-color:var(--green2);color:#e8f0e8;font-weight:500}
+.subnav-btn.active{background:var(--green3);border-color:var(--green2);color:#f3e3a6;font-weight:500}
 .subnav-btn.ghost{background:none;border-style:dashed}
 
 /* ── Main ── */
@@ -151,7 +162,7 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .field-item span{font-size:13px;color:var(--text)}
 
 /* ── Buttons ── */
-.btn{background:var(--green3);border:1px solid var(--green2);color:#e8f0e8;padding:7px 15px;border-radius:var(--radius-sm);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:background .15s;display:inline-flex;align-items:center;gap:6px}
+.btn{background:var(--green3);border:1px solid var(--green2);color:#f3e3a6;padding:7px 15px;border-radius:var(--radius-sm);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:background .15s;display:inline-flex;align-items:center;gap:6px}
 .btn:hover{background:var(--green2)}
 .btn-outline{background:none;border:1px solid var(--border);color:var(--text2)}
 .btn-outline:hover{border-color:var(--green);color:var(--text);background:none}
@@ -358,7 +369,8 @@ main.main-wide{max-width:1840px}
   .header-right{display:none}
   header{padding:11px 14px}
   header h1{font-size:16px}
-  .logo{width:30px;height:30px;font-size:15px}
+  .logo{width:32px;height:32px;font-size:15px}
+  .app-sub{display:block;margin-left:0;font-size:.5em;letter-spacing:.16em}
   nav{padding:0 8px}
   nav button{padding:11px 12px;font-size:12.5px}
   main{padding:12px 12px 28px}
@@ -415,9 +427,9 @@ main.main-wide{max-width:1840px}
 
 <header>
   <div class="header-left">
-    <div class="logo">🕊</div>
+    <div class="logo"><svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true"><defs><linearGradient id="pgLogoG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f5a623"/><stop offset=".38" stop-color="#e8301c"/><stop offset=".7" stop-color="#8b2fc9"/><stop offset="1" stop-color="#2a6ad8"/></linearGradient></defs><path fill="url(#pgLogoG)" d="M33 36C35 20 47 9 61 9 55 20 48 31 36 40Z"/><path fill="url(#pgLogoG)" d="M30 37C24 25 13 20 3 23 10 30 19 38 31 42Z" opacity=".9"/><path fill="url(#pgLogoG)" d="M29 41C31 49 33 56 36 61 38 55 40 48 39 41Z"/><circle cx="41" cy="26" r="3.6" fill="url(#pgLogoG)"/></svg></div>
     <div>
-      <h1>Brieftauben-Verwaltung</h1>
+      <h1>PIGMAN <span class="app-sub">PigeonManager</span></h1>
       <div class="db-status" id="db-status">Verbinde mit Datenbank…</div>
     </div>
   </div>
@@ -426,7 +438,7 @@ main.main-wide{max-width:1840px}
 </header>
 
 <nav id="nav">
-  <button data-group="tauben" class="active" onclick="showTab('tauben')">🐦 <span id="navPigeonsLabel">Tauben</span></button>
+  <button data-group="tauben" class="active" onclick="showTab('tauben')"><span class="pg-ico-wrap"><svg class="pg-ico" viewBox="0 0 32 32" width="18" height="18" aria-hidden="true"><g fill="currentColor"><circle cx="23" cy="9" r="4.6"/><path d="M26.5 8.2l4.2 1.3-4.2 1.9z"/><path d="M20 11c-5 .5-9 3.500-11 8L2 24.500l8-.8c3 2.800 8 3.500 11.500 1 3-2.200 4-6 2.800-9.500z"/><path d="M13 25l-2 5 4-3z"/><path d="M17 26.500l-.5 4.500 3-3.500z"/></g><circle cx="24.200" cy="8.200" r="1" fill="#0f1a2e"/><path d="M9 20.500c4-2.500 8-2 11 1" fill="none" stroke="#0f1a2e" stroke-width="1.200" stroke-linecap="round" opacity=".6"/></svg></span> <span id="navPigeonsLabel">Tauben</span></button>
   <button data-group="add" onclick="showTab('neu')">＋ <span id="navAddLabel">Hinzufügen</span></button>
   <button data-group="reisen" onclick="showTab('reisen')">🏁 <span id="navRacingLabel">Reisen</span></button>
 </nav>
@@ -460,7 +472,7 @@ const I18N = {
     show_all_breeders:'Alle Züchter anzeigen',
     ped_proband:'Proband', ped_parents:'Eltern', ped_grandparents:'Großeltern', ped_greatgrandparents:'Urgroßeltern',
     ped_virtual_label:'Virtueller Nachkomme', ped_virtual_badge:'Prognose',
-    cock:'Täuber', hen:'Täubin', ped_unknown:'Unbekannt', year_abbr:'Jg.', breeder_abbr:'Z:',
+    cock:'Vogel', hen:'Weibchen', ped_unknown:'Unbekannt', year_abbr:'Jg.', breeder_abbr:'Z:',
     inbreeding_label:'Inzuchtkoeff. (ber.):', inbreeding_suffix:'Inzucht',
     print_label:'Druck:', with_photo:'Mit Foto', with_travel:'Mit Reisedaten', breeder_data_btn:'Züchterdaten',
     legend_click:'Klick → Stammbaum wechseln', pedigree_not_found:'Taube nicht gefunden.',
@@ -468,7 +480,7 @@ const I18N = {
     sub_details:'Details', sub_pedigree:'Stammbaum', sub_offspring:'Nachkommen', sub_pairing:'Paarungscheck',
     back_overview:'← Übersicht',
     fld_ring:'Ringnummer', fld_ring_old:'Alte Ringnr.', fld_name:'Name', fld_year:'Jahrgang',
-    fld_gender:'Geschlecht', gender_cock:'Täuber', gender_hen:'Täubin', gender_choose:'— wählen —',
+    fld_gender:'Geschlecht', gender_cock:'Vogel', gender_hen:'Weibchen', gender_choose:'— wählen —',
     fld_color:'Farbe', fld_race:'Rasse', fld_strain:'Linie / Stamm', fld_breeder:'Züchter', fld_owner:'Besitzer',
     fld_location:'Standort / akt. Besitzer', fld_status:'Status', status_none:'— kein Status —',
     fld_country:'Land', fld_assocno:'Verbandsnr.', fld_birthday:'Geburtstag', fld_died:'Verstorben',
@@ -503,7 +515,7 @@ const I18N = {
     search_title:'26/1 = Jahrgang 2026 Endnummer 1 | idefix 1 = Name + Nummer | 455 = Endnummer',
     search_clear_title:'Suche löschen',
     filter_tools:'⚙️ Filter & Werkzeuge', filter_all:'Alle',
-    filter_sex_m:'♂ Täuber', filter_sex_f:'♀ Täubin',
+    filter_sex_m:'♂ Vogel', filter_sex_f:'♀ Weibchen',
     filter_all_years:'Alle Jahrgänge', filter_all_stock:'Alle Bestände',
     filter_instock:'Im Bestand', filter_not_instock:'Nicht im Bestand',
     search_archive_hint:'🗄️ inkl. {n} Ergebnis(se) aus dem Archiv (nicht im Bestand)',
@@ -525,14 +537,14 @@ const I18N = {
 
     // ── Status-Badges (Nachkommen-Ansicht) ──
     status_died:'Verstorben', status_sold:'Verkauft', status_not_instock:'Nicht im Bestand',
-    status_cock_active:'Täuber (aktiv)', status_hen_active:'Täubin (aktiv)', status_instock:'Im Bestand',
+    status_cock_active:'Vogel (aktiv)', status_hen_active:'Weibchen (aktiv)', status_instock:'Im Bestand',
     filter_chip_color:'Farbe', filter_chip_status:'Status',
 
     // ── Statistik-Ansicht (komplett) ──
     stats_click_filter:'(anklicken zum Filtern)',
     stats_total:'Tauben gesamt', stats_title_total:'Alle Tauben anzeigen',
-    stats_male:'♂ Täuber', stats_title_male:'Nach Täuber (♂) filtern',
-    stats_female:'♀ Täubin', stats_title_female:'Nach Täubin (♀) filtern',
+    stats_male:'♂ Vogel', stats_title_male:'Nach Vogel (♂) filtern',
+    stats_female:'♀ Weibchen', stats_title_female:'Nach Weibchen (♀) filtern',
     stats_instock:'Im Bestand', stats_title_instock:'Nur Bestandstauben anzeigen',
     stats_with_both_parents:'Mit beiden Eltern', stats_vintages:'Jahrgänge',
     stats_stock_by_type:'Bestand nach Taubentyp',
@@ -560,7 +572,7 @@ const I18N = {
 
     // ── Bestenliste ──
     bl_loading_perf:'Lade Leistungsdaten…', bl_loading_trips:'Lade Flüge…',
-    bl_tab_all:'🐦 Alle Tauben', bl_tab_cocks:'♂ Vögel', bl_tab_hens:'♀ Weibchen',
+    bl_tab_all:'Alle Tauben', bl_tab_cocks:'♂ Vögel', bl_tab_hens:'♀ Weibchen',
     bl_tab_cocks_yl:'♂ Vögel (einjährig)', bl_tab_hens_yl:'♀ Weibchen (einjährig)',
     bl_tab_cocks_yb:'♂ Jungtiere', bl_tab_hens_yb:'♀ Jungtiere', bl_tab_yb:'🐣 Jungtiere',
     bl_breeder_label:'Züchter:', bl_all_breeders_opt:'Gesamt (alle Züchter)',
@@ -687,7 +699,7 @@ const I18N = {
 
     // ── Leaderboard ──
     bl_loading_perf:'Loading performance data…', bl_loading_trips:'Loading races…',
-    bl_tab_all:'🐦 All Pigeons', bl_tab_cocks:'♂ Cocks', bl_tab_hens:'♀ Hens',
+    bl_tab_all:'All Pigeons', bl_tab_cocks:'♂ Cocks', bl_tab_hens:'♀ Hens',
     bl_tab_cocks_yl:'♂ Cocks (yearling)', bl_tab_hens_yl:'♀ Hens (yearling)',
     bl_tab_cocks_yb:'♂ Young birds', bl_tab_hens_yb:'♀ Young birds', bl_tab_yb:'🐣 Young birds',
     bl_breeder_label:'Breeder:', bl_all_breeders_opt:'Total (all breeders)',
@@ -823,8 +835,8 @@ function renderLogin(errMsg){
   <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)">
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:40px 36px;width:340px;box-shadow:0 8px 40px #0008">
       <div style="text-align:center;margin-bottom:28px">
-        <div style="font-size:32px;margin-bottom:8px">🕊️</div>
-        <div style="font-family:Georgia,serif;font-size:22px;font-weight:700;color:var(--text)">Brieftauben-Verwaltung</div>
+        <div style="width:56px;height:56px;margin:0 auto 10px"><svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true"><defs><linearGradient id="pgLogoG2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f5a623"/><stop offset=".38" stop-color="#e8301c"/><stop offset=".7" stop-color="#8b2fc9"/><stop offset="1" stop-color="#2a6ad8"/></linearGradient></defs><path fill="url(#pgLogoG2)" d="M33 36C35 20 47 9 61 9 55 20 48 31 36 40Z"/><path fill="url(#pgLogoG2)" d="M30 37C24 25 13 20 3 23 10 30 19 38 31 42Z" opacity=".9"/><path fill="url(#pgLogoG2)" d="M29 41C31 49 33 56 36 61 38 55 40 48 39 41Z"/><circle cx="41" cy="26" r="3.6" fill="url(#pgLogoG2)"/></svg></div>
+        <div style="font-family:Georgia,serif;font-size:22px;font-weight:700;color:var(--text);letter-spacing:.04em">PIGMAN</div><div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--text3);margin-top:2px">PigeonManager</div>
         <div style="font-size:13px;color:var(--text3);margin-top:6px">Bitte anmelden</div>
       </div>
       ${errMsg ? `<div style="background:#2a0f0f;color:#e07070;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:16px">⚠️ ${errMsg}</div>` : ''}
@@ -1087,6 +1099,11 @@ const COLUMN_DEFS = [
     val:p=>tColor(p.color)||'', cell:p=>escH(tColor(p.color))||'—' },
   { key:'strain', get label(){return t('fld_strain');}, sortKey:'strain',
     val:p=>p.strain||'', cell:p=>escH(p.strain||'—') },
+  { key:'line_derived', label:'Linie (abgeleitet)',
+    val:p=>{const d=deriveLine(p);return d?d.label:'';},
+    cell:p=>{const d=deriveLine(p);return d?`<span style="color:var(--gold)">${escH(d.label)}</span>`:'<span style="color:var(--text3)">—</span>';} },
+  { key:'race', get label(){return t('fld_race');}, sortKey:'race',
+    val:p=>p.race||'', cell:p=>escH(p.race||'—') },
   { key:'status', get label(){return t('fld_status');}, sortKey:'status',
     val:p=>tStatus(pigeonStateName(p)), cell:p=>qeStatusSelectHtml(p) },
   { key:'pigeontype', get label(){return t('fld_pigeontype');}, sortKey:'pigeontype',
@@ -1138,7 +1155,7 @@ const COLUMN_BY_KEY = Object.fromEntries(COLUMN_DEFS.map(c=>[c.key,c]));
 // type:'text'    -> Freitext (optional mit Datalist)
 const BULK_FIELDS = [
   { key:'gender', label:'Geschlecht', type:'select',
-    options:()=>[{v:'',l:'— leer —'},{v:'1',l:'♂ Täuber'},{v:'2',l:'♀ Täubin'}] },
+    options:()=>[{v:'',l:'— leer —'},{v:'1',l:'♂ Vogel'},{v:'2',l:'♀ Weibchen'}] },
   { key:'pigeonstateid', label:'Status', type:'select',
     options:()=>[{v:'',l:'— leer —'}].concat(S.pigeonStates.map(s=>({v:s.pigeonstateid,l:s.name}))) },
   { key:'instock', label:'Im Bestand', type:'bool' },
@@ -1697,8 +1714,8 @@ function updateHeaderStats(){
   if(hs) hs.innerHTML=`
     <div class="stat-pill">Gesamt <span>${S.pigeons.length.toLocaleString('de')}</span></div>
     <div class="stat-pill">Im Bestand <span>${instock.toLocaleString('de')}</span></div>
-    <div class="stat-pill">Täuber <span>${S.pigeons.filter(p=>sex_(p)==='M').length}</span></div>
-    <div class="stat-pill">Täubin <span>${S.pigeons.filter(p=>sex_(p)==='F').length}</span></div>`;
+    <div class="stat-pill">Vogel <span>${S.pigeons.filter(p=>sex_(p)==='M').length}</span></div>
+    <div class="stat-pill">Weibchen <span>${S.pigeons.filter(p=>sex_(p)==='F').length}</span></div>`;
 }
 
 // pigeonid-Set aller bereits geladenen Tauben, über loadData() und
@@ -2069,7 +2086,7 @@ async function exportPDF(){
   // Aktive Filter als Text
   const filterInfo = [
     S.search?'Suche: "'+S.search+'"':null,
-    S.sexFilter!=='all'?(S.sexFilter==='M'?'♂ Täuber':'♀ Täubin'):null,
+    S.sexFilter!=='all'?(S.sexFilter==='M'?'♂ Vogel':'♀ Weibchen'):null,
     S.yearFilter!=='all'?'Jg. '+S.yearFilter:null,
     S.colorFilter!=='all'?t('filter_chip_color')+': '+tColor(S.colorFilter):null,
     S.stateFilter!=='all'?t('filter_chip_status')+': '+tStatus(S.stateFilter):null,
@@ -2108,7 +2125,7 @@ async function exportPDF(){
 .scan-field input::placeholder{color:var(--text3)}
 .scan-field select option{background:var(--bg3)}
 .scan-match-box{border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.scan-match-found{background:rgba(91,134,89,.12);border:1px solid rgba(91,134,89,.3)}
+.scan-match-found{background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.3)}
 .scan-match-new{background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25)}
 .scan-match-icon{font-size:26px;flex-shrink:0}
 .scan-match-text strong{color:var(--text);display:block;font-size:14px;margin-bottom:2px}
@@ -2150,7 +2167,7 @@ async function exportPDF(){
 .imp-badge-new{background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25);border-radius:20px;padding:1px 8px;font-size:11px;white-space:nowrap}
 .imp-badge-dup{background:rgba(212,168,67,.12);color:var(--amber);border:1px solid rgba(212,168,67,.3);border-radius:20px;padding:1px 8px;font-size:11px;white-space:nowrap}
 .imp-badge-err{background:rgba(192,80,77,.12);color:#e07070;border:1px solid rgba(192,80,77,.3);border-radius:20px;padding:1px 8px;font-size:11px;white-space:nowrap}
-.imp-badge-ok{background:rgba(91,134,89,.15);color:var(--green);border:1px solid rgba(91,134,89,.3);border-radius:20px;padding:1px 8px;font-size:11px;white-space:nowrap}
+.imp-badge-ok{background:rgba(201,162,39,.15);color:var(--green);border:1px solid rgba(201,162,39,.3);border-radius:20px;padding:1px 8px;font-size:11px;white-space:nowrap}
 .imp-progress{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin:8px 0}
 .imp-progress-bar{height:100%;background:var(--green);border-radius:3px;transition:width .3s}
 .imp-col-map{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:14px}
@@ -2175,13 +2192,13 @@ tr.bulk-row-selected td{background:color-mix(in srgb,var(--green) 10%,var(--bg3)
 .imp-progress-bar{height:100%;background:var(--green);border-radius:3px;transition:width .2s}
 
 </style></head><body>
-<h1>🕊 Tauben-Liste</h1>
+<h1>PIGMAN · Tauben-Liste</h1>
 <div class="meta">${today} &nbsp;·&nbsp; ${rows.length} Tauben${filterInfo?' &nbsp;·&nbsp; Filter: '+filterInfo:''}</div>
 <table>
   <thead><tr>${header.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
   <tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>
 </table>
-<div class="footer">Brieftauben-Verwaltung · ${today}</div>
+<div class="footer">PIGMAN PigeonManager · ${today}</div>
 </body></html>`;
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
   const url=URL.createObjectURL(blob);
@@ -2812,13 +2829,6 @@ function renderList(){
               <option value="yes"${S.inStockFilter==='yes'?' selected':''}>${t('filter_instock')}</option>
               <option value="no"${S.inStockFilter==='no'?' selected':''}>${t('filter_not_instock')}</option>
             </select>
-            <button class="btn btn-outline btn-sm" onclick="resetTaubenFilter()">${t('filter_reset')}</button>
-          </div>
-          <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
-            <select id="color-filter" onchange="S.colorFilter=this.value;S.page=0;applyFilter()">
-              <option value="all">${t('filter_all_colors')}</option>
-              ${COLOR_FILTER_KEYWORDS.filter(k=>S.pigeons.some(p=>colorMatchesKeyword(p.color,k))).map(k=>`<option value="${escH(k)}"${S.colorFilter===k?' selected':''}>${escH(tColor(k))}</option>`).join('')}
-            </select>
             <select id="state-filter" onchange="S.stateFilter=this.value;S.page=0;applyFilter()">
               <option value="all">${t('filter_all_status')}</option>
               ${(S.pigeonStates.length?S.pigeonStates:S.pigeons.filter(p=>p.pigeonstate).map(p=>({name:p.pigeonstate,pigeonstateid:p.pigeonstate}))).map(s=>`<option value="${escH(s.name)}"${S.stateFilter===s.name?' selected':''}>${escH(tStatus(s.name))}</option>`).join('')}
@@ -2834,11 +2844,17 @@ function renderList(){
               <option value="all">${t('filter_all_locations')}</option>
               ${[...new Set(S.pigeons.map(p=>p.standort).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}"${S.standortFilter===s?' selected':''}>${escH(s)}</option>`).join('')}
             </select>
+            <select id="color-filter" onchange="S.colorFilter=this.value;S.page=0;applyFilter()">
+              <option value="all">${t('filter_all_colors')}</option>
+              ${COLOR_FILTER_KEYWORDS.filter(k=>S.pigeons.some(p=>colorMatchesKeyword(p.color,k))).map(k=>`<option value="${escH(k)}"${S.colorFilter===k?' selected':''}>${escH(tColor(k))}</option>`).join('')}
+            </select>
+            <button class="btn btn-outline btn-sm" onclick="resetTaubenFilter()">${t('filter_reset')}</button>
           </div>
           <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
             ${renderColumnPicker()}
             <button class="btn ${S.bulkMode?'':'btn-outline'} btn-sm" onclick="toggleBulkMode()">${S.bulkMode?t('bulk_stop'):t('bulk_start')}</button>
             <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben einheitlich formatieren und Duplikate zusammenführen">${t('cleanup_btn')}</button>
+            <button class="btn btn-outline btn-sm" onclick="showLineDeriveModal()" title="Linien aus den Stammbäumen ableiten und vorschlagen">🧬 Linien ableiten</button>
             <button class="btn btn-outline btn-sm" onclick="showPedigreeProblemsModal()" title="Findet Tauben, die als eigener Vater/eigene Mutter oder in ihrer eigenen Ahnenlinie verknüpft sind, und erlaubt das direkte Entfernen dieser Verknüpfung">🧬 Stammbaum prüfen</button>
             <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">${t('export_csv')}</button>
             <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">${t('export_pdf')}</button>
@@ -3756,6 +3772,9 @@ function pedLogoAccent(src){
 // Bis zu 5 deutlich verschiedene Textfarben aus dem Züchter-Logo (für Text auf Weiß abgedunkelt).
 const PED_PAL_CACHE = {};
 const PED_PAL_DEFAULT = ['#e0509c','#2a9ab8','#3f6fc8','#1a6b1a','#9a5b00'];
+// Feste Zusatzfarben hinter den 5 Logofarben: Schwarz, Grau, Türkis, Rosa, Blau
+const PED_PAL_EXTRA = ['#1a1a1a','#666666','#2a9ab8','#e0509c','#3f6fc8','#6b2fa0','#b3201a','#b35a00'];   // + Lila, Rot, Orange (dunkel, druckfest)
+const PED_PAL_ALL = () => PED_PAL_DEFAULT.concat(PED_PAL_EXTRA);
 function pedLogoPalette(src){
   if(!src) return Promise.resolve(PED_PAL_DEFAULT.slice());
   const ck = src.length+':'+src.slice(-40);
@@ -3801,6 +3820,26 @@ function pedLogoPalette(src){
   });
 }
 
+// Augenfotos (Tabelle pigeon_photos, kind='eye') gebündelt laden – nur das erste je Taube.
+const PED_EYE_CACHE = new Map();
+async function pedLoadEyePhotos(ids){
+  const need = ids.filter(id=>id && !PED_EYE_CACHE.has(id));
+  for(const id of need.slice()){           // schon im Detail-Cache vorhanden?
+    const st = PHOTO_CACHE.get(id);
+    if(st && !st.missing){ const e = st.rows.find(r=>r.kind==='eye'); PED_EYE_CACHE.set(id, e?e.data:null); }
+  }
+  const todo = need.filter(id=>!PED_EYE_CACHE.has(id));
+  for(let i=0;i<todo.length;i+=6){
+    const chunk = todo.slice(i,i+6);
+    try{
+      const list = chunk.map(id=>'"'+String(id).replace(/"/g,'')+'"').join(',');
+      const rows = await apiGet('/pigeon_photos?kind=eq.eye&pigeonid=in.('+encodeURIComponent(list)+')&select=pigeonid,data,sort_order&order=sort_order.asc');
+      (Array.isArray(rows)?rows:[]).forEach(r=>{ if(!PED_EYE_CACHE.get(r.pigeonid)) PED_EYE_CACHE.set(r.pigeonid, r.data); });
+    }catch(e){ /* Tabelle fehlt o. Ä. – dann eben ohne Augenfotos */ }
+    chunk.forEach(id=>{ if(!PED_EYE_CACHE.has(id)) PED_EYE_CACHE.set(id, null); });
+  }
+}
+
 // ── Standard-Stammbaum: ein Layout, Optionen im Druckdialog ──────────────────
 // Eltern in Spalte 1 (Proband dazwischen), weitere Ahnen in eigenen Spalten nach rechts.
 // Optionen (PP): gens 3/4/5 Ahnengenerationen, orient hoch/quer, color standard/geschlecht/sw,
@@ -3808,11 +3847,12 @@ function pedLogoPalette(src){
 async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
   try{
     const o = (typeof PP!=='undefined' && PP) ? PP : {};
-    const G = parseInt(gens)||4;
+    const G = o.view==='foto' ? 2 : (parseInt(gens)||4);   // Foto-Ansicht: Proband · Eltern · Großeltern
     const landscape = o.orient==='quer';
     const colorMode = o.color||'standard', frameMode = o.frame||'neutral';
-    const pal = (o.palette && o.palette.length>=5) ? o.palette : PED_PAL_DEFAULT;
-    const IT = o.items || {travel:{on:true,c:0}, breeder:{on:true,c:1}, line:{on:false,c:2}, info:{on:true,c:3}};
+    const pal = (o.palette && o.palette.length>=13) ? o.palette : PED_PAL_ALL();
+    const IT = o.items || {name:{on:true,c:7}, color:{on:true,c:9}, travel:{on:true,c:0}, breeder:{on:true,c:1}, line:{on:false,c:2}, info:{on:true,c:3}};
+    const fotoView = o.view==='foto';
     const itOn = k => !!(IT[k] && IT[k].on);
     const itCol = k => (colorMode==='sw') ? (k==='travel'?'#333':'#444') : (pal[(IT[k]&&IT[k].c)||0] || '#555');
     const data = await buildPedigreeTreeData(pid, G+1);
@@ -3820,11 +3860,12 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
     const { root, tree, breederProf, _ring, _sex } = data;
     const T = v => String(v==null?'':v).trim();
     const _esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    const showTravel = pedPrintTravel();
+    const showTravel = pedPrintTravel() && !fotoView;
+    if(fotoView){ const ids=[]; tree.forEach(col=>(col||[]).forEach(q=>{ if(q && q.pigeonid && !q._virtual) ids.push(q.pigeonid); })); await pedLoadEyePhotos(ids); }
     // Volle A4-Seite (Ränder als Padding), damit Druck, PDF und PNG deckungsgleich sind.
     const pageWmm = landscape?297:210, pageHmm = landscape?210:297, mX = 10, mTop = 8, mBot = 7;
     const innerW = pageWmm - 2*mX;
-    const U = Math.pow(2, G+1);                 // Rastereinheiten (tiefste Spalte = 2 je Box)
+    const U = o.view==='foto' ? 16 : Math.pow(2, G+1);                 // Rastereinheiten (tiefste Spalte = 2 je Box)
     const logoAcc = (colorMode==='sw') ? null : await pedLogoAccent(breederProf && breederProf.logo);
     const hdrHtml = pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc, logoAcc || (colorMode==='sw'?'#333':null));
     const gridH = pageHmm - mTop - mBot - (hdrHtml?30:0) - 5;   // grobe Höhe des Rasters (mm)
@@ -3845,12 +3886,13 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
     // Farbschemata
     const SEXC = {M:'#3a7bd5', F:'#8e44ad', '?':'#888'};
     const INK='#1a1a1a';
-    const COLC = colorMode==='sw' ? '#222' : '#3f6fc8';   // Gefiederfarbe: eigene Zeile, farblich abgesetzt
+    const COLC = itCol('color');   // Gefiederfarbe
     const scheme = (sx)=>{  // Elementfarben (Züchter/Linie/Info/Reisedaten) kommen aus itCol()
       const el = {brd:itCol('breeder'), line:itCol('line'), gray:itCol('info'), trv:itCol('travel'), top:itCol('travel')};
-      if(colorMode==='sw')        return Object.assign({ring:INK, name:'#222'}, el);
-      if(colorMode==='geschlecht')return Object.assign({ring:SEXC[sx]||SEXC['?'], name:INK}, el);
-      return Object.assign({ring:INK, name:'#2a9ab8'}, el);
+      const nm = itCol('name');
+      if(colorMode==='sw')        return Object.assign({ring:INK, name:nm}, el);
+      if(colorMode==='geschlecht')return Object.assign({ring:SEXC[sx]||SEXC['?'], name:nm}, el);
+      return Object.assign({ring:INK, name:nm}, el);
     };
     // Schriftgrößen je Spalte; bei 5 Generationen etwas kleiner
     const k = G>=5 ? .88 : 1;
@@ -3864,8 +3906,28 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
       5:{ring:7,txt:6}
     };
     const MM = 0.3528;
+    const fotoHtml = (p, g, boxH, sc, letter, border) => {
+      const one = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      const z = g===0 ? {ring:15, txt:11} : g===1 ? {ring:12, txt:9.5} : {ring:9.5, txt:8};
+      const cw = g===0 ? wP : g===1 ? wF : wG;               // Boxbreite in mm
+      const stack = boxH > cw*0.9;                           // hohe Box: Fotos untereinander, sonst nebeneinander
+      const cover = p.photo || null, eye = PED_EYE_CACHE.get(p.pigeonid) || null;
+      // Fotos in voller Größe (contain) – nichts wird abgeschnitten; das Augenfoto ist kleiner
+      const tile = (src, flex) => `<div style="flex:${flex};min-height:0;min-width:0;display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="${src}" style="width:100%;height:100%;object-fit:contain;display:block"></div>`;
+      let imgs = '';
+      if(cover) imgs += tile(cover, eye ? (stack?2.6:2.4) : 1);
+      if(eye)   imgs += tile(eye, 1);
+      if(!imgs) imgs = `<div style="flex:1;border:.2mm dashed #ccc;border-radius:.8mm;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:7pt">kein Foto</div>`;
+      const col = T(p.color);
+      return `<div style="height:100%;${border};border-radius:1.2mm;background:#fff;padding:1mm 1.4mm;display:flex;flex-direction:column;gap:.8mm;overflow:hidden">
+        ${g===0?`<div style="font-size:6pt;letter-spacing:.3mm;color:#888;flex-shrink:0">STAMMBAUM VON TAUBE</div>`:''}
+        <div style="flex:1;min-height:0;display:flex;flex-direction:${stack?'column':'row'};gap:.8mm">${imgs}</div>
+        <div style="flex-shrink:0;font-weight:700;font-size:${pt(z.ring)};color:${sc.ring};${one};line-height:1.2">${_esc(_ring(p))}${letter}</div>
+        ${col?`<div style="flex-shrink:0;color:${COLC};font-size:${pt(z.txt)};${one};line-height:1.2">${_esc(col)}</div>`:''}
+      </div>`;
+    };
     const box = (p, g) => {
-      const boxH = g===1 ? gridH*fa/U : gridH/Math.pow(2,g);   // Höhe der Box in mm
+      const boxH = g===1 ? (fotoView ? gridH/2 : gridH*fa/U) : gridH/Math.pow(2,g);   // Höhe der Box in mm
       if(!p) return `<div style="height:100%;border:.25mm dashed #ddd;border-radius:1.2mm"></div>`;
       const z = SZ[Math.min(g,5)];
       const sx = _sex(p), sc = scheme(sx);
@@ -3877,6 +3939,7 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
         : `border:.25mm solid ${colorMode==='sw'?'#999':fc}`;
       if(d) border = 'border:.5mm solid #f5a623';
       const one = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      if(fotoView) return fotoHtml(p, g, boxH, sc, letter, border);
       // wie viele Zeilen passen in die Box?
       const lineH = z.txt*k*MM*1.3, ringH = z.ring*k*MM*1.25;
       const n = Math.floor((boxH - 2.4 - ringH)/lineH);
@@ -3895,10 +3958,10 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
       const take = ()=>{ if(left>0){ left--; return true; } return false; };
       const bold = colorMode==='standard'?700:400;
       let body = '';
-      if(p.name && take())  body += `<div style="font-style:italic;font-weight:${bold};color:${sc.name};font-size:${txt};${one};line-height:1.3">„${_esc(p.name)}“</div>`;
+      if(p.name && itOn('name') && take())  body += `<div style="font-style:italic;font-weight:${bold};color:${sc.name};font-size:${txt};${one};line-height:1.3">„${_esc(p.name)}“</div>`;
       if(zl && take())      body += `<div style="font-weight:${bold};color:${sc.brd};font-size:${txt};${one};line-height:1.3">${_esc(zl)}</div>`;
       if(lineStr && take()) body += `<div style="color:${sc.line};font-size:${txt};${one};line-height:1.3">${_esc(lineStr)}</div>`;
-      if(T(p.color) && take()) body += `<div style="color:${COLC};font-size:${txt};${one};line-height:1.3">${_esc(T(p.color))}</div>`;
+      if(T(p.color) && itOn('color') && take()) body += `<div style="color:${COLC};font-size:${txt};${one};line-height:1.3">${_esc(T(p.color))}</div>`;
       // Reisedaten (Häkchen „Mit Reisedaten“)
       let trv = '';
       if(showTravel && g<=2 && p.pigeonid && boxH>=26){
@@ -3915,26 +3978,27 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
     const proB = tree[0][0];
     const probTrv = (showTravel && proB && proB.pigeonid && !proB._virtual) ? (pigeonTravelCompactLines(proB.pigeonid, 3)||[]) : [];
     const probTop = (showTravel && proB && proB.pigeonid && !proB._virtual) ? (pigeonTopPlacementsCompactLines(proB.pigeonid)||[]) : [];
-    const extra = Math.min(0.14, 0.014*(probTrv.length+probTop.length));
-    const pr = Math.max(3, Math.round(U*(0.19+extra)));        // Höhe der Proband-Box (Rastereinheiten)
+    const extra = fotoView ? 0.07 : Math.min(0.14, 0.014*(probTrv.length+probTop.length));
+    const pr = fotoView ? 4 : Math.max(3, Math.round(U*(0.19+extra)));        // Höhe der Proband-Box (Rastereinheiten)
     const fa = Math.floor((U-pr)/2), mo = U-pr-fa;
     // Proband-Box
-    const probH = gridH*pr/U;
+    const probH = fotoView ? gridH*0.5 : gridH*pr/U;
     const probandBox = p => {
       if(!p) return '';
       const sx=_sex(p), sc=scheme(sx), letter = sx==='M'?' V':sx==='F'?' W':'';
       const one = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
-      const gray = T(p.color);
+      const gray = itOn('color') ? T(p.color) : '';
       const zl = itOn('breeder') ? (T(p.breeder) || T(p.race)) : '';
       const lineStr = itOn('line') ? T(p.strain) : '';
       const photo = (withPhoto && p.photo && probH>=40) ? `<img src="${p.photo}" style="display:block;width:21mm;height:15mm;object-fit:cover;border-radius:.8mm;margin:1.2mm 0 1.5mm">` : '';
       const bc = frameMode==='geschlecht' ? (SEXC[sx]||SEXC['?']) : '#4a5568';
+      if(fotoView) return fotoHtml(p, 0, probH, sc, letter, `border:.45mm solid ${bc}`);
       const txt = pt(SZ[0].txt);
       return `<div style="height:100%;border:.45mm solid ${bc};border-radius:1.5mm;background:#fff;padding:1.6mm 2.2mm;overflow:hidden">
         <div style="font-size:6.3pt;letter-spacing:.35mm;color:#888">STAMMBAUM VON TAUBE</div>
         ${photo}
         <div style="font-weight:700;font-size:${pt(SZ[0].ring)};color:${sc.ring};${one};line-height:1.25;${photo?'':'margin-top:1mm'}">${_esc(_ring(p))}${letter}</div>
-        ${p.name?`<div style="font-style:italic;font-weight:${colorMode==='standard'?700:400};color:${sc.name};font-size:${txt};${one}">„${_esc(p.name)}“</div>`:''}
+        ${(p.name&&itOn('name'))?`<div style="font-style:italic;font-weight:${colorMode==='standard'?700:400};color:${sc.name};font-size:${txt};${one}">„${_esc(p.name)}“</div>`:''}
         ${zl?`<div style="font-weight:${colorMode==='standard'?700:400};color:${sc.brd};font-size:${txt};${one}">${_esc(zl)}</div>`:''}
         ${lineStr?`<div style="color:${sc.line};font-size:${txt};${one}">${_esc(lineStr)}</div>`:''}
         ${gray?`<div style="color:${COLC};font-size:${txt};${one}">${_esc(gray)}</div>`:''}
@@ -3946,8 +4010,24 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
 
     const gap = G>=5 ? 3 : 3.8;
     const colW = (innerW - (G-1)*gap) / G;
+    // Foto-Ansicht: Proband | Eltern (versetzt) | Großeltern – Proband am breitesten, mit Verbindungslinien
+    const gp = 7, avail = innerW - 2*gp;
+    const wP = avail*(landscape?0.38:0.46), wF = avail*(landscape?0.31:0.27), wG = avail-wP-wF;
+    const colWmm = c => fotoView ? (c<=0?wP:c===1?wF:wG) : colW;
     const cell = (col, r0, r1, inner) => `<div style="grid-column:${col};grid-row:${r0}/${r1};padding:.8mm 0;min-height:0">${inner}</div>`;
-    let cells = cell(1, 1, fa+1, box((tree[1]||[])[0]||null,1))
+    let cells = '';
+    if(fotoView){
+      const ln = 'position:absolute;background:#9a9a9a;';
+      const hz = (y,x0,x1)=>`<div style="${ln}top:${y}%;left:${x0}%;width:${x1-x0}%;height:.35mm"></div>`;
+      const vt = (x,y0,y1)=>`<div style="${ln}left:${x}%;top:${y0}%;height:${y1-y0}%;width:.35mm"></div>`;
+      const bracket = (yc,y1,y2)=> hz(yc,0,50)+vt(50,y1,y2)+hz(y1,50,100)+hz(y2,50,100);
+      cells += cell(1, 5, 13, probandBox(tree[0][0]));
+      cells += `<div style="grid-column:2;grid-row:1/17;position:relative">${bracket(50,25,75)}</div>`;
+      cells += cell(3, 1, 9, box((tree[1]||[])[0]||null,1)) + cell(3, 9, 17, box((tree[1]||[])[1]||null,1));
+      cells += `<div style="grid-column:4;grid-row:1/17;position:relative">${bracket(25,12.5,37.5)}${bracket(75,62.5,87.5)}</div>`;
+      for(let i=0;i<4;i++) cells += cell(5, i*4+1, i*4+5, box((tree[2]||[])[i]||null,2));
+    } else {
+    cells = cell(1, 1, fa+1, box((tree[1]||[])[0]||null,1))
               + cell(1, fa+1, fa+pr+1, `<div style="padding-top:.2mm;height:100%">${probandBox(tree[0][0])}</div>`)
               + cell(1, fa+pr+1, U+1, box((tree[1]||[])[1]||null,1));
     for(let c=2; c<=G; c++){
@@ -3957,7 +4037,8 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
         cells += cell(c, rs, rs+span, box((tree[c]||[])[i]||null,c));
       }
     }
-    const gtc = `repeat(${G},${colW.toFixed(2)}mm)`;
+    }
+    const gtc = fotoView ? `${wP.toFixed(2)}mm ${gp}mm ${wF.toFixed(2)}mm ${gp}mm ${wG.toFixed(2)}mm` : `repeat(${G},${colW.toFixed(2)}mm)`;
     const today = new Date().toLocaleDateString('de-DE');
 
     const safeName = (root.name || _ring(root) || 'Taube').toString()
@@ -3976,7 +4057,7 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
 </style>
 </head><body>
 <div style="flex-shrink:0">${hdrHtml}</div>
-<div style="flex:1;min-height:0;display:grid;grid-template-columns:${gtc};grid-template-rows:repeat(${U},minmax(0,1fr));column-gap:${gap}mm;width:${innerW}mm">${cells}</div>
+<div style="flex:1;min-height:0;display:grid;grid-template-columns:${gtc};grid-template-rows:repeat(${U},minmax(0,1fr));column-gap:${fotoView?0:gap}mm;width:${innerW}mm">${cells}</div>
 <div style="flex-shrink:0;display:flex;justify-content:space-between;align-items:center;font-size:6.3pt;color:#888;padding-top:1.5mm">
   <span style="display:flex;align-items:center;gap:1.2mm">${anyDup?'<span style="display:inline-block;width:2.6mm;height:2.6mm;border:.45mm solid #f5a623;border-radius:50%"></span>Umrandet: Vorfahr kommt in Vater- und Mutterlinie vor':''}</span>
   <span>Erstellt am ${today}</span>
@@ -4585,14 +4666,14 @@ function renderPaarung(){
         </div>
         <div class="autocomplete-drop" id="${id_prefix}drop"></div>
       </div>
-      <div style="font-size:12px;color:var(--text3)">Nur ${sx==='M'?'Täuber':'Täubin'} werden angezeigt</div>`}
+      <div style="font-size:12px;color:var(--text3)">Nur ${sx==='M'?'Vogel':'Weibchen'} werden angezeigt</div>`}
     </div>`;
   }
 
   return `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-      ${birdPicker('paarungM', S.paarungM, '♂ Täuber wählen','M')}
-      ${birdPicker('paarungF', S.paarungF, '♀ Täubin wählen','F')}
+      ${birdPicker('paarungM', S.paarungM, '♂ Vogel wählen','M')}
+      ${birdPicker('paarungF', S.paarungF, '♀ Weibchen wählen','F')}
     </div>
     ${S.paarungM && S.paarungF ? `
     <div class="card">
@@ -4625,7 +4706,7 @@ function renderPaarung(){
       };
       return renderPedigree(VIRTUAL_PROBAND.pigeonid, {embedded:true});
     })()}
-    ` : `<div class="empty-state"><div class="icon">💑</div>Wähle einen Täuber und eine Täubin, um den Inzuchtkoeffizienten und die Erfolgs-Prognose der Nachkommen zu berechnen.</div>
+    ` : `<div class="empty-state"><div class="icon">💑</div>Wähle einen Vogel und ein Weibchen, um den Inzuchtkoeffizienten und die Erfolgs-Prognose der Nachkommen zu berechnen.</div>
     <div style="margin-top:18px">${renderPairingRecommendations()}</div>`}
     <div style="margin-top:18px">${renderMatingsList()}</div>`;
 }
@@ -5299,7 +5380,7 @@ function renderScanResult(){
       ${p.name?`<div class="ped-name" style="font-size:${k==='proband'?'13px':'11px'}">${escH(p.name)}</div>`:''}
       <div style="font-size:9px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[p.date_year,tColor(p.color),p.strain].filter(Boolean).join(' · ')}</div>
       <div style="margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
-        <span style="font-size:9px;padding:0 5px;border-radius:8px;background:${act==='skip'?'var(--bg4)':'rgba(91,134,89,.15)'};color:${act==='skip'?'var(--text3)':'var(--green)'};border:1px solid ${act==='skip'?'var(--border)':'rgba(91,134,89,.3)'}">${act==='skip'?'übersprungen':act==='update'?'ergänzen':'neu'}</span>
+        <span style="font-size:9px;padding:0 5px;border-radius:8px;background:${act==='skip'?'var(--bg4)':'rgba(201,162,39,.15)'};color:${act==='skip'?'var(--text3)':'var(--green)'};border:1px solid ${act==='skip'?'var(--border)':'rgba(201,162,39,.3)'}">${act==='skip'?'übersprungen':act==='update'?'ergänzen':'neu'}</span>
         ${instockOn?`<span style="font-size:9px;padding:0 5px;border-radius:8px;background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.3)">Bestand</span>`:''}
       </div>
     </div>`;
@@ -5404,7 +5485,7 @@ function renderScanResult(){
     </div>
     ${SCAN.imagePreview?`<img id="scan-img" src="${SCAN.imagePreview}" class="scan-preview" style="display:none" alt="Scan">`:''}
     <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap">
-      <div style="background:rgba(91,134,89,.12);border:1px solid rgba(91,134,89,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
+      <div style="background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
         <strong style="color:var(--green)">${inDb}</strong> <span style="color:var(--text2)">in DB</span>
       </div>
       <div style="background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
@@ -6995,7 +7076,7 @@ function renderImpDone(){
     <div style="font-size:48px;margin-bottom:14px">✅</div>
     <div class="serif" style="font-size:22px;margin-bottom:8px">Import abgeschlossen</div>
     <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:16px 0">
-      <div style="background:rgba(91,134,89,.12);border:1px solid rgba(91,134,89,.3);border-radius:var(--radius-sm);padding:10px 20px">
+      <div style="background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.3);border-radius:var(--radius-sm);padding:10px 20px">
         <div style="font-size:24px;font-weight:600;color:var(--green)">${IMP.stats.new}</div>
         <div style="font-size:12px;color:var(--text3)">Neu importiert</div>
       </div>
@@ -7013,7 +7094,7 @@ function renderImpDone(){
     </div>`:''}
     <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
       <button class="btn btn-outline" onclick="impReset();render()">📥 Weiterer Import</button>
-      <button class="btn" onclick="showTab('tauben')">🐦 Zur Tauben-Liste</button>
+      <button class="btn" onclick="showTab('tauben')">Zur Tauben-Liste</button>
     </div>
   </div>`;
 }
@@ -7330,7 +7411,7 @@ let PP = null;
 function pedPrintOpen(pid){
   pedPrintClose();
   PP = { pid, gens:4, orient:'hoch', orientManual:false, color:'standard', frame:'neutral', timer:null, built:null,
-         palette: PED_PAL_DEFAULT.slice(), items:{travel:{on:true,c:0}, breeder:{on:true,c:1}, line:{on:false,c:2}, info:{on:true,c:3}} };
+         view:'stammbaum', palette: PED_PAL_ALL(), items:{name:{on:true,c:7}, color:{on:true,c:9}, travel:{on:true,c:0}, breeder:{on:true,c:1}, line:{on:false,c:2}, info:{on:true,c:3}} };
   const o = document.createElement('div');
   o.id = 'pp-overlay';
   o.style.cssText = 'position:fixed;inset:0;z-index:700;background:var(--bg);display:flex;flex-direction:column';
@@ -7348,19 +7429,19 @@ function pedPrintOpen(pid){
       </div>
     </div>
     <div id="pp-opts" style="display:${window.innerWidth<700?'none':'flex'};flex-wrap:wrap;gap:8px 16px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--border)">
+      ${grp('Ansicht', seg('view',[['stammbaum','Stammbaum'],['foto','Fotos']]))}
       ${grp('Generationen', seg('gens',[[3,'3'],[4,'4'],[5,'5']]))}
       ${grp('Format', seg('orient',[['hoch','A4 hoch'],['quer','A4 quer']]))}
       ${grp('Schriftfarbe', seg('color',[['standard','1 · Standard'],['sw','2 · S/W'],['geschlecht','3 · Version 3']]))}
       ${grp('Rahmen', seg('frame',[['neutral','Neutral'],['geschlecht','Geschlecht']]))}
       <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="ped-print-photo" checked onchange="pedPrintPreview()"> ${t('with_photo')}</label>
     </div>
-    <div id="pp-items" style="display:${window.innerWidth<700?'none':'flex'};flex-wrap:wrap;gap:8px 18px;align-items:center;padding:6px 14px;border-bottom:1px solid var(--border)">
-      <span style="font-size:11px;color:var(--text3)">Mit andrucken (je mit Farbe):</span>
-      ${[['travel','id="ped-print-travel"',t('with_travel')],['breeder','id="pp-it-breeder"','Züchter'],['line','id="pp-it-line"','Linie'],['info','id="pp-it-info"','Info']].map(([k,idAttr,lab])=>`
-      <div style="display:flex;align-items:center;gap:6px">
-        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" ${idAttr} ${PP.items[k].on?'checked':''} onchange="pedPrintItem('${k}',this.checked)"> ${lab}</label>
-        <span class="pp-sw" id="pp-sw-${k}"></span>
-      </div>`).join('')}
+    <div id="pp-items" style="display:${window.innerWidth<700?'none':'flex'};flex-wrap:wrap;gap:6px 8px;align-items:center;padding:6px 14px;border-bottom:1px solid var(--border)">
+      <span style="font-size:11px;color:var(--text3);margin-right:2px">Mit andrucken · Punkt = Farbe:</span>
+      ${[['name','id="pp-it-name"','Name'],['color','id="pp-it-color"','Farbe'],['breeder','id="pp-it-breeder"','Züchter'],['line','id="pp-it-line"','Linie'],['travel','id="ped-print-travel"',t('with_travel')],['info','id="pp-it-info"','Info']].map(([k,idAttr,lab])=>`
+      <span class="pp-chip${PP.items[k].on?' on':''}" id="pp-chip-${k}">
+        <label><input type="checkbox" ${idAttr} ${PP.items[k].on?'checked':''} onchange="pedPrintItem('${k}',this.checked)"> ${lab}</label><button type="button" class="pp-dot" id="pp-dot-${k}" title="Farbe wählen" onclick="pedPrintPop('${k}',event)"></button>
+      </span>`).join('')}
     </div>
     <div id="pp-status" style="font-size:11px;color:var(--text3);padding:2px 14px;min-height:16px"></div>
     <iframe id="pp-frame" style="flex:1;width:100%;min-width:0;max-width:100vw;border:0;background:#cfcfcf"></iframe>`;
@@ -7368,7 +7449,7 @@ function pedPrintOpen(pid){
   pedPrintSwatches();
   const _pp = PP;
   pedLogoPalette((typeof BREEDER_PROFILE!=='undefined' && BREEDER_PROFILE) ? BREEDER_PROFILE.logo : null).then(pal=>{
-    if(PP!==_pp) return; PP.palette = pal; pedPrintSwatches(); pedPrintPreview();
+    if(PP!==_pp) return; PP.palette = pal.concat(PED_PAL_EXTRA); pedPrintSwatches(); pedPrintPreview();
   });
   pedPrintSet('gens', PP.gens);
 }
@@ -7376,30 +7457,61 @@ function pedPrintToggleOpts(){
   const o = document.getElementById('pp-opts'); if(!o) return;
   const show = (o.style.display==='none');
   o.style.display = show ? 'flex' : 'none';
-  const it = document.getElementById('pp-items'); if(it) it.style.display = show ? 'flex' : 'none';
+  const it = document.getElementById('pp-items'); if(it) it.style.display = (show && PP && PP.view!=='foto') ? 'flex' : 'none';
 }
-function pedPrintItem(k, on){ if(!PP) return; PP.items[k].on = !!on; pedPrintPreview(); }
-function pedPrintItemColor(k, i){ if(!PP) return; PP.items[k].c = i; pedPrintSwatches(); pedPrintPreview(); }
+function pedPrintItem(k, on){
+  if(!PP) return; PP.items[k].on = !!on;
+  const ch = document.getElementById('pp-chip-'+k); if(ch) ch.classList.toggle('on', !!on);
+  pedPrintPopClose(); pedPrintPreview();
+}
+function pedPrintItemColor(k, i){ if(!PP) return; PP.items[k].c = i; pedPrintSwatches(); pedPrintPopClose(); pedPrintPreview(); }
 function pedPrintSwatches(){
   if(!PP) return;
   Object.keys(PP.items).forEach(k=>{
-    const el = document.getElementById('pp-sw-'+k); if(!el) return;
-    el.innerHTML = PP.palette.map((c,i)=>`<button type="button" title="${c}" onclick="pedPrintItemColor('${k}',${i})" style="width:18px;height:18px;border-radius:50%;background:${c};border:2px solid ${PP.items[k].c===i?'#fff':'transparent'};outline:1px solid var(--border);margin-left:3px;padding:0;cursor:pointer"></button>`).join('');
+    const d = document.getElementById('pp-dot-'+k); if(d) d.style.background = PP.palette[PP.items[k].c] || '#888';
   });
 }
-function pedPrintClose(){ const o=document.getElementById('pp-overlay'); if(o) o.remove(); PP=null; }
+// Eine gemeinsame Farbauswahl (Popover) statt vieler Farbpunkte je Zeile
+function pedPrintPopClose(){ const p=document.getElementById('pp-pop'); if(p) p.remove(); document.removeEventListener('mousedown', pedPrintPopOutside, true); document.removeEventListener('touchstart', pedPrintPopOutside, true); }
+function pedPrintPopOutside(e){ const p=document.getElementById('pp-pop'); if(p && !p.contains(e.target) && !(e.target.closest && e.target.closest('.pp-dot'))) pedPrintPopClose(); }
+function pedPrintPop(k, ev){
+  if(!PP) return; ev.stopPropagation();
+  const had = document.getElementById('pp-pop'); const same = had && had.dataset.k===k;
+  pedPrintPopClose(); if(same) return;
+  if(!PP.items[k].on){ PP.items[k].on = true; const cb = document.querySelector('#pp-chip-'+k+' input'); if(cb) cb.checked = true; const ch=document.getElementById('pp-chip-'+k); if(ch) ch.classList.add('on'); pedPrintPreview(); }
+  const btn = ev.currentTarget, r = btn.getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.id = 'pp-pop'; pop.dataset.k = k;
+  pop.style.cssText = 'position:fixed;z-index:800;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.45);width:'+(5*30+8*2+4*6)+'px;left:'+Math.max(6,Math.min(r.left-20, window.innerWidth-190))+'px;top:'+(r.bottom+6)+'px';
+  const names = ['Logo 1','Logo 2','Logo 3','Logo 4','Logo 5','Schwarz','Grau','Türkis','Rosa','Blau','Lila','Rot','Orange'];
+  pop.innerHTML = '<div style="display:grid;grid-template-columns:repeat(5,30px);gap:6px">'
+    + PP.palette.map((c,i)=>`<button type="button" title="${names[i]||c}" onclick="pedPrintItemColor('${k}',${i})" style="width:30px;height:30px;border-radius:50%;background:${c};border:2px solid ${PP.items[k].c===i?'#fff':'transparent'};outline:1px solid var(--border);padding:0;cursor:pointer"></button>`).join('')
+    + '</div>';
+  document.body.appendChild(pop);
+  document.addEventListener('mousedown', pedPrintPopOutside, true);
+  document.addEventListener('touchstart', pedPrintPopOutside, true);
+}
+function pedPrintClose(){ pedPrintPopClose(); const o=document.getElementById('pp-overlay'); if(o) o.remove(); PP=null; }
 function pedPrintSet(name, v){
   if(!PP) return;
-  if(name==='gens'){
+  if(name==='view'){
+    if(v==='foto' && PP.view!=='foto'){ PP.gensPrev = PP.gens; PP.gens = 3; }
+    else if(v!=='foto' && PP.view==='foto'){ PP.gens = PP.gensPrev || 4; }
+    PP.view = v;
+    if(!PP.orientManual) PP.orient = (PP.view!=='foto' && PP.gens>=5) ? 'quer' : 'hoch';
+  } else if(name==='gens'){
+    if(PP.view==='foto') return;                       // Foto-Ansicht ist fest auf 3 Generationen (Proband · Eltern · Großeltern)
     PP.gens = parseInt(v);
     if(!PP.orientManual) PP.orient = PP.gens>=5 ? 'quer' : 'hoch';   // 5 Generationen: automatisch quer
   } else {
     PP[name] = v;
     if(name==='orient') PP.orientManual = true;
   }
-  ['gens','orient','color','frame'].forEach(n=>{
-    document.querySelectorAll('#pp-seg-'+n+' button').forEach(b=>b.classList.toggle('on', b.dataset.v===String(PP[n])));
+  ['view','gens','orient','color','frame'].forEach(n=>{
+    document.querySelectorAll('#pp-seg-'+n+' button').forEach(b=>{ b.classList.toggle('on', b.dataset.v===String(PP[n])); if(n==='gens'){ const off = PP.view==='foto' && b.dataset.v!=='3'; b.disabled = off; b.style.opacity = off?'.35':''; } });
   });
+  const it = document.getElementById('pp-items'), opts = document.getElementById('pp-opts');
+  if(it) it.style.display = (PP.view==='foto' || !opts || opts.style.display==='none') ? 'none' : 'flex';
   pedPrintPreview();
 }
 function pedPrintPreview(){
@@ -7414,9 +7526,9 @@ async function pedPrintBuild(){
   try{
     const photo = !!document.getElementById('ped-print-photo')?.checked;
     const erfolge = await loadPrintErfolgeText();
-    const sig = JSON.stringify([PP.gens,PP.orient,PP.color,PP.frame,PP.items,PP.palette]);
+    const sig = JSON.stringify([PP.view,PP.gens,PP.orient,PP.color,PP.frame,PP.items,PP.palette]);
     const built = await buildStandardPedigreeHtml(PP.pid, PP.gens, photo, erfolge);
-    if(!PP || sig!==JSON.stringify([PP.gens,PP.orient,PP.color,PP.frame,PP.items,PP.palette])) return;   // inzwischen geändert
+    if(!PP || sig!==JSON.stringify([PP.view,PP.gens,PP.orient,PP.color,PP.frame,PP.items,PP.palette])) return;   // inzwischen geändert
     if(!built){ if(st) st.textContent=''; return; }
     PP.built = built;
     const fr = document.getElementById('pp-frame');
@@ -8146,7 +8258,7 @@ function exportErfolgsScoreCSV(){
   var rows = list.map(function(x){
     var sx=sex_(x.p);
     return [
-      ring(x.p)||'', x.p.name||'', sx==='M'?'Täuber':sx==='F'?'Täubin':'',
+      ring(x.p)||'', x.p.name||'', sx==='M'?'Vogel':sx==='F'?'Weibchen':'',
       x.p.date_year||'',
       x.er.score!=null?x.er.score:'',
       (x.own.ready&&!x.own.noFlights)?x.own.score:'',
@@ -8580,7 +8692,7 @@ function printMatingsList(){
   <thead><tr><th>Vater</th><th>Mutter</th><th>Inzucht</th><th>Score V</th><th>Score M</th><th>Score Ø</th><th>Datum</th></tr></thead>
   <tbody>${rows}</tbody>
 </table>
-<div class="footer">Brieftauben-Verwaltung · ${today}</div>
+<div class="footer">PIGMAN PigeonManager · ${today}</div>
 </body></html>`;
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
   const url=URL.createObjectURL(blob);
@@ -8625,7 +8737,7 @@ function renderPairingRecommendations(){
     +'<input type="checkbox" '+(S.pairRecIncludeReise?'checked':'')+' onchange="S.pairRecIncludeReise=this.checked;PAIR_REC.results=null;render()"> Reisetauben mit einbeziehen</label>';
   if(!cand.males.length || !cand.females.length){
     return '<div class="card"><div class="card-title">🏆 Top-Paarungsempfehlungen</div>'
-      +'<div style="font-size:13px;color:var(--text3);margin-bottom:10px">Es werden mindestens ein Täuber und eine Täubin als Zuchttaube im Bestand benötigt'+(S.pairRecIncludeReise?' (Reisetauben werden bereits einbezogen)':'')+'.</div>'
+      +'<div style="font-size:13px;color:var(--text3);margin-bottom:10px">Es werden mindestens ein Vogel und ein Weibchen als Zuchttaube im Bestand benötigt'+(S.pairRecIncludeReise?' (Reisetauben werden bereits einbezogen)':'')+'.</div>'
       +reiseToggle+'</div>';
   }
   if(!S.pairRecOpen){
@@ -8728,7 +8840,7 @@ function renderPairingRecommendations(){
     +'<div class="qe-group" style="justify-content:center">'+reiseToggle+'</div>'
     +'</div>'
     +(shown.length ? '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-      +'<thead><tr><th>#</th><th>♂ Täuber</th><th>♀ Täubin</th><th>Score</th><th>Inzucht</th><th></th></tr></thead>'
+      +'<thead><tr><th>#</th><th>♂ Vogel</th><th>♀ Weibchen</th><th>Score</th><th>Inzucht</th><th></th></tr></thead>'
       +'<tbody>'+rows+'</tbody></table></div>'
       : '<div style="color:var(--text3);font-size:13px;padding:8px 0">Keine Paarungen erfüllen die aktuellen Filter — Mindest-Score senken oder Inzuchtgrenze anheben.</div>')
     +'</div>';
@@ -10823,7 +10935,7 @@ function renderTripsPreview(){
         <strong style="color:#7ab3e0">${selRows.length}</strong> <span style="color:var(--text2)">von ${rows.length} Reisen ausgewählt</span></div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
         <strong style="color:var(--text)">${totalR}</strong> <span style="color:var(--text2)">Ergebnisse (ausgewählt)</span></div>
-      <div style="background:rgba(91,134,89,.12);border:1px solid rgba(91,134,89,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
+      <div style="background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
         <strong style="color:var(--green)">${foundR}</strong> <span style="color:var(--text2)">Tauben gefunden</span></div>
       ${existingCount?`<div style="background:rgba(212,168,67,.1);border:1px solid rgba(212,168,67,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
         <strong style="color:var(--amber)">${existingCount}</strong> <span style="color:var(--text2)">bereits vorhanden</span></div>`:''}
@@ -10873,7 +10985,7 @@ function renderTripsDone(){
     <div style="font-size:48px;margin-bottom:12px">🏁</div>
     <div class="serif" style="font-size:22px;margin-bottom:8px">Import abgeschlossen</div>
     <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:16px 0">
-      <div style="background:rgba(91,134,89,.12);border:1px solid rgba(91,134,89,.3);border-radius:var(--radius-sm);padding:10px 20px">
+      <div style="background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.3);border-radius:var(--radius-sm);padding:10px 20px">
         <div style="font-size:24px;font-weight:600;color:var(--green)">${RT.imp.stats.trips}</div>
         <div style="font-size:12px;color:var(--text3)">Reisen angelegt${RT.imp.stats.tripsUpdated?' · '+RT.imp.stats.tripsUpdated+' aktualisiert':''}</div></div>
       <div style="background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25);border-radius:var(--radius-sm);padding:10px 20px">
@@ -11589,6 +11701,196 @@ async function resolvePedigreeProblem(pigeonid, side){
     applyFilter(); render();
   }catch(e){ alert('Fehler beim Entfernen: '+e.message); }
 }
+// ── Linien-Ableitung aus dem Stammbaum ─────────────────────────
+// Zählt Ahnen bis zur 4. Generation über den Eltern (Eltern 1/2 … Ururgroßeltern 1/16).
+// Vorschlag = mehrfach (≥2×) vorkommender Ahne mit größtem Anteil (≥15 %, Ahnen auf Vater- UND Mutterseite zählen ×1,5).
+// Berühmte Namen (LINE_FAMOUS) genügen schon ab 12,5 % und werden als Name verwendet,
+// sonst: "#ANTON" bzw. mit Partner "#ANTON x #255"; ohne Namen die Nummer ("#825W x #102", V = Vogel, W = Weibchen).
+const LINE_FAMOUS = ['Hero','Goed Grijs','Rambo','Kannibaal','Bliksem','Olympiade','Kleine Dirk','Dolle Dolores','Dolle Dirk','Wittenbuik','Ceasar','Gaston Van Wanroy'];
+const LINE_MIN = 0.15, LINE_MIN_FAMOUS = 0.125, LINE_BOTH_BONUS = 1.5, LINE_DEPTH = 4;
+let _lineIdx = null, _lineCache = new Map();
+function lineIndex(){
+  if(_lineIdx && _lineIdx.ref===S.pigeons && _lineIdx.len===S.pigeons.length) return _lineIdx;
+  const byId=new Map(), byRing=new Map();
+  for(const x of S.pigeons){
+    byId.set(x.pigeonid,x);
+    const r1=normRing(x.ringnumber); if(r1) byRing.set(r1,x);
+    const r2=normRing(x.ringnumberold||''); if(r2 && !byRing.has(r2)) byRing.set(r2,x);
+  }
+  _lineIdx={ref:S.pigeons,len:S.pigeons.length,byId,byRing}; _lineCache=new Map();
+  return _lineIdx;
+}
+function lineParent(p,which){
+  const ix=lineIndex();
+  const id=which==='F'?p.fatherid:p.motherid;
+  if(id && ix.byId.has(id)) return ix.byId.get(id);
+  const rr=which==='F'?p.ringnumberfather:p.ringnumbermother;
+  const n=rr?normRing(rr):''; return n?(ix.byRing.get(n)||null):null;
+}
+function lineIsFamous(p){
+  const nm=String(p.name||'').trim(); if(!nm) return null;
+  for(const f of LINE_FAMOUS){
+    const re=new RegExp('(^|[^a-zA-ZäöüÄÖÜß])'+f.replace(/\s+/g,'\\s+')+'($|[^a-zA-ZäöüÄÖÜß])','i');
+    if(re.test(nm)) return f.toUpperCase();
+  }
+  return null;
+}
+const LINE_GENERIC=/(?<![a-zäöüß])(st[aä]mm[a-zäöüß]*|t[aä]ubin|t[aä]uber|weibchen|vogel|enk(el[a-zäöüß]*)?\.?|so\.|sohn|tochter|vollbruder|schwester|bruder|nr\.?|nummer)(?![a-zäöüß])/gi;
+function lineShort(p, withSex){
+  // Bevorzugt der Name (ohne Allgemeinwörter wie "Stammtäubin"), sonst die Endnummer
+  let nm=String(p.name||'').replace(LINE_GENERIC,' ').replace(/["„“”'.]/g,' ').replace(/\s+/g,' ').trim();
+  if(nm && !/^[\d\s\/\-]+$/.test(nm)){
+    if(nm.length>22) nm=nm.slice(0,22).trim();
+    return '#'+nm.toUpperCase();
+  }
+  const n=endNumberOf(p); let t=n!=null?String(n):(ring(p)||'?');
+  if(withSex){ const sx=sex_(p); t+=sx==='F'?'W':sx==='M'?'V':''; }
+  return '#'+t;
+}
+function deriveLine(p){
+  lineIndex();
+  if(_lineCache.has(p.pigeonid)) return _lineCache.get(p.pigeonid);
+  const acc=new Map(), mates=new Map();
+  const add=(a,w,side,depth)=>{
+    let e=acc.get(a.pigeonid); if(!e){e={p:a,w:0,n:0,sides:new Set(),depth};acc.set(a.pigeonid,e);}
+    e.w+=w; e.n++; e.sides.add(side); e.depth=Math.min(e.depth,depth);
+  };
+  const walk=(node,depth,w,side)=>{
+    if(depth>LINE_DEPTH) return;
+    const f=lineParent(node,'F'), m=lineParent(node,'M');
+    if(f && m){
+      for(const [a,b] of [[f,m],[m,f]]){
+        let mm=mates.get(a.pigeonid); if(!mm){mm=new Map();mates.set(a.pigeonid,mm);}
+        mm.set(b.pigeonid,(mm.get(b.pigeonid)||0)+1);
+      }
+    }
+    for(const [par,key] of [[f,'F'],[m,'M']]){
+      if(!par) continue;
+      const s=side||key;
+      add(par,w/2,s,depth);
+      walk(par,depth+1,w/2,s);
+    }
+  };
+  walk(p,1,1,null);
+  let best=null;
+  for(const e of acc.values()){
+    const famous=lineIsFamous(e.p);
+    const ok=(e.n>=2 && e.w>=LINE_MIN-1e-9) || (famous && e.w>=LINE_MIN_FAMOUS-1e-9);
+    if(!ok) continue;
+    const both=e.sides.size>1;
+    const score=e.w*(both?LINE_BOTH_BONUS:1);
+    if(!best || score>best.score) best={e,famous,both,score};
+  }
+  let res=null;
+  if(best){
+    const a=best.e.p;
+    let label, partner=null;
+    if(best.famous){ label='#'+best.famous; }
+    else{
+      label=lineShort(a,true);
+      const mm=mates.get(a.pigeonid);
+      if(mm){
+        let bid=null,bc=1; for(const [id,c] of mm) if(c>bc){bc=c;bid=id;}
+        if(bid){ partner=lineIndex().byId.get(bid); if(partner) label+=' x '+lineShort(partner,false); }
+      }
+    }
+    res={label,anc:a,partner,share:best.e.w,count:best.e.n,both:best.both,famous:!!best.famous};
+  }
+  _lineCache.set(p.pigeonid,res);
+  return res;
+}
+function showLineDeriveModal(){
+  S.lineOnlyEmpty = true;
+  const ov=document.createElement('div');
+  ov.className='lightbox-overlay line-overlay'; ov.style.cursor='default';
+  ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+  const panel=document.createElement('div');
+  panel.style.cssText='background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:min(1400px,98vw);height:94vh;display:flex;flex-direction:column;padding:18px;cursor:default';
+  panel.onclick=e=>e.stopPropagation();
+  panel.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px"><div class="card-title" style="margin:0">🧬 Linien aus dem Stammbaum ableiten</div><span onclick="this.closest(\'.line-overlay\').remove()" style="cursor:pointer;color:var(--text3);font-size:22px;line-height:1;padding:2px 6px">×</span></div><div id="line-body" style="display:flex;flex-direction:column;min-height:0;flex:1"></div>';
+  ov.appendChild(panel); document.body.appendChild(ov);
+  lineLoad(); lineRenderBody();
+}
+function lineEff(r){
+  const id=r.p.pigeonid;
+  if(S._lineRowOver && S._lineRowOver[id]!==undefined) return S._lineRowOver[id];
+  if(S._lineGroupOver && S._lineGroupOver[r.d.label]!==undefined) return S._lineGroupOver[r.d.label];
+  return r.d.label;
+}
+function lineLoad(){
+  const rows=[];
+  for(const p of S.pigeons){
+    const d=deriveLine(p); if(!d) continue;
+    if(S.lineOnlyEmpty && p.strain && String(p.strain).trim()) continue;
+    if((p.strain||'').trim()===d.label) continue;
+    rows.push({p,d});
+  }
+  rows.sort((a,b)=>a.d.label.localeCompare(b.d.label,'de')||String(ring(a.p)).localeCompare(String(ring(b.p)),'de'));
+  S._lineRows=rows.slice(0,2000); S._lineTotal=rows.length;
+  S._lineSel=new Set(S._lineRows.filter(r=>!(r.p.strain&&String(r.p.strain).trim())).map(r=>r.p.pigeonid));
+  S._lineRowOver={}; S._lineGroupOver={};
+}
+function lineRenderBody(){
+  const el=document.getElementById('line-body'); if(!el) return;
+  const shown=S._lineRows;
+  const gm=new Map(); for(const r of shown) gm.set(r.d.label,(gm.get(r.d.label)||0)+1);
+  const groups=[...gm.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'de'));
+  S._lineGroups=groups.map(g=>g[0]);
+  el.innerHTML=
+   '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:13px">'
+   +'<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" '+(S.lineOnlyEmpty?'checked':'')+' onchange="S.lineOnlyEmpty=this.checked;lineLoad();lineRenderBody()"> nur Tauben ohne eingetragene Linie</label>'
+   +'<span style="color:var(--text3)">'+S._lineTotal+' Vorschläge · '+groups.length+' Linien'+(S._lineTotal>shown.length?' (erste '+shown.length+' angezeigt)':'')+'</span>'
+   +'<span style="flex:1"></span>'
+   +'<button class="btn btn-outline btn-sm" onclick="lineSelAll(true)">Alle</button><button class="btn btn-outline btn-sm" onclick="lineSelAll(false)">Keine</button>'
+   +'<button class="btn btn-sm" id="line-apply" onclick="lineApply()">Auswahl übernehmen (<span id="line-cnt">'+S._lineSel.size+'</span>)</button></div>'
+   +'<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Regel: mehrfach vorkommender Ahne mit mind. 15 % Genanteil (bis zur 4. Generation über den Eltern), Ahnen auf Vater- und Mutterseite zählen stärker; berühmte Linien (z. B. HERO, GOED GRIJS, RAMBO) schon ab 12,5 %. Namen werden bevorzugt, sonst Nummer (V = Vogel, W = Weibchen).</div>'
+   +'<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:600;margin-bottom:4px">Linien insgesamt umbenennen <span style="font-weight:400;color:var(--text3)">(gilt für alle Tauben der Linie)</span></div>'
+   +'<div style="display:flex;flex-wrap:wrap;gap:6px;max-height:130px;overflow:auto">'
+   +groups.map((g,i)=>{const cur=S._lineGroupOver[g[0]]!==undefined?S._lineGroupOver[g[0]]:g[0];
+      return '<label style="display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:3px 8px"><input type="text" value="'+escH(cur)+'" style="width:190px;padding:3px 6px;font-size:13px" onchange="lineGroupSet('+i+',this.value)"><span style="color:var(--text3);font-size:12px;white-space:nowrap">'+g[1]+' ×</span></label>';}).join('')
+   +'</div></div>'
+   +'<div style="overflow:auto;flex:1;min-height:0;border:1px solid var(--border);border-radius:8px"><table class="data-table" style="width:100%"><thead><tr><th style="width:34px"></th><th>Taube</th><th>Jg.</th><th>Aktuelle Linie</th><th>Vorschlag (änderbar)</th><th>Anteil</th><th>Herleitung</th></tr></thead><tbody>'
+   +shown.map((r,i)=>{
+      const p=r.p,d=r.d;
+      return '<tr><td><input type="checkbox" '+(S._lineSel.has(p.pigeonid)?'checked':'')+' onchange="lineToggle('+i+',this.checked)"></td>'
+       +'<td><span class="ring">'+escH(ring(p))+'</span>'+(p.name?' <span style="color:var(--text2)">'+escH(p.name)+'</span>':'')+'</td>'
+       +'<td>'+(p.date_year||'—')+'</td><td>'+escH(p.strain||'—')+'</td>'
+       +'<td><input type="text" value="'+escH(lineEff(r))+'" style="width:200px;padding:3px 6px;font-size:13px;color:var(--gold);font-weight:600" onchange="lineRowSet('+i+',this.value)"></td>'
+       +'<td>'+(d.share*100).toFixed(1).replace('.',',')+' %</td>'
+       +'<td style="font-size:12px;color:var(--text2)">'+escH(ring(d.anc))+(d.anc.name?' „'+escH(d.anc.name)+'“':'')+' · '+d.count+'× vorhanden'+(d.both?' · Vater- &amp; Mutterseite':'')+(d.partner?' · Partner '+escH(ring(d.partner)):'')+'</td></tr>';
+    }).join('')
+   +'</tbody></table></div>';
+}
+function lineGroupSet(i,v){
+  const orig=S._lineGroups[i]; v=String(v).trim();
+  S._lineGroupOver[orig]=v;
+  for(const r of S._lineRows) if(r.d.label===orig) delete S._lineRowOver[r.p.pigeonid];
+  const sc=document.querySelector('.line-overlay [style*="overflow:auto;flex:1"]'); const top=sc?sc.scrollTop:0;
+  lineRenderBody();
+  const sc2=document.querySelector('.line-overlay [style*="overflow:auto;flex:1"]'); if(sc2) sc2.scrollTop=top;
+}
+function lineRowSet(i,v){ S._lineRowOver[S._lineRows[i].p.pigeonid]=String(v).trim(); }
+function lineToggle(i,on){ const id=S._lineRows[i].p.pigeonid; on?S._lineSel.add(id):S._lineSel.delete(id); const c=document.getElementById('line-cnt'); if(c) c.textContent=S._lineSel.size; }
+function lineSelAll(on){ S._lineSel=new Set(on?S._lineRows.map(r=>r.p.pigeonid):[]); document.querySelectorAll('.line-overlay tbody input[type=checkbox]').forEach(c=>c.checked=on); const c=document.getElementById('line-cnt'); if(c) c.textContent=S._lineSel.size; }
+async function lineApply(){
+  const rows=S._lineRows.filter(r=>S._lineSel.has(r.p.pigeonid) && lineEff(r));
+  if(!rows.length) return;
+  const over=rows.filter(r=>r.p.strain&&String(r.p.strain).trim()).length;
+  if(!confirm(rows.length+' Taube(n) erhalten die angegebene Linie.'+(over?'\n\nAchtung: '+over+' davon haben bereits eine Linie, die dabei überschrieben wird.':'')+'\n\nFortfahren?')) return;
+  const btn=document.getElementById('line-apply'); if(btn){btn.disabled=true;}
+  let done=0, err=0;
+  for(const r of rows){
+    const val=lineEff(r);
+    try{ await apiPatch('pigeons', r.p.pigeonid, {strain:val}); r.p.strain=val; done++; }
+    catch(e){ err++; }
+    if(btn) btn.textContent='… '+(done+err)+' / '+rows.length;
+  }
+  _lineCache=new Map();
+  applyFilter();
+  alert(done+' Linie(n) übernommen'+(err?', '+err+' Fehler.':'.'));
+  const ov=document.querySelector('.line-overlay'); if(ov) ov.remove();
+}
+
 function showPedigreeProblemsModal(){
   var overlay=document.createElement('div');
   overlay.className='lightbox-overlay pedigree-problems-overlay';
@@ -12556,7 +12858,7 @@ function renderNachSearch(){
 // sich S.pigeons ändert (siehe invalidatePedigreeCache()).
 var CHILDREN_INDEX=null;      // pigeonid -> Array<pigeon>
 var DESC_CACHE=new Map();     // pigeonid -> Array<pigeon> (Kinder+Enkel, für Vererbung)
-function invalidatePedigreeCache(){ CHILDREN_INDEX=null; DESC_CACHE.clear(); }
+function invalidatePedigreeCache(){ _lineIdx=null; CHILDREN_INDEX=null; DESC_CACHE.clear(); }
 function buildChildrenIndex(){
   var byId={}, byRing={};
   S.pigeons.forEach(function(p){ byId[p.pigeonid]=p; if(p.ringnumber) byRing[p.ringnumber]=p; });
@@ -12818,7 +13120,7 @@ function renderNachkommen(pid){
     +'<div>'
     +'<div class="serif" style="font-size:22px">'+escH(root.name||ring(root))+'</div>'
     +'<div style="font-family:monospace;font-size:13px;color:var(--green);margin-top:4px">'
-    +escH(ring(root))+' · '+(sx==='M'?'♂ Täuber':sx==='F'?'♀ Täubin':'?')+' · Jg. '+(root.date_year||'—')
+    +escH(ring(root))+' · '+(sx==='M'?'♂ Vogel':sx==='F'?'♀ Weibchen':'?')+' · Jg. '+(root.date_year||'—')
     +'</div></div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">'+kpiHtml+'</div>'
