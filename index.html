@@ -6,6 +6,9 @@
 <title>Brieftauben-Verwaltung</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
+/* Handy/PWA: keine seitliche Verschiebung der ganzen Seite (Inhalte scrollen nur in ihren eigenen Containern) */
+html,body{overflow-x:hidden;max-width:100%}
+#main{min-width:0;max-width:100%}
 @media(max-width:700px){.pp-lbl,.pp-title{display:none}}
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -3559,7 +3562,7 @@ function pedigreeBoxHtml(p, gen, ctx){
 
 // Gemeinsame Kopfzeile für alle Stammbaum-Exportformate: Züchterdaten links,
 // Logo/Foto mittig, im Druckdialog ausgewählte Züchtererfolge rechts.
-function pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc, accent){
+function pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc, accent, compact){
   const p = breederProf || {};
   if(!p.name && !p.strasse && !p.ort && !p.verein && !p.logo && !erfolgeText) return '';
   const addr = [p.strasse, p.ort].filter(Boolean).join(', ');
@@ -3570,6 +3573,17 @@ function pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc, accent){
     ${p.telefon?`<div style="font-size:7pt;color:#555">Tel. ${_esc(p.telefon)}</div>`:''}
   </div>`;
   const mid = p.logo?`<div style="text-align:center"><img src="${p.logo}" style="max-height:18mm;max-width:40mm;object-fit:contain"></div>`:'<div></div>';
+  const erfTxt = erfolgeText ? _esc(erfolgeText).replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>') : '';
+  if(compact){
+    // Kompakt: Erfolge in zwei Spalten, begrenzte Höhe – damit der Kopf nicht die halbe Seite füllt.
+    const rightC = erfolgeText?`<div style="min-width:0;overflow:hidden;max-height:24mm">
+      <div style="font-size:7pt;font-weight:700;color:${accent||'#1a6b1a'};margin-bottom:.4mm">Züchtererfolge</div>
+      <div style="font-size:6pt;line-height:1.25;color:#555;column-count:2;column-gap:3mm">${erfTxt}</div>
+    </div>`:'<div></div>';
+    return `<div style="margin-bottom:2mm;padding-bottom:1.6mm;border-bottom:.3mm solid #ccc;display:grid;grid-template-columns:minmax(0,.8fr) auto minmax(0,2fr);align-items:center;gap:4mm">
+      ${left}${p.logo?`<div style="text-align:center"><img src="${p.logo}" style="max-height:14mm;max-width:32mm;object-fit:contain"></div>`:'<div></div>'}${rightC}
+    </div>`;
+  }
   const right = erfolgeText?`<div style="font-size:7pt;color:#555;text-align:right;max-width:90mm">
     <div style="font-size:8pt;font-weight:700;color:${accent||'#1a6b1a'};margin-bottom:.5mm">Züchtererfolge</div>
     ${_esc(erfolgeText).replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>')}
@@ -3746,8 +3760,8 @@ async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
     const innerW = pageWmm - 2*mX;
     const U = Math.pow(2, G+1);                 // Rastereinheiten (tiefste Spalte = 2 je Box)
     const logoAcc = (colorMode==='sw') ? null : await pedLogoAccent(breederProf && breederProf.logo);
-    const hdrHtml = pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc, logoAcc || (colorMode==='sw'?'#333':null));
-    const gridH = pageHmm - mTop - mBot - (hdrHtml?20:0) - 5;   // grobe Höhe des Rasters (mm)
+    const hdrHtml = pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc, logoAcc || (colorMode==='sw'?'#333':null), true);
+    const gridH = pageHmm - mTop - mBot - (hdrHtml?24:0) - 5;   // grobe Höhe des Rasters (mm)
 
     // Ahnen in beiden Linien erkennen (Ahnenverlust)
     const keyOf = p => p ? (p.pigeonid || ('r:'+_ring(p))) : null;
@@ -7258,7 +7272,7 @@ function pedPrintOpen(pid){
       <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="ped-print-travel" checked onchange="pedPrintPreview()"> ${t('with_travel')}</label>
     </div>
     <div id="pp-status" style="font-size:11px;color:var(--text3);padding:2px 14px;min-height:16px"></div>
-    <iframe id="pp-frame" style="flex:1;width:100%;border:0;background:#cfcfcf"></iframe>`;
+    <iframe id="pp-frame" style="flex:1;width:100%;min-width:0;max-width:100vw;border:0;background:#cfcfcf"></iframe>`;
   document.body.appendChild(o);
   pedPrintSet('gens', PP.gens);
 }
@@ -7299,7 +7313,7 @@ async function pedPrintBuild(){
     if(!built){ if(st) st.textContent=''; return; }
     PP.built = built;
     const fr = document.getElementById('pp-frame');
-    fr.onload = ()=>pedPrintFit();
+    fr.onload = ()=>{ pedPrintFit(); setTimeout(pedPrintFit, 200); };
     fr.srcdoc = built.html;
     if(st) st.textContent = 'Seitenformat: A4 '+(built.pageWmm>built.pageHmm?'quer':'hoch')+' · scrollen zum Prüfen';
   }catch(e){ if(st) st.textContent='Fehler: '+e.message; }
@@ -7307,11 +7321,20 @@ async function pedPrintBuild(){
 function pedPrintFit(){
   const fr = document.getElementById('pp-frame');
   if(!fr || !PP || !PP.built) return;
-  const d = fr.contentDocument; if(!d) return;
+  let d = null; try{ d = fr.contentDocument; }catch(e){}
+  if(!d || !d.body) return;
   d.documentElement.classList.add('pv');
-  const pw = PP.built.pageWmm*96/25.4 + (fr.clientWidth<700?4:28);
-  d.body.style.zoom = Math.min(1, fr.clientWidth/pw);
+  // Breite des Overlays (nicht des Iframes) verwenden – auf iOS ist die Iframe-Breite beim Laden oft 0/unzuverlässig
+  const ov = document.getElementById('pp-overlay');
+  const avail = (ov && ov.clientWidth) || window.innerWidth || fr.clientWidth || 360;
+  const pw = PP.built.pageWmm*96/25.4 + (avail<700?4:28);
+  const z = Math.min(1, avail/pw);
+  d.body.style.zoom = z;
+  d.body.style.margin = avail<700 ? '2px 0' : '';
 }
+window.addEventListener('resize', ()=>{ if(PP) pedPrintFit(); });
+window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ if(PP) pedPrintFit(); }, 250); });
+
 async function pedPrintDo(kind){
   if(!PP || !PP.built){ return; }
   const st = document.getElementById('pp-status');
