@@ -211,6 +211,99 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .form-field textarea{min-height:80px;resize:vertical}
 .form-full{grid-column:1 / -1}
 .form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+
+/* ── Taubenformular (Neu anlegen + Bearbeiten, identisch) ── */
+.pf-block{margin-bottom:20px}
+.pf-title{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px}
+.pf-id{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1.1fr) minmax(0,1.7fr) minmax(0,1fr);gap:12px;align-items:start}
+.pf-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.pf-4{display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr);gap:12px}
+.pf-seg{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--bg3)}
+.pf-seg button{flex:1;background:transparent;border:0;color:var(--text2);padding:8px 10px;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.pf-seg button+button{border-left:1px solid var(--border)}
+.pf-seg button{display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.25;white-space:normal;min-height:38px}
+.pf-seg button small{font-size:10px;font-weight:400;opacity:.8}
+.pf-seg button.on.m{background:color-mix(in srgb,var(--blue) 22%,var(--bg3));color:var(--blue);font-weight:600}
+.pf-seg button.on.f{background:color-mix(in srgb,var(--purple) 22%,var(--bg3));color:var(--purple);font-weight:600}
+.pf-parents{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:18px;align-items:start}
+.pf-pfields{display:grid;gap:12px}
+.pf-hint{font-size:11px;color:var(--text3);line-height:1.5}
+.pf-inwrap{position:relative}
+.pf-inwrap input{width:100%;box-sizing:border-box;padding-right:28px}
+.pf-x{position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--text3);font-size:14px;line-height:1}
+.pf-x:hover{color:var(--orange)}
+.pf-ped{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px}
+.pf-ph{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)}
+.pf-pb{background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--border2,var(--border));border-radius:6px;padding:5px 8px;min-height:38px;display:flex;flex-direction:column;justify-content:center;gap:1px;min-width:0;overflow:hidden;box-sizing:border-box}
+.pf-pb.m{border-left-color:var(--blue)}
+.pf-pb.f{border-left-color:var(--purple)}
+.pf-pb.empty{border-style:dashed;border-left-width:1px;align-items:center;color:var(--text3);font-size:11px}
+.pf-pb .r{font-family:monospace;font-size:11px;color:var(--green);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-pb .n{font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-pb .s{font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-pb.root{border-width:1px;border-left-width:3px}
+.pf-v{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:13px;color:var(--text);min-height:36px;box-sizing:border-box;display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.pf-v.empty{color:var(--text3)}
+.pf-v.mono{font-family:monospace;color:var(--green)}
+.pf-v.ta{align-items:flex-start;white-space:pre-wrap;line-height:1.6;min-height:58px}
+.pf-v a{color:var(--green);cursor:pointer;font-family:monospace}
+.pf-v a:hover{text-decoration:underline}
+.pf-seg.ro{pointer-events:none}
+.pf-seg button.on:not(.m):not(.f){background:color-mix(in srgb,var(--green) 22%,var(--bg3));color:var(--green);font-weight:600}
+.pf-pb.nav{cursor:pointer}
+.pf-pb.nav:hover{border-color:var(--green)}
+.pg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.pg-tile{position:relative;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.pg-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);padding:6px 8px 4px}
+.pg-img{aspect-ratio:4/3;background:#fff;cursor:zoom-in}
+.pg-img img{width:100%;height:100%;object-fit:contain;display:block}
+.pg-cap{padding:5px 8px;font-size:11px;color:var(--text2);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:24px;box-sizing:border-box}
+.pg-cap.empty{color:var(--text3)}
+.pg-cap:hover{color:var(--green)}
+.pg-actions{position:absolute;top:4px;right:4px;display:flex;gap:4px}
+.pg-btn{width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:0;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;padding:0}
+.pg-btn:hover{background:rgba(0,0,0,.85)}
+.pg-add{border:1px dashed var(--border);border-radius:var(--radius-sm);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:120px;color:var(--text3);cursor:pointer;font-size:12px;background:transparent}
+.pg-add:hover{border-color:var(--green);color:var(--green)}
+.pg-add b{font-size:22px;font-weight:400;line-height:1}
+.split{display:grid;grid-template-columns:minmax(300px,34%) minmax(0,1fr);gap:14px;align-items:start}
+.split-list .search-row{gap:6px}
+.split-list .search-wrap{flex:1 1 100%}
+.srow{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg2);margin-bottom:6px;cursor:pointer;min-width:0}
+.srow:hover{border-color:var(--green)}
+.srow.row-sel{border-color:var(--green);background:color-mix(in srgb,var(--green) 14%,var(--bg2))}
+.srow img{width:38px;height:38px;border-radius:50%;object-fit:cover;background:#fff;flex-shrink:0}
+.srow-main{min-width:0;flex:1}
+.srow-l1{display:flex;gap:8px;align-items:baseline;min-width:0}
+.srow-ring{font-weight:700;font-size:13px;white-space:nowrap}
+.srow-name{font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow-l2{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--text3);margin-top:3px;flex-wrap:wrap}
+.srow-chip{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:0 7px;font-size:10.5px;color:var(--text2)}
+.srow-chip.off{color:var(--orange)}
+.split-list,.split-detail{max-height:calc(100vh - 150px);min-height:420px;overflow:auto}
+.split-list{padding-right:2px}
+.split-list .search-row{flex-wrap:wrap}
+.split-detail .card{margin-top:0}
+.split-tabs{margin-bottom:12px;padding-bottom:8px}
+.split-empty{border:1px dashed var(--border);border-radius:var(--radius-sm);padding:60px 20px;text-align:center;color:var(--text3)}
+.split-empty b{display:block;font-size:30px;margin-bottom:8px;font-weight:400}
+tr.row-sel td{background:color-mix(in srgb,var(--green) 14%,var(--bg2))}
+tr.row-sel td:first-child{box-shadow:inset 3px 0 0 var(--green)}
+main.main-wide{max-width:1840px}
+.split-toggle{margin-left:auto}
+@media(max-width:767px){.split-toggle{display:none}}
+.pf-more{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:14px;background:var(--bg2)}
+.pf-more>summary{cursor:pointer;padding:10px 14px;font-size:12px;font-weight:600;color:var(--text2)}
+.pf-more>summary span{font-weight:400;color:var(--text3);margin-left:8px}
+.pf-more-body{padding:4px 14px 14px}
+.pf-datewrap{position:relative}
+.pf-datewrap input{width:100%;box-sizing:border-box}
+.pf-datewrap .pf-x{right:34px}
+@media(max-width:760px){
+  .pf-id{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pf-parents{grid-template-columns:1fr}
+  .pf-3,.pf-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 .form-msg{font-size:12px;padding:8px 12px;border-radius:var(--radius-sm);margin-bottom:10px}
 .form-msg.ok{background:color-mix(in srgb,var(--green) 10%,var(--bg3));color:var(--green);border:1px solid color-mix(in srgb,var(--green) 30%,var(--border))}
 .form-msg.err{background:#1e0f0f;color:#e07070;border:1px solid #5a1f1f}
@@ -369,6 +462,16 @@ const I18N = {
     edit_title:'Taube bearbeiten', btn_save:'Speichern', btn_cancel:'Abbrechen', btn_back_cancel:'← Abbrechen',
     add_title:'＋ Neue Taube erfassen', sec_ring:'Ringnummer', sec_status_stock:'Status & Bestand',
     sec_pigeon_info:'Angaben zur Taube', sec_info:'Informationen',
+    split_on:'▭ Vollbreite', split_off:'◧ Geteilte Ansicht', split_pick:'Taube in der Liste auswählen', split_perf:'Erfolgsbilanz', split_close:'Auswahl aufheben',
+    pf_calc:'Berechnete Werte & Benutzerfelder',
+    pg_title:'Bilder', pg_cover:'Titelbild', pg_eye:'Augenfoto', pg_other:'Weiteres Bild', pg_add_cover:'Titelbild', pg_add_eye:'Augenfoto', pg_add_other:'Weitere Bilder',
+    pg_replace:'Ersetzen', pg_remove:'Entfernen', pg_caption_ph:'+ Beschriftung', pg_loading:'Weitere Bilder werden geladen…',
+    pg_missing:'Die Tabelle pigeon_photos fehlt noch (oder ist nicht lesbar). Bitte pigeon_photos.sql einmal in Supabase ausführen – das Titelbild funktioniert weiterhin.',
+    pf_male:'Männlich', pf_male_alt:'Vogel', pf_female:'Weiblich', pf_female_alt:'Weibchen',
+    pf_origin:'Herkunft & Zucht', pf_ringdata:'Ring-Details & Daten', pf_ringdata_hint:'alte Ringnr., Jahrgang, Land, Vereinsnr., Daten',
+    pf_notes:'Notizen', pf_ped_preview:'Stammbaum-Vorschau', pf_not_in_db:'nicht in Datenbank', pf_new_pigeon:'Neue Taube',
+    pf_parent_hint:'Suche nach Ringnummer oder Name. Ringnummern, die noch nicht in der Datenbank sind, werden als Text gespeichert.',
+    pf_col_pigeon:'Taube', pf_col_parents:'Eltern', pf_col_grand:'Großeltern', pf_auto:'automatisch', pf_clear_date:'Datum entfernen', pf_clear_parent:'Verknüpfung entfernen',
     fld_ring_req:'Ringnummer *', fld_father:'Vater', fld_mother:'Mutter', fld_name_short:'Name / Kurzbezeichnung',
     ph_ring_search:'Ringnummer oder Name suchen…', ph_name_short:'Spitzname oder Bezeichnung',
     ph_color:'z. B. blau, gescheckt', ph_race:'z. B. Brieftaube', ph_strain:'z. B. Janssen, van Loon',
@@ -486,6 +589,16 @@ const I18N = {
     edit_title:'Edit Pigeon', btn_save:'Save', btn_cancel:'Cancel', btn_back_cancel:'← Cancel',
     add_title:'＋ Add New Pigeon', sec_ring:'Ring Number', sec_status_stock:'Status & Stock',
     sec_pigeon_info:'Pigeon Details', sec_info:'Information',
+    split_on:'▭ Full width', split_off:'◧ Split view', split_pick:'Select a pigeon in the list', split_perf:'Performance', split_close:'Clear selection',
+    pf_calc:'Calculated values & user fields',
+    pg_title:'Photos', pg_cover:'Cover photo', pg_eye:'Eye photo', pg_other:'Other photo', pg_add_cover:'Cover photo', pg_add_eye:'Eye photo', pg_add_other:'More photos',
+    pg_replace:'Replace', pg_remove:'Remove', pg_caption_ph:'+ Caption', pg_loading:'Loading more photos…',
+    pg_missing:'The table pigeon_photos is missing (or not readable). Please run pigeon_photos.sql in Supabase once – the cover photo keeps working.',
+    pf_male:'Male', pf_male_alt:'Cock', pf_female:'Female', pf_female_alt:'Hen',
+    pf_origin:'Origin & Breeding', pf_ringdata:'Ring Details & Dates', pf_ringdata_hint:'old ring no., year, country, association no., dates',
+    pf_notes:'Notes', pf_ped_preview:'Pedigree preview', pf_not_in_db:'not in database', pf_new_pigeon:'New pigeon',
+    pf_parent_hint:'Search by ring number or name. Ring numbers not yet in the database are stored as text.',
+    pf_col_pigeon:'Pigeon', pf_col_parents:'Parents', pf_col_grand:'Grandparents', pf_auto:'automatic', pf_clear_date:'Clear date', pf_clear_parent:'Remove link',
     fld_ring_req:'Ring Number *', fld_father:'Father', fld_mother:'Mother', fld_name_short:'Name / Short Label',
     ph_ring_search:'Search ring number or name…', ph_name_short:'Nickname or label',
     ph_color:'e.g. blue, pied', ph_race:'e.g. racing pigeon', ph_strain:'e.g. Janssen, van Loon',
@@ -1394,15 +1507,13 @@ async function quickEditPigeonField(pigeonid, field, value, evt){
   const prev = p[field];
   if(prev === value) return;
   p[field] = value; // optimistisches Update
-  if(document.getElementById('table-wrap')) renderTableOnly();
-  else if(S.selected && S.selected.pigeonid===pigeonid) render();
+  qeRefresh(pigeonid);
   try{
     await apiPatch('pigeons', pigeonid, {[field]: value});
   }catch(e){
     p[field] = prev; // zurückrollen
     alert('Speichern fehlgeschlagen: '+e.message);
-    if(document.getElementById('table-wrap')) renderTableOnly();
-    else if(S.selected && S.selected.pigeonid===pigeonid) render();
+    qeRefresh(pigeonid);
   }
 }
 
@@ -2248,7 +2359,7 @@ function applyFilter(){
   S.filtered=arr;
   const totalPages=Math.max(1,Math.ceil(S.filtered.length/S.pageSize));
   if(S.page>totalPages-1) S.page=0;
-  if(S.tab==='tauben'&&!S.selected){
+  if(S.tab==='tauben'&&(!S.selected||document.getElementById('split-list'))){
     if(document.getElementById('table-wrap')) renderTableOnly();
     else render();
   } else { render(); }
@@ -2272,7 +2383,7 @@ function setActiveNav(tab){
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.group===grp));
 }
 function showTab(t){
-  S.tab=t; S.selected=null;
+  S.tab=t; S.selected=null; if(t!=='paarung') S.splitPaarung=false;
   setActiveNav(t);
   render();
 }
@@ -2319,21 +2430,28 @@ function goBackFromPigeon(){
   render();
   window.scrollTo(0,0);
 }
-function selectPigeon(id){ pushPigeonNavIfNeeded(); S.selected=findById(id); S.pigeonTripYear=null; S.tab='tauben'; setActiveNav('tauben'); render(); window.scrollTo(0,0); }
-function showPedigree(id){ pushPigeonNavIfNeeded(); S.selectedPed=id; S.tab='stammbaum'; setActiveNav('stammbaum'); render(); window.scrollTo(0,0); }
+function selectPigeon(id){
+  if(splitActive() && document.getElementById('split-detail')){ splitSelect(id); return; }
+  if(S.splitTab==='paarung') S.splitTab='detail';
+  pushPigeonNavIfNeeded(); S.selected=findById(id); S.pigeonTripYear=null; S.tab='tauben'; setActiveNav('tauben'); render(); window.scrollTo(0,0); }
+function showPedigree(id){
+  if(splitActive() && document.getElementById('split-detail')){ splitSelect(id,'stammbaum'); return; }
+  pushPigeonNavIfNeeded(); S.selectedPed=id; S.tab='stammbaum'; setActiveNav('stammbaum'); render(); window.scrollTo(0,0); }
 
 // Subnav: Kontext-Reiter für eine ausgewählte Taube — Details/Stammbaum/Nachkommen/
 // Paarungscheck sind bewusst KEINE eigenen Hauptreiter mehr, sondern nur erreichbar,
 // nachdem man in der Tauben-Übersicht eine Taube ausgewählt hat.
 function renderTaubenSubnav(active, p){
+  const tog = `<button class="subnav-btn split-toggle" onclick="toggleSplitMode()">${splitOn()?t('split_on'):t('split_off')}</button>`;
   const back = `<button class="subnav-btn" onclick="goBackFromPigeon()">${backLabel()}</button>`;
-  if(!p) return `<div class="subnav">${back}</div>`;
+  if(!p) return `<div class="subnav">${back}${tog}</div>`;
   const btn=(key,label,icon,fn)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="${fn}">${icon} ${label}</button>`;
   return `<div class="subnav">${back}
     ${btn('detail',t('sub_details'),'📋',`selectPigeon('${p.pigeonid}')`)}
     ${btn('stammbaum',t('sub_pedigree'),'🌳',`showPedigree('${p.pigeonid}')`)}
     ${btn('nachkommen',t('sub_offspring'),'🐣',`showNachkommen('${p.pigeonid}')`)}
     ${btn('paarung',t('sub_pairing'),'💑',`setPaarungVogel('${p.pigeonid}')`)}
+    ${tog}
   </div>`;
 }
 // Subnav: Reisen-Themenkreis (Flüge, Bestenliste, Züchter)
@@ -2348,6 +2466,7 @@ function renderTaubenOverviewNav(active){
   const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="S.taubenView='${key}';render();window.scrollTo(0,0)">${icon} ${label}</button>`;
   return `<div class="subnav">
     ${btn('liste',t('sub_liste'),'📋')}${btn('statistik',t('sub_statistik'),'📊')}
+    <button class="subnav-btn split-toggle" onclick="toggleSplitMode()" title="Liste und Detail nebeneinander bzw. Liste in voller Breite">${splitOn()?t('split_on'):t('split_off')}</button>
   </div>`;
 }
 // Subnav: Wege, eine neue Taube anzulegen (manuell, per Scan, per Datei-Import)
@@ -2358,15 +2477,151 @@ function renderAddSubnav(active){
   </div>`;
 }
 
+
+// ── GETEILTE ANSICHT (Desktop): links Taubenliste, rechts Detail · Stammbaum · Nachkommen · Erfolgsbilanz ──
+// Gilt ab 1100 px Breite. Im Bearbeitungsmodus (und in der Statistik) wird weiterhin die volle Breite genutzt.
+const SPLIT_COL_KEYS = ['ringnumber','name','year','gender','color','status'];
+let SPLIT_LAST = null;
+function splitOn(){
+  if(S.splitMode===undefined){ try{ S.splitMode = localStorage.getItem('bv_split')!=='0'; }catch(e){ S.splitMode = true; } }
+  return S.splitMode;
+}
+function splitActive(){
+  return S.tab==='tauben' && S.taubenView!=='statistik' && splitOn() && window.innerWidth>=768 && !!(S.selected || S.splitPaarung);
+}
+function splitColumns(){
+  const cols = SPLIT_COL_KEYS.map(k=>COLUMN_BY_KEY[k]).filter(Boolean);
+  return cols.length ? cols : activeColumns();
+}
+function toggleSplitMode(){
+  const wasSplit = !!document.getElementById('split-root');
+  if(wasSplit){
+    // Von geteilt nach Vollbreite: zurück zur Liste bzw. zur Paarungscheck-Seite, nicht zur Taubendetail-Vollseite
+    const pair = S.splitPaarung && S.splitTab==='paarung';
+    S.selected = null; S.splitPaarung = false;
+    if(pair){ S.tab='paarung'; setActiveNav('paarung'); }
+  }
+  S.splitMode = !splitOn();
+  try{ localStorage.setItem('bv_split', S.splitMode ? '1' : '0'); }catch(e){}
+  render();
+}
+function renderSplit(){
+  return `<div class="split" id="split-root">
+    <div class="split-list" id="split-list">${renderList()}</div>
+    <div class="split-detail" id="split-detail">${renderSplitDetail()}</div>
+  </div>`;
+}
+function renderSplitDetail(){
+  const p = S.selected || S.paarungM || S.paarungF;
+  if(!p) return `<div class="split-empty"><b>🕊</b>${t('split_pick')}</div>`;
+  if(!S.splitTab) S.splitTab = 'detail';
+  const tab = S.splitTab;
+  const btn = (key, icon, label) => `<button class="subnav-btn ${tab===key?'active':''}" onclick="splitTab('${key}')">${icon} ${label}</button>`;
+  const back = S.navStack.length ? `<button class="subnav-btn" onclick="goBackFromPigeon()">${backLabel()}</button>` : '';
+  const nav = `<div class="subnav split-tabs">${back}
+      ${btn('detail','📋',t('sub_details'))}${btn('stammbaum','🌳',t('sub_pedigree'))}${btn('nachkommen','🐣',t('sub_offspring'))}${btn('erfolg','🏆',t('split_perf'))}
+      ${btn('paarung','💑',t('sub_pairing'))}
+      <button class="subnav-btn" style="margin-left:auto" title="${t('split_close')}" onclick="splitClose()">✕</button>
+    </div>`;
+  let body = '';
+  if(tab==='stammbaum')        body = renderPedigree(p.pigeonid, {embedded:true});
+  else if(tab==='nachkommen'){ S.selectedNach = p.pigeonid; body = renderNachkommen(p.pigeonid); }
+  else if(tab==='erfolg')      body = `<div class="card">${renderPigeonTripsSection(p)}${renderVererbungCard(p.pigeonid)}</div>`;
+  else if(tab==='paarung')     body = renderPaarung();
+  else                         body = renderDetail(S.selected || p, {split:true});
+  return nav + body;
+}
+function splitRefreshDetail(keepScroll){
+  const el = document.getElementById('split-detail');
+  if(!el) return false;
+  const top = keepScroll ? el.scrollTop : 0;
+  el.innerHTML = renderSplitDetail();
+  el.scrollTop = top;
+  bindAutocomplete(); bindNachSearch();
+  return true;
+}
+function splitMarkRow(id){
+  document.querySelectorAll('#table-wrap .row-sel').forEach(r=>r.classList.remove('row-sel'));
+  const tr = document.querySelector(`#table-wrap [data-pid="${id}"]`);
+  if(tr) tr.classList.add('row-sel');
+  return tr;
+}
+function splitSelect(id, tab){
+  const p = findById(id);
+  if(!p) return;
+  if(S.selectedNach!==id){ S.nachStatusFilter=null; S.nachGenFilter=null; S.nachPerfFilter=null; }
+  S.selected = p; S.selectedNach = id; S.selectedPed = id; S.pigeonTripYear = null;
+  if(tab){ S.splitTab = tab; S.splitPaarung = (tab==='paarung'); } else if(!S.splitTab) S.splitTab = 'detail';
+  const wasSplit = !!document.getElementById('split-root');
+  if(!wasSplit){ render(); return; }   // erste Auswahl: von Vollbreite in die geteilte Ansicht wechseln
+  splitRefreshDetail();
+  splitMarkRow(id);
+}
+function splitTab(key){
+  S.splitTab = key; S.pigeonTripYear = null;
+  S.splitPaarung = (key==='paarung');
+  if(key==='paarung' && S.selected){
+    const s = sex_(S.selected);
+    if(s==='M') S.paarungM = S.selected; else if(s==='F') S.paarungF = S.selected;
+  }
+  splitRefreshDetail();
+}
+function splitClose(){
+  S.selected = null; S.splitPaarung = false;
+  render();   // zurück zur Liste in voller Breite
+}
+// Nach dem Laden einzelner Daten nur den rechten Bereich (bzw. ohne Split die ganze Ansicht) neu zeichnen.
+function rerenderDetailArea(){ if(!splitRefreshDetail(true)) render(); }
+// Quick-Edit: Liste UND Detail aktualisieren, ohne die Liste zurückzusetzen.
+function qeRefresh(pigeonid){
+  const tbl = !!document.getElementById('table-wrap'), sp = !!document.getElementById('split-detail');
+  if(tbl) renderTableOnly();
+  if(sp) splitRefreshDetail(true);
+  else if(!tbl && S.selected && S.selected.pigeonid===pigeonid) render();
+}
+// Pfeiltasten ↑/↓ in der Liste wechseln die Auswahl.
+document.addEventListener('keydown', e=>{
+  if((e.key!=='ArrowDown' && e.key!=='ArrowUp') || !document.getElementById('split-root')) return;
+  const tag = (e.target && e.target.tagName) || '';
+  if(['INPUT','TEXTAREA','SELECT'].includes(tag) || (e.target && e.target.isContentEditable)) return;
+  const rows = [...document.querySelectorAll('#table-wrap [data-pid]')];
+  if(!rows.length) return;
+  const cur = rows.findIndex(r=>r.classList.contains('row-sel'));
+  const next = rows[Math.max(0, Math.min(rows.length-1, cur + (e.key==='ArrowDown' ? 1 : -1)))];
+  if(!next) return;
+  e.preventDefault();
+  splitSelect(next.getAttribute('data-pid'));
+  next.scrollIntoView({block:'nearest'});
+});
+window.addEventListener('resize', ()=>{
+  clearTimeout(window.__splitT);
+  window.__splitT = setTimeout(()=>{
+    const now = splitActive();
+    if(SPLIT_LAST!==null && now!==SPLIT_LAST && S.tab==='tauben' && !S.loading) render();
+    SPLIT_LAST = now;
+  }, 200);
+});
+
 // ── RENDER ─────────────────────────────────────────────────────
 function render(){
+  if(S.tab==='paarung' && splitOn() && window.innerWidth>=768){ S.tab='tauben'; S.taubenView='liste'; S.splitTab='paarung'; S.splitPaarung=true; setActiveNav('tauben'); }
+  SPLIT_LAST = splitActive();
   const m=document.getElementById('main');
   const npl=document.getElementById('navPigeonsLabel'); if(npl) npl.textContent=t('nav_pigeons');
   const nal=document.getElementById('navAddLabel'); if(nal) nal.textContent=t('nav_add');
   const nrl=document.getElementById('navRacingLabel'); if(nrl) nrl.textContent=t('nav_racing');
   const lsw=document.getElementById('langSwitch'); if(lsw && !lsw.innerHTML) renderLangSwitch();
   if(S.loading){ m.innerHTML='<div class="loading"><div class="spinner"></div>Lade Tauben…</div>'; return; }
-  if(S.tab==='tauben')     m.innerHTML=S.selected ? renderTaubenSubnav('detail',S.selected)+renderDetail(S.selected) : renderTaubenOverviewNav(S.taubenView)+(S.taubenView==='statistik'?renderStats():renderList());
+  if(S.tab==='tauben'){
+    const prevScroll=(document.getElementById('split-list')||{}).scrollTop;
+    if(splitActive() && !(S.selected && S.selected._editMode)){
+      m.innerHTML=renderTaubenOverviewNav(S.taubenView)+renderSplit();
+      const sl=document.getElementById('split-list');
+      if(sl){ if(prevScroll) sl.scrollTop=prevScroll; else { const tr=document.querySelector('#table-wrap .row-sel'); if(tr) tr.scrollIntoView({block:'center'}); } }
+    } else {
+      m.innerHTML=S.selected ? renderTaubenSubnav('detail',S.selected)+renderDetail(S.selected) : renderTaubenOverviewNav(S.taubenView)+(S.taubenView==='statistik'?renderStats():renderList());
+    }
+  }
   else if(S.tab==='stammbaum')  m.innerHTML=S.selectedPed ? renderTaubenSubnav('stammbaum',findById(S.selectedPed))+renderPedigree(S.selectedPed) : (showTab('tauben'),'');
   else if(S.tab==='nachkommen') m.innerHTML=S.selectedNach ? renderTaubenSubnav('nachkommen',findById(S.selectedNach))+renderNachkommen(S.selectedNach) : renderTaubenSubnav('nachkommen',null)+renderNachSearch();
   else if(S.tab==='paarung')    m.innerHTML=renderTaubenSubnav('paarung', S.paarungM||S.paarungF||null) + renderPaarung();
@@ -2378,6 +2633,7 @@ function render(){
   else if(S.tab==='zuechter')   m.innerHTML=renderReisenSubnav('zuechter')+renderZuechter();
   else if(S.tab==='bestenliste') m.innerHTML=renderReisenSubnav('bestenliste')+renderBestenliste();
   else                          m.innerHTML=renderTaubenOverviewNav('statistik')+renderStats();
+  m.classList.toggle('main-wide', !!document.getElementById('split-root'));
   bindAutocomplete();
   bindNachSearch();
 }
@@ -2449,13 +2705,14 @@ function buildCardsHTML(page){
 }
 
 function buildTableHTML(page, si){
-  const cols = activeColumns();
+  const cols = splitActive() ? splitColumns() : activeColumns();
   if(cols.some(c=>c.key==='reiseleistung'||c.key==='top10')){
     const missing=page.map(p=>p.pigeonid).filter(id=>id && !PT_CACHE[id]);
     if(missing.length){
-      loadPigeonTripsBatch(missing).then(()=>{ if(S.tab==='tauben' && !S.selected) renderTableOnly(); });
+      loadPigeonTripsBatch(missing).then(()=>{ if(S.tab==='tauben' && (!S.selected || document.getElementById('split-list'))) renderTableOnly(); });
     }
   }
+  if(splitActive()) return buildSplitRows(page);
   const allOnPageSelected = S.bulkMode && page.length>0 && page.every(p=>S.bulkSelected.has(p.pigeonid));
   const headCb = S.bulkMode ? `<th class="bulk-th"><input type="checkbox" id="bulk-select-all" ${allOnPageSelected?'checked':''} onclick="event.stopPropagation()" onchange="toggleBulkPage(this.checked)"></th>` : '';
   return buildCardsHTML(page) + `<table>
@@ -2469,13 +2726,34 @@ function buildTableHTML(page, si){
         const sel = S.bulkMode && S.bulkSelected.has(p.pigeonid);
         const rowClick = S.bulkMode ? `toggleBulkRow('${p.pigeonid}')` : `selectPigeon('${p.pigeonid}')`;
         const rowCb = S.bulkMode ? `<td class="bulk-td"><input type="checkbox" ${sel?'checked':''} onclick="event.stopPropagation()" onchange="toggleBulkRow('${p.pigeonid}')"></td>` : '';
-        return `<tr onclick="${rowClick}" class="${sel?'bulk-row-selected':''}">
+        return `<tr data-pid="${p.pigeonid}" onclick="${rowClick}" class="${sel?'bulk-row-selected':''}${S.selected&&S.selected.pigeonid===p.pigeonid?' row-sel':''}">
           ${rowCb}
           ${cols.map(c=>`<td>${(c.cell||(x=>escH(c.val(x))))(p)}</td>`).join('')}
         </tr>`;
       }).join('')}
       </tbody>
     </table>`;
+}
+
+// Kompakte Listenzeilen für die geteilte Ansicht (nur das Nötigste: Ring, Name, Status, Geschlecht, Jahrgang)
+function buildSplitRows(page){
+  const stName = p => p.pigeonstate || (p.pigeonstateid ? ((S.pigeonStates.find(s=>s.pigeonstateid===p.pigeonstateid)||{}).name||'') : '');
+  if(!page.length) return `<div class="empty-state"><div class="icon">🕊</div>${t('filter_all')}: 0</div>`;
+  const head = S.bulkMode ? `<div style="padding:4px 2px 8px;font-size:12px"><label><input type="checkbox" id="bulk-select-all" ${page.every(p=>S.bulkSelected.has(p.pigeonid))?'checked':''} onchange="toggleBulkPage(this.checked)"> Seite wählen</label></div>` : '';
+  return head + page.map(p=>{
+    const sx = sex_(p), st = stName(p);
+    const sel = S.bulkMode && S.bulkSelected.has(p.pigeonid);
+    const click = S.bulkMode ? `toggleBulkRow('${p.pigeonid}')` : `selectPigeon('${p.pigeonid}')`;
+    const cb = S.bulkMode ? `<input type="checkbox" ${sel?'checked':''} onclick="event.stopPropagation()" onchange="toggleBulkRow('${p.pigeonid}')">` : '';
+    const cur = S.selected && S.selected.pigeonid===p.pigeonid;
+    return `<div class="srow ${cur?'row-sel':''} ${sel?'bulk-row-selected':''}" data-pid="${p.pigeonid}" onclick="${click}">${cb}
+      <img src="${escH(pigeonThumbSrc(p))}" alt="" loading="lazy" onerror="this.onerror=null;this.src=PIGEON_COLOR_THUMBS.leer">
+      <div class="srow-main">
+        <div class="srow-l1"><span class="srow-ring">${escH(ring(p))}</span>${p.name?`<span class="srow-name">${escH(p.name)}</span>`:''}</div>
+        <div class="srow-l2">${sx==='M'?'<span style="color:var(--blue)">♂</span>':sx==='F'?'<span style="color:var(--purple)">♀</span>':''}
+          ${p.date_year?`<span>${p.date_year}</span>`:''}${st?`<span class="srow-chip">${escH(tStatus(st))}</span>`:''}${p.instock===false?`<span class="srow-chip off">${t('detail_not_instock')}</span>`:''}</div>
+      </div></div>`;
+  }).join('');
 }
 
 function buildPagination(totalPages){
@@ -2566,7 +2844,7 @@ function renderList(){
 }
 
 // ── DETAIL ─────────────────────────────────────────────────────
-function renderDetail(p){
+function renderDetail(p, opts){
   if(p._editMode) return renderDetailEdit(p);
   const sx=sex_(p),f=findFather(p),mo=findMother(p);
   const ib=calcInbreeding(p);
@@ -2586,23 +2864,6 @@ function renderDetail(p){
   // Status-Name aus pigeonstates
   const stateName = p.pigeonstate || (p.pigeonstateid ? (S.pigeonStates.find(s=>s.pigeonstateid===p.pigeonstateid)||{}).name||'' : '');
 
-  // Kernfelder oben (ohne Info/InternalInfo — die kommen separat)
-  const coreFields=[
-    [t('fld_ring'),p.ringnumber],[t('fld_ring_old'),p.ringnumberold],
-    [t('fld_year'),p.date_year],[t('fld_color'),tColor(p.color)],[t('fld_race'),p.race],
-    [t('fld_strain'),p.strain],[t('fld_breeder'),p.breeder],[t('fld_owner'),p.owner],
-    [t('fld_location'),p.standort],
-    [t('fld_country'),p.countrycode],[t('fld_assocno'),p.associationno],
-    [t('fld_birthday'),p.birthday],[t('fld_died'),p.died],
-    [t('fld_bought'),p.bought],[t('fld_sold'),p.sold],
-    [t('fld_instock'),p.instock!=null?(p.instock?t('yes_word'):t('no_word')):null],
-    [t('fld_pigeontype'),p.pigeontype?(p.pigeontype==='Reisetaube'?t('type_racing'):p.pigeontype==='Zuchttaube'?t('type_breeding'):p.pigeontype==='Heimtaube'?t('type_home'):p.pigeontype==='Verkauf'?t('type_sale'):p.pigeontype):null],
-    [t('fld_status'),stateName?tStatus(stateName):null],
-    [t('fld_inbreedcoeff'),p.inbreedcoefficient!=null?Number(p.inbreedcoefficient).toFixed(4):null],
-    [t('fld_calc_inbreed'),ib>0?`${(ib*100).toFixed(2)} %`:null],
-    [t('fld_user1'),p.userdefined1],[t('fld_user2'),p.userdefined2],[t('fld_user3'),p.userdefined3],
-  ].filter(([,v])=>v!==null&&v!==undefined&&v!=='');
-
   return `
     <div class="card">
       <!-- Header: Foto + Name + Aktionsbuttons -->
@@ -2620,18 +2881,6 @@ function renderDetail(p){
           <div>
             <div class="detail-name">${escH(p.name||ring(p))}</div>
             <div class="detail-ring">🏷 ${escH(ring(p))}</div>
-            <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:4px">
-              ${sx==='M'?`<span class="badge badge-m">♂ ${t('cock')}</span>`:sx==='F'?`<span class="badge badge-f">♀ ${t('hen')}</span>`:''}
-              ${p.date_year?`<span class="badge badge-u">${t('year_abbr')} ${p.date_year}</span>`:''}
-              ${p.color?`<span class="badge badge-u">${escH(tColor(p.color))}</span>`:''}
-              ${p.strain?`<span class="badge badge-u">${escH(p.strain)}</span>`:''}
-              ${stateName?`<span class="badge" style="background:rgba(212,168,67,.12);color:var(--amber);border:1px solid rgba(212,168,67,.25)">${escH(tStatus(stateName))}</span>`:''}
-              ${p.pigeontype==='Reisetaube'?`<span class="badge" style="background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25)">✈ ${t('type_racing')}</span>`:''}
-              ${p.pigeontype==='Zuchttaube'?`<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25)">🥚 ${t('type_breeding')}</span>`:''}
-              ${p.pigeontype==='Heimtaube'?`<span class="badge badge-u">🏠 ${t('type_home')}</span>`:''}
-              ${p.pigeontype==='Verkauf'?`<span class="badge" style="background:rgba(224,160,80,.12);color:#e0a050;border:1px solid rgba(224,160,80,.3)">💰 ${t('type_sale')}</span>`:''}
-              ${p.instock===false?`<span class="badge" style="background:#2a1a0a;color:#c8883a">${t('detail_not_instock')}</span>`:''}
-            </div>
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -2640,57 +2889,11 @@ function renderDetail(p){
         </div>
       </div>
 
-      <!-- Schnellbearbeitung: Bestand/Reisetaube/Status sofort speichernd, unabhängig vom Bearbeitungsmodus -->
-      <div class="qe-quickbar">
-        <div class="qe-group">
-          <span class="qe-group-label">${t('fld_instock')}</span>
-          ${qeInstockSwitchHtml(p)}
-        </div>
-        <div class="qe-group">
-          <span class="qe-group-label">${t('fld_pigeontype')}</span>
-          ${qeReiseSwitchHtml(p)}
-          ${qeSaleSwitchHtml(p)}
-        </div>
-        <div class="qe-group">
-          <span class="qe-group-label">${t('fld_status')}</span>
-          ${qeStatusSelectHtml(p)}
-        </div>
-      </div>
+      <!-- Gleiche Anordnung wie im Bearbeiten-Formular; Bestand/Taubentyp/Status = Schnellbearbeitung -->
+      ${renderPigeonView(p)}
 
-      <!-- Eltern direkt oben -->
-      ${(fR||mR)?`
-      <div class="section-label">${t('sec_parents')}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px">
-        <div class="parent-card male ${!f?'unknown':''}" onclick="${f?`selectPigeon('${f.pigeonid}')`:'void(0)'}">
-          <div style="font-size:10px;color:var(--blue);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${t('fld_father')}</div>
-          <div class="ped-ring">${escH(fR||t('ped_unknown'))}</div>
-          ${f?`<div style="font-size:13px;color:var(--text);margin-top:3px">${escH(f.name||'—')}</div>
-               <div style="font-size:11px;color:var(--text3);margin-top:2px">${[f.date_year,f.color].filter(Boolean).map(escH).join(' · ')}</div>`:''}
-        </div>
-        <div class="parent-card female ${!mo?'unknown':''}" onclick="${mo?`selectPigeon('${mo.pigeonid}')`:'void(0)'}">
-          <div style="font-size:10px;color:var(--purple);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${t('fld_mother')}</div>
-          <div class="ped-ring">${escH(mR||t('ped_unknown'))}</div>
-          ${mo?`<div style="font-size:13px;color:var(--text);margin-top:3px">${escH(mo.name||'—')}</div>
-                <div style="font-size:11px;color:var(--text3);margin-top:2px">${[mo.date_year,mo.color].filter(Boolean).map(escH).join(' · ')}</div>`:''}
-        </div>
-      </div>`:''}
-
-      <!-- Info-Felder prominent -->
-      ${p.info?`
-      <div class="section-label" style="margin-top:14px">${t('fld_info')}</div>
-      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${escH(p.info)}</div>`:''}
-      ${p.internalinfo?`
-      <div class="section-label" style="margin-top:10px">${t('fld_internal_info')}</div>
-      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${escH(p.internalinfo)}</div>`:''}
-
-      <!-- Alle weiteren Felder -->
-      <div class="section-label" style="margin-top:14px">${t('sub_details')}</div>
-      <div class="field-grid">
-        ${coreFields.map(([l,v])=>`<div class="field-item"><label>${escH(l)}</label><span>${escH(String(v))}</span></div>`).join('')}
-      </div>
-
-      ${renderPigeonTripsSection(p)}
-      ${renderVererbungCard(p.pigeonid)}
+      ${opts&&opts.split?'':renderPigeonTripsSection(p)}
+      ${opts&&opts.split?'':renderVererbungCard(p.pigeonid)}
     </div>`;
 }
 
@@ -2854,6 +3057,7 @@ async function uploadPigeonPhoto(id, file){
     if(p) p.photo = dataUrl;
     if(imgEl){ imgEl.src=dataUrl; imgEl.style.opacity='1'; }
     if(document.getElementById('table-wrap')) renderTableOnly();
+    if(typeof pgRerender==='function') pgRerender(id);
   }catch(err){
     if(imgEl){ imgEl.style.opacity='1'; if(prevSrc) imgEl.src=prevSrc; }
     alert('Foto konnte nicht gespeichert werden: '+err.message+'\n\nHinweis: In Supabase muss die Tabelle "pigeons" eine Text-Spalte "photo" besitzen.');
@@ -2880,9 +3084,6 @@ function clearParentField(which){
 }
 
 function renderDetailEdit(p){
-  const f=findFather(p),mo=findMother(p);
-  const fR=f?ring(f):(p.ringnumberfather||'');
-  const mR=mo?ring(mo):(p.ringnumbermother||'');
   const ws=WEBSITE_SETTINGS_CACHE.get(p.pigeonid)||emptyWebsiteSettings(p.pigeonid);
   const elite=computeEliteSeason(p.pigeonid);
   return `
@@ -2896,100 +3097,7 @@ function renderDetailEdit(p){
         </div>
       </div>
       <div id="edit-msg" style="display:none;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:14px;font-size:13px"></div>
-      <div class="form-grid">
-        <div class="form-field"><label>${t('fld_ring')}</label><input id="e_ringnumber" value="${fv(p,'ringnumber')}"></div>
-        <div class="form-field"><label>${t('fld_ring_old')}</label><input id="e_ringnumberold" value="${fv(p,'ringnumberold')}"></div>
-        <div class="form-field"><label>${t('fld_name')}</label><input id="e_name" value="${fv(p,'name')}"></div>
-        <div class="form-field"><label>${t('fld_year')}</label><input id="e_date_year" type="number" value="${fv(p,'date_year')}"></div>
-        <div class="form-field"><label>${t('fld_gender')}</label>
-          <select id="e_gender">
-            <option value="">—</option>
-            <option value="1" ${String(p.gender)==='1'?'selected':''}>♂ ${t('gender_cock')}</option>
-            <option value="2" ${String(p.gender)==='2'?'selected':''}>♀ ${t('gender_hen')}</option>
-          </select>
-        </div>
-        <div class="form-field"><label>${t('fld_color')}</label>
-          <input id="e_color" list="dl-colors" value="${fv(p,'color')}" autocomplete="off" placeholder="${t('ph_color')}">
-          <datalist id="dl-colors">${[...new Set(S.pigeons.map(p=>p.color).filter(Boolean))].sort().map(c=>`<option value="${escH(c)}">`).join('')}</datalist>
-        </div>
-        <div class="form-field"><label>${t('fld_race')}</label>
-          <input id="e_race" list="dl-races" value="${fv(p,'race')}" autocomplete="off" placeholder="${t('ph_race')}">
-          <datalist id="dl-races">${[...new Set(S.pigeons.map(p=>p.race).filter(Boolean))].sort().map(r=>`<option value="${escH(r)}">`).join('')}</datalist>
-        </div>
-        <div class="form-field"><label>${t('fld_strain')}</label>
-          <input id="e_strain" list="dl-strains" value="${fv(p,'strain')}" autocomplete="off" placeholder="${t('ph_strain')}">
-          <datalist id="dl-strains">${[...new Set(S.pigeons.map(p=>p.strain).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}">`).join('')}</datalist>
-        </div>
-        <div class="form-field"><label>${t('fld_breeder')}</label>
-          <input id="e_breeder" list="dl-breeders" value="${fv(p,'breeder')}" autocomplete="off" placeholder="${t('ph_breeder')}">
-          <datalist id="dl-breeders">${[...new Set(S.pigeons.map(p=>p.breeder).filter(Boolean))].sort().map(b=>`<option value="${escH(b)}">`).join('')}</datalist>
-        </div>
-        <div class="form-field"><label>${t('fld_owner')}</label><input id="e_owner" value="${fv(p,'owner')}"></div>
-        <div class="form-field"><label>${t('fld_location')}</label>
-          <input id="e_standort" list="dl-standorte" value="${fv(p,'standort')}" autocomplete="off" placeholder="${t('ph_location')}">
-          <datalist id="dl-standorte">${[...new Set(S.pigeons.map(p=>p.standort).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}">`).join('')}</datalist>
-        </div>
-        <div class="form-field"><label>${t('fld_status')}</label>
-          <select id="e_pigeonstateid">
-            <option value="">${t('status_none')}</option>
-            ${S.pigeonStates.map(s=>`<option value="${escH(s.pigeonstateid)}"${p.pigeonstateid===s.pigeonstateid?' selected':''}>${escH(s.name)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-field"><label>${t('fld_country')}</label><input id="e_countrycode" value="${fv(p,'countrycode')}"></div>
-        <div class="form-field"><label>${t('fld_assocno')}</label><input id="e_associationno" value="${fv(p,'associationno')}"></div>
-        <div class="form-field"><label>${t('fld_birthday')}</label><input id="e_birthday" type="date" value="${fv(p,'birthday')}"></div>
-        <div class="form-field"><label>${t('fld_died')}</label>
-          <div style="display:flex;gap:6px;align-items:center">
-            <input id="e_died" type="date" value="${fv(p,'died')}" style="flex:1">
-            <span onclick="clearDateField('e_died')" title="Datum entfernen" style="cursor:pointer;color:var(--text3);font-size:15px;padding:0 4px" onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--text3)'">✕</span>
-          </div>
-        </div>
-        <div class="form-field"><label>${t('fld_bought')}</label><input id="e_bought" type="date" value="${fv(p,'bought')}"></div>
-        <div class="form-field"><label>${t('fld_sold')}</label>
-          <div style="display:flex;gap:6px;align-items:center">
-            <input id="e_sold" type="date" value="${fv(p,'sold')}" style="flex:1">
-            <span onclick="clearDateField('e_sold')" title="Datum entfernen" style="cursor:pointer;color:var(--text3);font-size:15px;padding:0 4px" onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--text3)'">✕</span>
-          </div>
-        </div>
-        <div class="form-field"><label>${t('fld_instock')}</label>
-          <select id="e_instock">
-            <option value="true" ${p.instock!==false?'selected':''}>${t('yes_word')}</option>
-            <option value="false" ${p.instock===false?'selected':''}>${t('no_word')}</option>
-          </select>
-        </div>
-        <div class="form-field"><label>${t('fld_pigeontype')}</label>
-          <select id="e_pigeontype">
-            <option value="" ${!p.pigeontype?'selected':''}>${t('type_unset')}</option>
-            <option value="Reisetaube" ${p.pigeontype==='Reisetaube'?'selected':''}>✈ ${t('type_racing')}</option>
-            <option value="Zuchttaube" ${p.pigeontype==='Zuchttaube'?'selected':''}>🥚 ${t('type_breeding')}</option>
-            <option value="Heimtaube" ${p.pigeontype==='Heimtaube'?'selected':''}>🏠 ${t('type_home')}</option>
-            <option value="Verkauf" ${p.pigeontype==='Verkauf'?'selected':''}>💰 ${t('type_sale')}</option>
-          </select>
-        </div>
-        <div class="form-field" style="grid-column:1/-1"><label>${t('fld_info')}</label><textarea id="e_info" rows="3" style="width:100%;resize:vertical">${fv(p,'info')}</textarea></div>
-        <div class="form-field" style="grid-column:1/-1"><label>${t('fld_internal_info')}</label><input id="e_internalinfo" value="${fv(p,'internalinfo')}"></div>
-      </div>
-      <div class="section-label">${t('sec_parents')}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-field">
-          <label>${t('fld_father_ring')}</label>
-          <div style="position:relative;display:flex;gap:6px;align-items:center">
-            <input id="e_father_inp" value="${escH(fR)}" autocomplete="off" placeholder="${t('ph_ring_input')}" style="flex:1">
-            <input type="hidden" id="e_father_id" value="${escH(p.fatherid||'')}">
-            <span onclick="clearParentField('father')" title="Vater-Verknüpfung entfernen" style="cursor:pointer;color:var(--text3);font-size:15px;padding:0 4px" onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--text3)'">✕</span>
-            <div id="e_father_drop" class="ac-drop"></div>
-          </div>
-        </div>
-        <div class="form-field">
-          <label>${t('fld_mother_ring')}</label>
-          <div style="position:relative;display:flex;gap:6px;align-items:center">
-            <input id="e_mother_inp" value="${escH(mR)}" autocomplete="off" placeholder="${t('ph_ring_input')}" style="flex:1">
-            <input type="hidden" id="e_mother_id" value="${escH(p.motherid||'')}">
-            <span onclick="clearParentField('mother')" title="Mutter-Verknüpfung entfernen" style="cursor:pointer;color:var(--text3);font-size:15px;padding:0 4px" onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--text3)'">✕</span>
-            <div id="e_mother_drop" class="ac-drop"></div>
-          </div>
-        </div>
-      </div>
+      ${renderPigeonForm('edit', p)}
       <div class="section-label" style="margin-top:22px">🌐 Website & Homepage</div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-top:8px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
@@ -3053,6 +3161,8 @@ async function saveEdit(id){
   const msg=document.getElementById('edit-msg');
   const g=id=>document.getElementById(id);
   const val=id=>{const el=g(id);return el?el.value.trim():'';};
+  const dupRing=val('e_ringnumber')?findInDb(val('e_ringnumber')):null;
+  if(dupRing && dupRing.pigeonid!==id && !confirm('Diese Ringnummer ist bereits bei einer anderen Taube vorhanden ('+ring(dupRing)+'). Trotzdem speichern?')) return;
   const row={
     ringnumber:     fmtRingnumber(val('e_ringnumber')) || val('e_ringnumber'),
     ringnumberold:  fmtRingnumber(val('e_ringnumberold')) || val('e_ringnumberold'),
@@ -3187,22 +3297,12 @@ function renderPedigreeInner(root, opts, embedded){
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span style="font-size:11px;color:var(--text3)">${t('print_label')}</span>
-            <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);cursor:pointer">
-              <input type="checkbox" id="ped-print-photo" checked style="width:14px;height:14px;cursor:pointer"> ${t('with_photo')}
-            </label>
-            <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);cursor:pointer" title="Flugergebnisse (Preise, Top-Platzierungen) automatisch aus den Flügen in den Stammbaum drucken">
-              <input type="checkbox" id="ped-print-travel" checked style="width:14px;height:14px;cursor:pointer"> ${t('with_travel')}
-            </label>
-            <button class="btn btn-outline btn-sm" onclick="openPedigreePrintMenu(event,'${root.pigeonid}',4)">🖨 4 ${t('gens')}</button>
-            <button class="btn btn-outline btn-sm" onclick="openPedigreePrintMenu(event,'${root.pigeonid}',5)">🖨 5 ${t('gens')}</button>
-            <button class="btn btn-outline btn-sm" onclick="openFamilyPedigreePrintMenu(event,'${root.pigeonid}',4)" title="Proband klein links in der Mitte, Vater/Mutter je 2/5, 4 Ahnengenerationen rechts">🖨 Familienstil</button>
+            <button class="btn btn-sm" onclick="pedPrintOpen('${root.pigeonid}')" title="Fächer- oder Familienstil, Vorschau, Drucken, PDF, PNG">🖨 Drucken / Export</button>
             ${!embedded?`<button class="btn btn-outline btn-sm" onclick="toggleBreederProfileEditor()">🧑‍🌾 ${t('breeder_data_btn')}</button>`:''}
           </div>
         </div>
       </div>
       ${!embedded && S.breederProfileEditing ? renderBreederProfileForm() : ''}
-      ${renderPaarungsprognoseCard(f, mo)}
       <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap">
         <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--blue)"></span>${t('cock')}</span>
         <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text3)"><span class="dot" style="background:var(--purple)"></span>${t('hen')}</span>
@@ -3458,7 +3558,7 @@ function pedigreeBoxHtml(p, gen, ctx){
 
 // Gemeinsame Kopfzeile für alle Stammbaum-Exportformate: Züchterdaten links,
 // Logo/Foto mittig, im Druckdialog ausgewählte Züchtererfolge rechts.
-function pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc){
+function pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc, accent){
   const p = breederProf || {};
   if(!p.name && !p.strasse && !p.ort && !p.verein && !p.logo && !erfolgeText) return '';
   const addr = [p.strasse, p.ort].filter(Boolean).join(', ');
@@ -3470,7 +3570,7 @@ function pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc){
   </div>`;
   const mid = p.logo?`<div style="text-align:center"><img src="${p.logo}" style="max-height:18mm;max-width:40mm;object-fit:contain"></div>`:'<div></div>';
   const right = erfolgeText?`<div style="font-size:7pt;color:#555;text-align:right;max-width:90mm">
-    <div style="font-size:8pt;font-weight:700;color:#1a6b1a;margin-bottom:.5mm">Züchtererfolge</div>
+    <div style="font-size:8pt;font-weight:700;color:${accent||'#1a6b1a'};margin-bottom:.5mm">Züchtererfolge</div>
     ${_esc(erfolgeText).replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>')}
   </div>`:'<div></div>';
   return `<div style="margin-bottom:2.5mm;padding-bottom:2mm;border-bottom:.3mm solid #ccc;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:4mm">
@@ -3550,6 +3650,7 @@ async function buildPedigreeHtml(pid, gens, withPhoto, erfolgeText){
   html,body{height:100%}
   body{width:${pageWmm}mm;height:${pageHmm}mm;background:#fff;color:#111;display:flex;flex-direction:column;overflow:hidden}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  @media screen{html.pv{height:auto;overflow:auto;background:#cfcfcf}html.pv body{margin:12px auto;box-shadow:0 2px 14px rgba(0,0,0,.35)}}
 </style>
 </head><body>
 <div style="flex-shrink:0">
@@ -3575,6 +3676,221 @@ ${buildBreederHeader()}
 // Boxanzahl (Großeltern, Urgroßeltern, …), gleichmäßig über die volle Höhe
 // verteilt. "gens" zählt hier die Ahnen-Generationen (Vater/Mutter = 1,
 // Großeltern = 2, …) — der Proband kommt zusätzlich dazu.
+
+// Akzentfarbe aus dem Züchter-Logo (häufigste kräftige Farbe, für Text abgedunkelt) – null, wenn nicht ermittelbar.
+const PED_ACCENT_CACHE = {};
+function pedLogoAccent(src){
+  if(!src) return Promise.resolve(null);
+  const ck = src.length+':'+src.slice(-40);
+  if(ck in PED_ACCENT_CACHE) return Promise.resolve(PED_ACCENT_CACHE[ck]);
+  return new Promise(res=>{
+    const done = v=>{ PED_ACCENT_CACHE[ck]=v; res(v); };
+    const img = new Image();
+    img.onload = ()=>{
+      try{
+        const W=48, H=Math.max(1,Math.round(48*img.height/Math.max(1,img.width)));
+        const c=document.createElement('canvas'); c.width=W; c.height=H;
+        const x=c.getContext('2d'); x.drawImage(img,0,0,W,H);
+        const d=x.getImageData(0,0,W,H).data, B={};
+        for(let i=0;i<d.length;i+=4){
+          const r=d[i],g=d[i+1],b=d[i+2],a=d[i+3];
+          if(a<128) continue;
+          const mx=Math.max(r,g,b), mn=Math.min(r,g,b), l=(mx+mn)/510;
+          if(l>0.93||l<0.1) continue;
+          const sat = mx===0?0:(mx-mn)/mx;
+          if(sat<0.25) continue;
+          const key=(r>>4)+','+(g>>4)+','+(b>>4);
+          const o=B[key]||(B[key]={w:0,n:0,r:0,g:0,b:0});
+          o.w+=sat; o.n++; o.r+=r; o.g+=g; o.b+=b;
+        }
+        let best=null; Object.values(B).forEach(o=>{ if(!best||o.w>best.w) best=o; });
+        if(!best) return done(null);
+        let r=best.r/best.n/255, g=best.g/best.n/255, b=best.b/best.n/255;
+        // HSL, Helligkeit für Text auf Weiß begrenzen
+        const mx=Math.max(r,g,b), mn=Math.min(r,g,b); let h=0, sl=0, l=(mx+mn)/2;
+        if(mx!==mn){
+          const dd=mx-mn; sl = l>0.5 ? dd/(2-mx-mn) : dd/(mx+mn);
+          h = mx===r ? (g-b)/dd+(g<b?6:0) : mx===g ? (b-r)/dd+2 : (r-g)/dd+4; h/=6;
+        }
+        l = Math.min(l,0.38); sl = Math.max(sl,0.45);
+        const f=(p,q,t)=>{ if(t<0)t+=1; if(t>1)t-=1; return t<1/6?p+(q-p)*6*t : t<1/2?q : t<2/3?p+(q-p)*(2/3-t)*6 : p; };
+        const q = l<0.5 ? l*(1+sl) : l+sl-l*sl, p = 2*l-q;
+        const hex = v=>('0'+Math.round(v*255).toString(16)).slice(-2);
+        done('#'+hex(f(p,q,h+1/3))+hex(f(p,q,h))+hex(f(p,q,h-1/3)));
+      }catch(e){ done(null); }
+    };
+    img.onerror = ()=>done(null);
+    img.src = src;
+  });
+}
+
+// ── Standard-Stammbaum: ein Layout, Optionen im Druckdialog ──────────────────
+// Eltern in Spalte 1 (Proband dazwischen), weitere Ahnen in eigenen Spalten nach rechts.
+// Optionen (PP): gens 3/4/5 Ahnengenerationen, orient hoch/quer, color standard/geschlecht/sw,
+// frame neutral/geschlecht; Foto und Reisedaten über die Häkchen im Dialog.
+async function buildStandardPedigreeHtml(pid, gens, withPhoto, erfolgeText){
+  try{
+    const o = (typeof PP!=='undefined' && PP) ? PP : {};
+    const G = parseInt(gens)||4;
+    const landscape = o.orient==='quer';
+    const colorMode = o.color||'standard', frameMode = o.frame||'neutral';
+    const data = await buildPedigreeTreeData(pid, G+1);
+    if(!data){ alert('Taube nicht gefunden'); return null; }
+    const { root, tree, breederProf, _ring, _sex } = data;
+    const T = v => String(v==null?'':v).trim();
+    const _esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const showTravel = pedPrintTravel();
+    // Volle A4-Seite (Ränder als Padding), damit Druck, PDF und PNG deckungsgleich sind.
+    const pageWmm = landscape?297:210, pageHmm = landscape?210:297, mX = 10, mTop = 8, mBot = 7;
+    const innerW = pageWmm - 2*mX;
+    const U = Math.pow(2, G+1);                 // Rastereinheiten (tiefste Spalte = 2 je Box)
+    const logoAcc = (colorMode==='sw') ? null : await pedLogoAccent(breederProf && breederProf.logo);
+    const hdrHtml = pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc, logoAcc || (colorMode==='sw'?'#333':null));
+    const gridH = pageHmm - mTop - mBot - (hdrHtml?20:0) - 5;   // grobe Höhe des Rasters (mm)
+
+    // Ahnen in beiden Linien erkennen (Ahnenverlust)
+    const keyOf = p => p ? (p.pigeonid || ('r:'+_ring(p))) : null;
+    const seenF = new Set(), seenM = new Set();
+    for(let g=1; g<=G; g++){
+      const half = Math.pow(2, g-1);
+      (tree[g]||[]).forEach((p,i)=>{
+        const k = keyOf(p); if(!k || p._virtual) return;
+        (i<half ? seenF : seenM).add(k);
+      });
+    }
+    const dup = p => { const k=keyOf(p); return !!k && !p._virtual && seenF.has(k) && seenM.has(k); };
+    let anyDup = false;
+
+    // Farbschemata
+    const SEXC = {M:'#3a7bd5', F:'#8e44ad', '?':'#888'};
+    const INK='#1a1a1a';
+    const COLC = colorMode==='sw' ? '#222' : '#3f6fc8';   // Gefiederfarbe: eigene Zeile, farblich abgesetzt
+    const scheme = (sx)=>{
+      if(colorMode==='sw')        return {ring:INK, name:'#222', brd:'#444', gray:'#555', trv:'#333', top:'#333'};
+      if(colorMode==='geschlecht')return {ring:SEXC[sx]||SEXC['?'], name:INK, brd:logoAcc||'#666', gray:'#555', trv:logoAcc||'#1a6b1a', top:logoAcc||'#333'};
+      return {ring:INK, name:'#2a9ab8', brd:'#e0509c', gray:'#555', trv:logoAcc||'#1a6b1a', top:logoAcc||'#333'};
+    };
+    // Schriftgrößen je Spalte; bei 5 Generationen etwas kleiner
+    const k = G>=5 ? .88 : 1;
+    const pt = v => (v*k).toFixed(1)+'pt';
+    const SZ = {
+      0:{ring:11.5,txt:8},
+      1:{ring:10,txt:8},
+      2:{ring:9.5,txt:7.5},
+      3:{ring:8.5,txt:7},
+      4:{ring:7.8,txt:6.5},
+      5:{ring:7,txt:6}
+    };
+    const MM = 0.3528;
+    const box = (p, g) => {
+      const boxH = g===1 ? gridH*fa/U : gridH/Math.pow(2,g);   // Höhe der Box in mm
+      if(!p) return `<div style="height:100%;border:.25mm dashed #ddd;border-radius:1.2mm"></div>`;
+      const z = SZ[Math.min(g,5)];
+      const sx = _sex(p), sc = scheme(sx);
+      const letter = sx==='M'?' V':sx==='F'?' W':'';
+      const d = g>0 && dup(p); if(d) anyDup = true;
+      const fc = frameMode==='geschlecht' ? (SEXC[sx]||SEXC['?']) : '#bdbdbd';
+      let border = frameMode==='geschlecht'
+        ? `border:.3mm solid ${fc};border-left:1.6mm solid ${fc}`
+        : `border:.25mm solid ${colorMode==='sw'?'#999':fc}`;
+      if(d) border = 'border:.5mm solid #f5a623';
+      const one = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      // wie viele Zeilen passen in die Box?
+      const lineH = z.txt*k*MM*1.3, ringH = z.ring*k*MM*1.25;
+      const n = Math.floor((boxH - 2.4 - ringH)/lineH);
+      const gray = T(p.info);
+      const zl = T(p.breeder) || T(p.race);   // Züchter, ersatzweise Rasse
+      const phH = g===1?'17mm':g===2?'11mm':'';
+      const photo = (withPhoto && p.photo && phH && boxH>=(g===1?40:34))
+        ? `<img src="${p.photo}" style="display:block;height:${phH};max-width:100%;object-fit:cover;border-radius:.8mm;border:.2mm solid #ddd;margin:.8mm 0 1mm">`
+        : '';
+      const head = p._virtual
+        ? `<div style="font-size:7pt;color:#666">🧬 Prognose</div>`
+        : `<div style="font-weight:700;font-size:${pt(z.ring)};color:${sc.ring};${one};line-height:1.2">${_esc(_ring(p))}${letter}</div>`;
+      const txt = pt(z.txt);
+      const body = `${(p.name&&n>=1)?`<div style="font-style:italic;font-weight:${colorMode==='standard'?700:400};color:${sc.name};font-size:${txt};${one};line-height:1.3">„${_esc(p.name)}“</div>`:''}
+        ${(zl&&n>=2)?`<div style="font-weight:${colorMode==='standard'?700:400};color:${sc.brd};font-size:${txt};${one};line-height:1.3">${_esc(zl)}</div>`:''}`;
+      // Reisedaten (Häkchen „Mit Reisedaten“)
+      let trv = '';
+      if(showTravel && g<=2 && p.pigeonid && boxH>=26){
+        const lines = pigeonTravelCompactLines(p.pigeonid, g===1?3:2) || [];
+        const top = g<=1 ? (pigeonTopPlacementsCompactLines(p.pigeonid)||[]) : [];
+        if(lines.length) trv += `<div style="font-size:${pt(Math.max(6,z.txt-.5))};color:${sc.trv};margin-top:.8mm;padding-top:.2mm;line-height:1.35">${lines.map(_esc).join('<br>')}</div>`;
+        if(top.length)   trv += `<div style="font-size:${pt(Math.max(6,z.txt-.5))};color:${sc.top};margin-top:.5mm;line-height:1.35">${top.map(_esc).join('<br>')}</div>`;
+      }
+      const colLine = (T(p.color) && n>=3) ? `<div style="color:${COLC};font-size:${pt(z.txt)};${one};line-height:1.3">${_esc(T(p.color))}</div>` : '';
+      const infoTxt = (g<=3 && gray && n>=4) ? `<div style="color:${sc.gray};${trv?'margin-top:.8mm;border-top:.2mm solid #ddd;padding-top:.5mm;':''}font-size:${txt};line-height:1.3;word-break:break-word;overflow:hidden">${_esc(gray)}</div>` : '';
+      return `<div style="height:100%;${border};border-radius:1.2mm;background:#fff;padding:1mm 1.6mm;overflow:hidden">${head}${body}${colLine}${photo}${trv}${infoTxt}</div>`;
+    };
+
+    const pr = Math.max(3, Math.round(U*0.19));        // Höhe der Proband-Box (Rastereinheiten)
+    const fa = Math.floor((U-pr)/2), mo = U-pr-fa;
+    // Proband-Box
+    const probH = gridH*pr/U;
+    const probandBox = p => {
+      if(!p) return '';
+      const sx=_sex(p), sc=scheme(sx), letter = sx==='M'?' V':sx==='F'?' W':'';
+      const one = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      const gray = T(p.color);
+      const zl = T(p.breeder) || T(p.race);
+      const photo = (withPhoto && p.photo && probH>=40) ? `<img src="${p.photo}" style="display:block;width:21mm;height:15mm;object-fit:cover;border-radius:.8mm;margin:1.2mm 0 1.5mm">` : '';
+      const bc = frameMode==='geschlecht' ? (SEXC[sx]||SEXC['?']) : '#4a5568';
+      const txt = pt(SZ[0].txt);
+      return `<div style="height:100%;border:.45mm solid ${bc};border-radius:1.5mm;background:#fff;padding:1.6mm 2.2mm;overflow:hidden">
+        <div style="font-size:6.3pt;letter-spacing:.35mm;color:#888">STAMMBAUM VON TAUBE</div>
+        ${photo}
+        <div style="font-weight:700;font-size:${pt(SZ[0].ring)};color:${sc.ring};${one};line-height:1.25;${photo?'':'margin-top:1mm'}">${_esc(_ring(p))}${letter}</div>
+        ${p.name?`<div style="font-style:italic;font-weight:${colorMode==='standard'?700:400};color:${sc.name};font-size:${txt};${one}">„${_esc(p.name)}“</div>`:''}
+        ${zl?`<div style="font-weight:${colorMode==='standard'?700:400};color:${sc.brd};font-size:${txt};${one}">${_esc(zl)}</div>`:''}
+        ${gray?`<div style="color:${COLC};font-size:${txt};${one}">${_esc(gray)}</div>`:''}
+      </div>`;
+    };
+
+    const gap = G>=5 ? 3 : 3.8;
+    const colW = (innerW - (G-1)*gap) / G;
+    const cell = (col, r0, r1, inner) => `<div style="grid-column:${col};grid-row:${r0}/${r1};padding:.8mm 0;min-height:0">${inner}</div>`;
+    let cells = cell(1, 1, fa+1, box((tree[1]||[])[0]||null,1))
+              + cell(1, fa+1, fa+pr+1, `<div style="padding-top:.2mm;height:100%">${probandBox(tree[0][0])}</div>`)
+              + cell(1, fa+pr+1, U+1, box((tree[1]||[])[1]||null,1));
+    for(let c=2; c<=G; c++){
+      const n = Math.pow(2,c), span = U/n;
+      for(let i=0;i<n;i++){
+        const rs=i*span+1;
+        cells += cell(c, rs, rs+span, box((tree[c]||[])[i]||null,c));
+      }
+    }
+    const gtc = `repeat(${G},${colW.toFixed(2)}mm)`;
+    const today = new Date().toLocaleDateString('de-DE');
+
+    const safeName = (root.name || _ring(root) || 'Taube').toString()
+      .replace(/[^\p{L}\p{N}\-]+/gu,'_').replace(/_+/g,'_').replace(/^_|_$/g,'') || 'Taube';
+    const filenameBase = `Stammbaum_${safeName}`;
+
+    const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+<title>Stammbaum – ${_esc(root.name||_ring(root))}</title>
+<style>
+  @page{size:A4 ${landscape?'landscape':'portrait'};margin:0}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:Helvetica,Arial,sans-serif}
+  html,body{height:100%}
+  body{width:${pageWmm}mm;height:${pageHmm}mm;padding:${mTop}mm ${mX}mm ${mBot}mm;background:#fff;color:${INK};display:flex;flex-direction:column;overflow:hidden}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  @media screen{html.pv{height:auto;overflow:auto;background:#cfcfcf}html.pv body{margin:12px auto;box-shadow:0 2px 14px rgba(0,0,0,.35)}}
+</style>
+</head><body>
+<div style="flex-shrink:0">${hdrHtml}</div>
+<div style="flex:1;min-height:0;display:grid;grid-template-columns:${gtc};grid-template-rows:repeat(${U},minmax(0,1fr));column-gap:${gap}mm;width:${innerW}mm">${cells}</div>
+<div style="flex-shrink:0;display:flex;justify-content:space-between;align-items:center;font-size:6.3pt;color:#888;padding-top:1.5mm">
+  <span style="display:flex;align-items:center;gap:1.2mm">${anyDup?'<span style="display:inline-block;width:2.6mm;height:2.6mm;border:.45mm solid #f5a623;border-radius:50%"></span>Umrandet: Vorfahr kommt in Vater- und Mutterlinie vor':''}</span>
+  <span>Erstellt am ${today}</span>
+</div>
+</body></html>`;
+    return { html, pageWmm, pageHmm, filenameBase };
+  }catch(e){
+    alert('Druckfehler: '+e.message);
+    return null;
+  }
+}
+
 async function buildFamilyPedigreeHtml(pid, gens, withPhoto, erfolgeText){
   try{
     withPhoto = !!withPhoto;
@@ -3656,6 +3972,7 @@ async function buildFamilyPedigreeHtml(pid, gens, withPhoto, erfolgeText){
   html,body{height:100%}
   body{width:${pageWmm}mm;height:${pageHmm}mm;background:#fff;color:#111;display:flex;flex-direction:column;overflow:hidden}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  @media screen{html.pv{height:auto;overflow:auto;background:#cfcfcf}html.pv body{margin:12px auto;box-shadow:0 2px 14px rgba(0,0,0,.35)}}
 </style>
 </head><body>
 <div style="flex-shrink:0">
@@ -3673,6 +3990,34 @@ ${pedigreeBreederHeaderHtml(breederProf, erfolgeText, _esc)}
   }
 }
 
+
+// ── Datei speichern: robust für Handy/Kiosk-Modus ───────────────────────────
+// Download per <a download> wird in Kiosk-/Standalone-Fenstern oft blockiert.
+// Auf Touch-Geräten daher zuerst der System-Teilen-Dialog (Speichern, Drucken, Mail …);
+// geht das nicht, Download – und bei Bildern zusätzlich eine Vollbild-Ansicht zum Lange-Drücken.
+function pedIsTouch(){ return window.matchMedia && matchMedia('(pointer:coarse)').matches; }
+async function pedSaveBlob(blob, filename){
+  const file = (typeof File==='function') ? new File([blob], filename, {type: blob.type}) : null;
+  if(file && pedIsTouch() && navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title: filename}); return 'shared'; }
+    catch(e){ if(e && e.name==='AbortError') return 'cancelled'; /* sonst weiter mit Download */ }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  if(pedIsTouch() && blob.type.indexOf('image/')===0){ pedShowImageOverlay(url, filename); return 'overlay'; }
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+  return 'download';
+}
+function pedShowImageOverlay(url, filename){
+  const o = document.createElement('div');
+  o.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;padding:12px;overflow:auto';
+  o.innerHTML = '<div style="color:#fff;font-size:13px;margin-bottom:8px;text-align:center">Bild lange gedrückt halten → „Bild speichern“ / Teilen<br><span style="opacity:.7">'+escH(filename)+'</span></div>'
+    + '<img src="'+url+'" style="max-width:100%;background:#fff"><button class="btn" style="margin:12px 0" onclick="this.parentNode.remove()">Schließen</button>';
+  document.body.appendChild(o);
+}
+
 async function printFamilyPedigree(pid, gens, withPhoto, erfolgeText){
   const built = await buildFamilyPedigreeHtml(pid, gens, withPhoto, erfolgeText);
   if(!built) return;
@@ -3684,11 +4029,11 @@ async function printFamilyPedigree(pid, gens, withPhoto, erfolgeText){
   setTimeout(()=>URL.revokeObjectURL(url),15000);
 }
 
-async function exportFamilyPedigreeImage(pid, gens, withPhoto, erfolgeText){
+async function exportFamilyPedigreeImage(pid, gens, withPhoto, erfolgeText, builder){
   let iframe;
   try{
     await ensureHtml2Canvas();
-    const built = await buildFamilyPedigreeHtml(pid, gens, withPhoto, erfolgeText);
+    const built = await (builder||buildFamilyPedigreeHtml)(pid, gens, withPhoto, erfolgeText);
     if(!built) return;
     const { html, pageWmm, pageHmm, filenameBase } = built;
 
@@ -3718,17 +4063,39 @@ async function exportFamilyPedigreeImage(pid, gens, withPhoto, erfolgeText){
 
     const blob = await new Promise(res=>canvas.toBlob(res, 'image/png'));
     if(!blob){ alert('Bild-Export fehlgeschlagen'); return; }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filenameBase + '.png';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(()=>URL.revokeObjectURL(url), 15000);
+    await pedSaveBlob(blob, filenameBase + '.png');
 
   } catch(e){
     alert('Bild-Export fehlgeschlagen: '+e.message);
   } finally {
     if(iframe) iframe.remove();
   }
+}
+
+
+// Familienstil als PDF: dasselbe HTML wie Druck/PNG, gerastert und als A4-Seite in ein PDF gelegt.
+async function exportFamilyPedigreePdf(pid, gens, withPhoto, erfolgeText, builder){
+  let iframe;
+  try{
+    await Promise.all([ensureHtml2Canvas(), ensureJsPDF()]);
+    const built = await (builder||buildFamilyPedigreeHtml)(pid, gens, withPhoto, erfolgeText);
+    if(!built) return;
+    const { html, pageWmm, pageHmm, filenameBase } = built;
+    const pxW = Math.round(pageWmm*96/25.4), pxH = Math.round(pageHmm*96/25.4);
+    iframe = document.createElement('iframe');
+    iframe.style.cssText = `position:fixed;top:-10000px;left:-10000px;width:${pxW}px;height:${pxH}px;border:0`;
+    document.body.appendChild(iframe);
+    await new Promise((res,rej)=>{ iframe.onload=res; iframe.onerror=()=>rej(new Error('Vorschau konnte nicht geladen werden')); iframe.srcdoc=html; });
+    await new Promise(r=>setTimeout(r,200));
+    const canvas = await window.html2canvas(iframe.contentDocument.body,{scale:2.5,backgroundColor:'#ffffff',useCORS:true,width:pxW,height:pxH,windowWidth:pxW,windowHeight:pxH});
+    const { jsPDF } = window.jspdf;
+    const landscape = pageWmm > pageHmm;
+    const doc = new jsPDF({orientation: landscape?'landscape':'portrait', unit:'mm', format:'a4'});
+    doc.setProperties({title: filenameBase});
+    doc.addImage(canvas.toDataURL('image/jpeg',.95),'JPEG',0,0,doc.internal.pageSize.getWidth(),doc.internal.pageSize.getHeight());
+    await pedSaveBlob(doc.output('blob'), filenameBase+'.pdf');
+  }catch(e){ alert('PDF-Export fehlgeschlagen: '+e.message); }
+  finally{ if(iframe) iframe.remove(); }
 }
 
 async function triggerFamilyPrint(pid, gens, withPhoto){
@@ -3831,11 +4198,7 @@ async function exportPedigreeImage(pid, gens, withPhoto, erfolgeText){
 
     const blob = await new Promise(res=>canvas.toBlob(res, 'image/png'));
     if(!blob){ alert('Bild-Export fehlgeschlagen'); return; }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filenameBase + '.png';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(()=>URL.revokeObjectURL(url), 15000);
+    await pedSaveBlob(blob, filenameBase + '.png');
 
   } catch(e){
     alert('Bild-Export fehlgeschlagen: '+e.message);
@@ -4050,7 +4413,7 @@ async function exportPedigreePdf(pid, gens, withPhoto, erfolgeText){
       }
     }
 
-    doc.save(filenameBase + '.pdf');
+    await pedSaveBlob(doc.output('blob'), filenameBase + '.pdf');
   } catch(e){
     alert('PDF-Export fehlgeschlagen: '+e.message);
   }
@@ -4099,7 +4462,6 @@ function renderPaarung(){
   }
 
   return `
-    <div style="margin-bottom:12px">${renderPairingRecommendations()}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       ${birdPicker('paarungM', S.paarungM, '♂ Täuber wählen','M')}
       ${birdPicker('paarungF', S.paarungF, '♀ Täubin wählen','F')}
@@ -4120,7 +4482,9 @@ function renderPaarung(){
         ${sharedAnc.map(p=>`<div class="tag">${escH(ring(p))}${p.name?`<strong>${escH(p.name)}</strong>`:''}</div>`).join('')}
       </div>`:'<div style="margin-top:12px;font-size:13px;color:var(--text3)">Keine gemeinsamen Vorfahren in 4 Generationen gefunden.</div>'}
     </div>
+    <div style="margin-top:12px">${renderPaarungsprognoseCard(S.paarungM, S.paarungF)}</div>
     <div style="margin-top:12px">${renderExistingMatingCard()}</div>
+    <div style="margin-top:18px">${renderPairingRecommendations()}</div>
     <div class="section-label" style="margin-top:18px">🌳 Stammbaum des virtuellen Nachkommen (druckbar)</div>
     ${(() => {
       VIRTUAL_PROBAND = {
@@ -4133,7 +4497,8 @@ function renderPaarung(){
       };
       return renderPedigree(VIRTUAL_PROBAND.pigeonid, {embedded:true});
     })()}
-    ` : `<div class="empty-state"><div class="icon">💑</div>Wähle einen Täuber und eine Täubin, um den Inzuchtkoeffizienten der Nachkommen zu berechnen.</div>`}
+    ` : `<div class="empty-state"><div class="icon">💑</div>Wähle einen Täuber und eine Täubin, um den Inzuchtkoeffizienten und die Erfolgs-Prognose der Nachkommen zu berechnen.</div>
+    <div style="margin-top:18px">${renderPairingRecommendations()}</div>`}
     <div style="margin-top:18px">${renderMatingsList()}</div>`;
 }
 
@@ -5138,125 +5503,498 @@ function renderNeu(){
   return `<div class="card">
     <div class="card-title serif" style="font-size:18px">${t('add_title')}</div>
     <div id="form-msg" style="display:none"></div>
-
-    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('sec_ring')}</div>
-    <div class="form-grid" style="margin-bottom:6px">
-      <div class="form-field form-full">
-        <label>${t('fld_ring_req')}</label>
-        <input id="neu_ring" placeholder="z. B. DE-06559-26-170 oder B-22-6106458" autocomplete="off" oninput="neuRingChanged(this.value)">
-      </div>
-    </div>
-    <div id="neu-ring-preview" style="margin-bottom:16px"></div>
-
-    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('sec_parents')}</div>
-    <div class="form-grid" style="margin-bottom:16px">
-      <div class="form-field">
-        <label>${t('fld_father')}</label>
-        <div class="autocomplete-wrap">
-          <input id="neu_father_inp" placeholder="${t('ph_ring_search')}" autocomplete="off">
-          <div class="autocomplete-drop" id="neu_father_drop"></div>
-          <input type="hidden" id="neu_father_id">
-        </div>
-      </div>
-      <div class="form-field">
-        <label>${t('fld_mother')}</label>
-        <div class="autocomplete-wrap">
-          <input id="neu_mother_inp" placeholder="${t('ph_ring_search')}" autocomplete="off">
-          <div class="autocomplete-drop" id="neu_mother_drop"></div>
-          <input type="hidden" id="neu_mother_id">
-        </div>
-      </div>
-    </div>
-
-    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('sec_status_stock')}</div>
-    <div class="form-grid" style="margin-bottom:16px">
-      <div class="form-field">
-        <label>${t('fld_status')}</label>
-        <select id="neu_pigeonstateid">
-          <option value="">${t('status_none')}</option>
-          ${S.pigeonStates.map(s=>`<option value="${escH(s.pigeonstateid)}">${escH(s.name)}</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-field">
-        <label>${t('fld_instock')}</label>
-        <select id="neu_instock">
-          <option value="true">${t('yes_word')}</option>
-          <option value="false">${t('no_word')}</option>
-        </select>
-      </div>
-      <div class="form-field">
-        <label>${t('fld_pigeontype')}</label>
-        <select id="neu_pigeontype">
-          <option value="">${t('type_unset')}</option>
-          <option value="Reisetaube">✈ ${t('type_racing')}</option>
-          <option value="Zuchttaube">🥚 ${t('type_breeding')}</option>
-          <option value="Heimtaube">🏠 ${t('type_home')}</option>
-          <option value="Verkauf">💰 ${t('type_sale')}</option>
-        </select>
-      </div>
-    </div>
-
-    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('sec_pigeon_info')}</div>
-    <div class="form-grid" style="margin-bottom:16px">
-      <div class="form-field">
-        <label>${t('fld_name_short')}</label>
-        <input id="neu_name" placeholder="${t('ph_name_short')}">
-      </div>
-      <div class="form-field">
-        <label>${t('fld_gender')}</label>
-        <select id="neu_gender">
-          <option value="">${t('gender_choose')}</option>
-          <option value="M">♂ ${t('gender_cock')}</option>
-          <option value="F">♀ ${t('gender_hen')}</option>
-        </select>
-      </div>
-      <div class="form-field">
-        <label>${t('fld_color')}</label>
-        <input id="neu_color" list="neu-dl-colors" placeholder="${t('ph_color')}" autocomplete="off">
-        <datalist id="neu-dl-colors">${[...new Set(S.pigeons.map(p=>p.color).filter(Boolean))].sort().map(c=>`<option value="${escH(c)}">`).join('')}</datalist>
-      </div>
-      <div class="form-field">
-        <label>${t('fld_race')}</label>
-        <input id="neu_race" list="neu-dl-races" placeholder="${t('ph_race')}" autocomplete="off">
-        <datalist id="neu-dl-races">${[...new Set(S.pigeons.map(p=>p.race).filter(Boolean))].sort().map(r=>`<option value="${escH(r)}">`).join('')}</datalist>
-      </div>
-      <div class="form-field">
-        <label>${t('fld_strain')}</label>
-        <input id="neu_strain" list="neu-dl-strains" placeholder="${t('ph_strain')}" autocomplete="off">
-        <datalist id="neu-dl-strains">${[...new Set(S.pigeons.map(p=>p.strain).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}">`).join('')}</datalist>
-      </div>
-      <div class="form-field">
-        <label>${t('fld_breeder')}</label>
-        <input id="neu_breeder" list="neu-dl-breeders" placeholder="${t('ph_breeder')}" autocomplete="off">
-        <datalist id="neu-dl-breeders">${[...new Set(S.pigeons.map(p=>p.breeder).filter(Boolean))].sort().map(b=>`<option value="${escH(b)}">`).join('')}</datalist>
-      </div>
-      <div class="form-field">
-        <label>${t('fld_owner')}</label>
-        <input id="neu_owner" list="neu-dl-owners" placeholder="${t('ph_owner')}" autocomplete="off">
-        <datalist id="neu-dl-owners">${[...new Set(S.pigeons.map(p=>p.owner).filter(Boolean))].sort().map(o=>`<option value="${escH(o)}">`).join('')}</datalist>
-      </div>
-      <div class="form-field">
-        <label>${t('fld_location')}</label>
-        <input id="neu_standort" list="neu-dl-standorte" placeholder="${t('ph_location')}" autocomplete="off">
-        <datalist id="neu-dl-standorte">${[...new Set(S.pigeons.map(p=>p.standort).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}">`).join('')}</datalist>
-      </div>
-    </div>
-
-    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${t('sec_info')}</div>
-    <div class="form-grid" style="margin-bottom:16px">
-      <div class="form-field form-full">
-        <label>${t('fld_info_notes')}</label>
-        <textarea id="neu_info" placeholder="${t('ph_info')}" rows="3"></textarea>
-      </div>
-      <div class="form-field form-full">
-        <label>${t('fld_internal_info')}</label>
-        <textarea id="neu_internalinfo" placeholder="${t('ph_internal_info')}" rows="2"></textarea>
-      </div>
-    </div>
-
+    ${renderPigeonForm('new', {})}
     <div class="form-actions">
       <button type="button" class="btn btn-outline" onclick="neuFormReset()">${t('btn_reset')}</button>
       <button type="button" class="btn" id="neu-submit-btn" onclick="submitNeu()">${t('btn_save_pigeon')}</button>
+    </div>
+  </div>`;
+}
+
+// ── TAUBENFORMULAR (Neu anlegen + Bearbeiten, identischer Aufbau) ──────────
+// Reihenfolge: Ringnummer · Name · Geschlecht · Farbe → Bestand · Taubentyp · Status
+//              → Eltern + Stammbaum-Vorschau (2 Generationen) → Herkunft → Ring-Details → Notizen
+// Die Feld-IDs bleiben bewusst unverändert (neu_* bzw. e_*), damit submitNeu()/saveEdit() weiter funktionieren.
+const PF_IDS = {
+  e:   { ring:'e_ringnumber', ringold:'e_ringnumberold', name:'e_name', year:'e_date_year', gender:'e_gender', color:'e_color',
+         race:'e_race', strain:'e_strain', breeder:'e_breeder', owner:'e_owner', standort:'e_standort', country:'e_countrycode',
+         assoc:'e_associationno', birthday:'e_birthday', died:'e_died', bought:'e_bought', sold:'e_sold', instock:'e_instock',
+         type:'e_pigeontype', state:'e_pigeonstateid', info:'e_info', internal:'e_internalinfo' },
+  neu: { ring:'neu_ring', ringold:'neu_ringold', name:'neu_name', year:'neu_year', gender:'neu_gender', color:'neu_color',
+         race:'neu_race', strain:'neu_strain', breeder:'neu_breeder', owner:'neu_owner', standort:'neu_standort', country:'neu_country',
+         assoc:'neu_assoc', birthday:'neu_birthday', died:'neu_died', bought:'neu_bought', sold:'neu_sold', instock:'neu_instock',
+         type:'neu_pigeontype', state:'neu_pigeonstateid', info:'neu_info', internal:'neu_internalinfo' }
+};
+
+function renderPigeonForm(mode, p){
+  p = p || {};
+  const pfx = mode==='edit' ? 'e' : 'neu';
+  const I = PF_IDS[pfx];
+  const v = f => fv(p, f);
+  const g = sex_(p)==='M' ? 'M' : sex_(p)==='F' ? 'F' : '';
+  const uniq = f => [...new Set(S.pigeons.map(x=>x[f]).filter(Boolean))].sort().map(x=>`<option value="${escH(x)}">`).join('');
+  const dlInput = (key, field, ph) => `<input id="${I[key]}" list="pf-dl-${field}" value="${v(field)}" autocomplete="off" placeholder="${escH(ph||'')}">`;
+  const dateField = (key, field, label) => `<div class="form-field"><label>${label}</label>
+      <div class="pf-datewrap"><input id="${I[key]}" type="date" value="${v(field)}">
+        <span class="pf-x" onclick="clearDateField('${I[key]}')" title="${t('pf_clear_date')}">✕</span></div></div>`;
+  const f = mode==='edit' ? findFather(p) : null, mo = mode==='edit' ? findMother(p) : null;
+  const fR = f ? ring(f) : (p.ringnumberfather||''), mR = mo ? ring(mo) : (p.ringnumbermother||'');
+  const parentField = (which, label, valText, valId) => `<div class="form-field">
+      <label>${label}</label>
+      <div class="autocomplete-wrap pf-inwrap">
+        <input id="${pfx}_${which}_inp" value="${escH(valText)}" autocomplete="off" placeholder="${t('ph_ring_search')}">
+        <input type="hidden" id="${pfx}_${which}_id" value="${escH(valId||'')}">
+        <span class="pf-x" onclick="pfClearParent('${pfx}','${which}')" title="${t('pf_clear_parent')}">✕</span>
+        <div class="autocomplete-drop" id="${pfx}_${which}_drop"></div>
+      </div></div>`;
+  const ringOnInput = mode==='edit' ? `pfRingChanged('e',this.value,'${escH(p.pigeonid||'')}')` : `pfRingChanged('neu',this.value)`;
+  const ph = key => mode==='edit' ? '' : t('pf_auto');
+
+  return `<div id="pf-root-${pfx}" oninput="pfFormChanged('${pfx}',event)">
+    <div class="pf-block">
+      <div class="pf-id">
+        <div class="form-field"><label>${t('fld_ring_req')}</label>
+          <input id="${I.ring}" value="${v('ringnumber')}" autocomplete="off" placeholder="z. B. DE-06559-26-170 oder B-22-6106458" oninput="${ringOnInput}"></div>
+        <div class="form-field"><label>${t('fld_name_short')}</label>
+          <input id="${I.name}" value="${v('name')}" placeholder="${t('ph_name_short')}"></div>
+        <div class="form-field"><label>${t('fld_gender')}</label>
+          ${pfGenderSegHtml(pfx,g,false)}
+          <input type="hidden" id="${I.gender}" value="${g}"></div>
+        <div class="form-field"><label>${t('fld_color')}</label>
+          <input id="${I.color}" list="pf-dl-color" value="${v('color')}" autocomplete="off" placeholder="${t('ph_color')}"></div>
+      </div>
+      <div id="${pfx}-ring-preview" style="margin-top:10px"></div>
+    </div>
+
+    <div class="pf-block">
+      <div class="pf-4">
+        <div class="form-field"><label>${t('fld_instock')}</label>
+          <select id="${I.instock}">
+            <option value="true" ${p.instock!==false?'selected':''}>${t('yes_word')}</option>
+            <option value="false" ${p.instock===false?'selected':''}>${t('no_word')}</option>
+          </select></div>
+        <div class="form-field"><label>${t('fld_location')}</label>${dlInput('standort','standort',t('ph_location'))}</div>
+        <div class="form-field"><label>${t('fld_pigeontype')}</label>
+          <select id="${I.type}">
+            <option value="" ${!p.pigeontype?'selected':''}>${t('type_unset')}</option>
+            <option value="Reisetaube" ${p.pigeontype==='Reisetaube'?'selected':''}>✈ ${t('type_racing')}</option>
+            <option value="Zuchttaube" ${p.pigeontype==='Zuchttaube'?'selected':''}>🥚 ${t('type_breeding')}</option>
+            <option value="Heimtaube" ${p.pigeontype==='Heimtaube'?'selected':''}>🏠 ${t('type_home')}</option>
+            <option value="Verkauf" ${p.pigeontype==='Verkauf'?'selected':''}>💰 ${t('type_sale')}</option>
+          </select></div>
+        <div class="form-field"><label>${t('fld_status')}</label>
+          <select id="${I.state}">
+            <option value="">${t('status_none')}</option>
+            ${S.pigeonStates.map(s=>`<option value="${escH(s.pigeonstateid)}"${p.pigeonstateid===s.pigeonstateid?' selected':''}>${escH(s.name)}</option>`).join('')}
+          </select></div>
+      </div>
+    </div>
+
+    <div class="pf-block">
+      <div class="pf-title">${t('sec_parents')} · ${t('pf_ped_preview')}</div>
+      <div class="pf-parents">
+        <div class="pf-pfields">
+          ${parentField('father','♂ '+t('fld_father_ring'), fR, p.fatherid)}
+          ${parentField('mother','♀ '+t('fld_mother_ring'), mR, p.motherid)}
+          <div class="pf-hint">${t('pf_parent_hint')}</div>
+        </div>
+        <div id="${pfx}-ped" class="pf-ped"></div>
+      </div>
+    </div>
+
+    <details class="pf-more" open>
+      <summary>${t('pf_origin')}</summary>
+      <div class="pf-more-body"><div class="form-grid">
+        <div class="form-field"><label>${t('fld_breeder')}</label>${dlInput('breeder','breeder',t('ph_breeder'))}</div>
+        <div class="form-field"><label>${t('fld_strain')}</label>${dlInput('strain','strain',t('ph_strain'))}</div>
+        <div class="form-field"><label>${t('fld_owner')}</label>${dlInput('owner','owner',t('ph_owner'))}</div>
+        <div class="form-field"><label>${t('fld_race')}</label>${dlInput('race','race',t('ph_race'))}</div>
+      </div></div>
+    </details>
+
+    <details class="pf-more">
+      <summary>${t('pf_ringdata')}<span>${t('pf_ringdata_hint')}</span></summary>
+      <div class="pf-more-body"><div class="form-grid">
+        <div class="form-field"><label>${t('fld_ring_old')}</label><input id="${I.ringold}" value="${v('ringnumberold')}"></div>
+        <div class="form-field"><label>${t('fld_year')}</label><input id="${I.year}" type="number" value="${v('date_year')}" placeholder="${ph()}"></div>
+        <div class="form-field"><label>${t('fld_country')}</label><input id="${I.country}" value="${v('countrycode')}" placeholder="${ph()}"></div>
+        <div class="form-field"><label>${t('fld_assocno')}</label><input id="${I.assoc}" value="${v('associationno')}" placeholder="${ph()}"></div>
+        ${dateField('birthday','birthday',t('fld_birthday'))}
+        ${dateField('died','died',t('fld_died'))}
+        ${dateField('bought','bought',t('fld_bought'))}
+        ${dateField('sold','sold',t('fld_sold'))}
+      </div></div>
+    </details>
+
+    <div class="pf-block">
+      <div class="pf-title">${t('pf_notes')}</div>
+      <div class="form-grid">
+        <div class="form-field form-full"><label>${t('fld_info_notes')}</label>
+          <textarea id="${I.info}" rows="3" placeholder="${t('ph_info')}">${v('info')}</textarea></div>
+        <div class="form-field form-full"><label>${t('fld_internal_info')}</label>
+          <textarea id="${I.internal}" rows="2" placeholder="${t('ph_internal_info')}">${v('internalinfo')}</textarea></div>
+      </div>
+    </div>
+
+    <datalist id="pf-dl-color">${uniq('color')}</datalist>
+    <datalist id="pf-dl-race">${uniq('race')}</datalist>
+    <datalist id="pf-dl-strain">${uniq('strain')}</datalist>
+    <datalist id="pf-dl-breeder">${uniq('breeder')}</datalist>
+    <datalist id="pf-dl-owner">${uniq('owner')}</datalist>
+    <datalist id="pf-dl-standort">${uniq('standort')}</datalist>
+  </div>`;
+}
+
+// ── Geschlecht (segmentierte Auswahl, Wert liegt im versteckten Feld) ──
+function pfSetGender(pfx, g){
+  const hid = document.getElementById(PF_IDS[pfx].gender);
+  if(!hid) return;
+  hid.value = hid.value===g ? '' : g;            // zweiter Klick = Auswahl aufheben
+  const seg = document.getElementById(pfx+'-gender-seg');
+  if(seg){
+    seg.querySelector('.m').classList.toggle('on', hid.value==='M');
+    seg.querySelector('.f').classList.toggle('on', hid.value==='F');
+  }
+  pfRefresh(pfx);
+}
+
+// ── Ringnummer: Duplikat-Hinweis (Neu: wie bisher + Erkennung, Bearbeiten: nur Warnung) ──
+function pfRingChanged(pfx, val, selfId){
+  if(pfx==='neu'){ neuRingChanged(val); return; }
+  const prev = document.getElementById('e-ring-preview');
+  if(!prev) return;
+  const dup = (val||'').trim() ? findInDb(val) : null;
+  prev.innerHTML = (dup && dup.pigeonid!==selfId)
+    ? `<div style="background:rgba(192,80,77,.12);border:1px solid rgba(192,80,77,.3);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:#e07070;display:flex;align-items:center;gap:10px;flex-wrap:wrap">⚠️ Ringnummer bereits bei einer anderen Taube vorhanden: <strong>${escH(ring(dup))}</strong>${dup.name?' · '+escH(dup.name):''}
+         <button type="button" class="btn btn-outline btn-sm" onclick="selectPigeon('${dup.pigeonid}')">Öffnen →</button></div>`
+    : '';
+}
+
+// ── Eltern: Auswahl / Entfernen / Eingabe ──
+function pfPickParent(pfx, which, id){
+  const p = findById(id); if(!p) return;
+  const inp = document.getElementById(`${pfx}_${which}_inp`);
+  const hid = document.getElementById(`${pfx}_${which}_id`);
+  const drop = document.getElementById(`${pfx}_${which}_drop`);
+  if(inp) inp.value = ring(p);
+  if(hid) hid.value = p.pigeonid;
+  if(drop) drop.classList.remove('open');
+  pfRefresh(pfx);
+}
+function pfClearParent(pfx, which){
+  const inp = document.getElementById(`${pfx}_${which}_inp`);
+  const hid = document.getElementById(`${pfx}_${which}_id`);
+  if(inp) inp.value = '';
+  if(hid) hid.value = '';
+  pfRefresh(pfx);
+}
+// Eine per Dropdown gewählte ID darf nicht "kleben bleiben", wenn der Text danach geändert wird.
+let PF_TIMER = null;
+function pfFormChanged(pfx, ev){
+  const tg = ev && ev.target, id = (tg && tg.id) || '';
+  const m = id.match(/_(father|mother)_inp$/);
+  if(m){
+    const hid = document.getElementById(`${pfx}_${m[1]}_id`);
+    if(hid && hid.value){
+      const sel = findById(hid.value);
+      if(!sel || ring(sel)!==tg.value.trim()) hid.value = '';
+    }
+  }
+  clearTimeout(PF_TIMER);
+  PF_TIMER = setTimeout(()=>pfRefresh(pfx), 120);
+}
+
+// ── Stammbaum-Vorschau (Taube → Eltern → Großeltern) ──
+function pfResolve(pfx, which){
+  const text = (document.getElementById(`${pfx}_${which}_inp`)?.value || '').trim();
+  const id = document.getElementById(`${pfx}_${which}_id`)?.value || '';
+  let p = id ? findById(id) : null;
+  if(!p && text) p = findInDb(text);
+  return { text, p };
+}
+function pfBox(p, o){
+  const area = o.area ? `grid-area:${o.area}` : '';
+  if(!p && !o.text) return `<div class="pf-pb empty" style="${area}">—</div>`;
+  if(!p) return `<div class="pf-pb" style="${area}"><span class="r">${escH(o.text)}</span><span class="s">${t('pf_not_in_db')}</span></div>`;
+  const sx = sex_(p), cls = sx==='M' ? 'm' : sx==='F' ? 'f' : '';
+  const sub = [p.date_year, p.color].filter(Boolean).join(' · ');
+  const nav = (o.nav && p.pigeonid) ? ` nav" onclick="selectPigeon('${p.pigeonid}')` : '';
+  return `<div class="pf-pb ${cls} ${o.root?'root':''}${nav}" style="${area}">
+    <span class="r">${sx==='M'?'♂ ':sx==='F'?'♀ ':''}${escH(o.root && !p.ringnumber ? t('pf_new_pigeon') : ring(p))}</span>
+    ${p.name?`<span class="n">${escH(p.name)}</span>`:''}${sub?`<span class="s">${escH(sub)}</span>`:''}</div>`;
+}
+// Baut das 3-Spalten-Raster Taube → Eltern → Großeltern (Formular-Vorschau UND Detailansicht).
+function pfPedMarkup(me, F, M, ff, fm, mf, mm, nav){
+  const rootBox = (me.ringnumber || me.name)
+    ? pfBox(me, { area:'2/1/6/2', root:true })
+    : `<div class="pf-pb empty" style="grid-area:2/1/6/2">${t('pf_new_pigeon')}</div>`;
+  return `<div class="pf-ph" style="grid-area:1/1">${t('pf_col_pigeon')}</div>
+     <div class="pf-ph" style="grid-area:1/2">${t('pf_col_parents')}</div>
+     <div class="pf-ph" style="grid-area:1/3">${t('pf_col_grand')}</div>` +
+    rootBox +
+    pfBox(F.p, { text:F.text, area:'2/2/4/3', nav }) + pfBox(M.p, { text:M.text, area:'4/2/6/3', nav }) +
+    pfBox(ff, { area:'2/3/3/4', nav }) + pfBox(fm, { area:'3/3/4/4', nav }) +
+    pfBox(mf, { area:'4/3/5/4', nav }) + pfBox(mm, { area:'5/3/6/4', nav });
+}
+function pfRefresh(pfx){
+  const box = document.getElementById(pfx+'-ped');
+  if(!box) return;
+  const I = PF_IDS[pfx];
+  const val = id => (document.getElementById(id)?.value || '').trim();
+  const me = { ringnumber: val(I.ring) || null, name: val(I.name) || null, gender: val(I.gender) || null,
+               color: val(I.color) || null, date_year: val(I.year) || null };
+  const F = pfResolve(pfx,'father'), M = pfResolve(pfx,'mother');
+  const sub = par => par.p ? [findFather(par.p), findMother(par.p)] : [null, null];
+  const [ff, fm] = sub(F), [mf, mm] = sub(M);
+  box.innerHTML = pfPedMarkup(me, F, M, ff, fm, mf, mm, false);
+}
+function pfInitAll(){ ['neu','e'].forEach(pfx=>{ if(document.getElementById(pfx+'-ped')) pfRefresh(pfx); }); }
+
+// ── BILDER: Titelbild (pigeons.photo) · Augenfoto · weitere Bilder (Tabelle pigeon_photos) ──
+// Die Zusatzbilder werden nur beim Öffnen der Detailansicht der jeweiligen Taube geladen.
+const PHOTO_CACHE = new Map();   // pigeonid -> { rows:[{id,pigeonid,kind,data,caption,sort_order}], missing:boolean }
+
+async function loadPigeonPhotos(id, force){
+  if(!force && PHOTO_CACHE.has(id)) return PHOTO_CACHE.get(id);
+  const st = { rows:[], missing:false };
+  try{
+    const rows = await apiGet('/pigeon_photos?pigeonid=eq.'+encodeURIComponent(id)+'&select=id,pigeonid,kind,data,caption,sort_order,created_at&order=sort_order.asc,created_at.asc');
+    st.rows = Array.isArray(rows) ? rows : [];
+  }catch(e){ st.missing = true; }
+  PHOTO_CACHE.set(id, st);
+  return st;
+}
+
+function pgGalleryHtml(p){
+  const id = p.pigeonid, st = PHOTO_CACHE.get(id);
+  const eye = st ? st.rows.find(r=>r.kind==='eye') : null;
+  const others = st ? st.rows.filter(r=>r.kind!=='eye') : [];
+  const btn = (icon, title, onclick) => `<button type="button" class="pg-btn" title="${escH(title)}" onclick="${onclick}">${icon}</button>`;
+  const picker = (inputId, icon, title) => `<label class="pg-btn" for="${inputId}" title="${escH(title)}">${icon}</label>`;
+  const view = 'openPhotoLightbox(this.querySelector(\'img\').src)';
+
+  const cover = `<div class="pg-tile">
+      <div class="pg-label">${t('pg_cover')}</div>
+      <div class="pg-img" onclick="${view}"><img src="${escH(pigeonThumbSrc(p))}" alt="" onerror="this.onerror=null;this.src=PIGEON_COLOR_THUMBS.leer"></div>
+      <div class="pg-actions">${picker('pg-in-cover','📷',t('pg_replace'))}${p.photo?btn('🗑',t('pg_remove'),`pgRemoveCover('${id}')`):''}</div>
+      <input type="file" id="pg-in-cover" accept="image/*" style="display:none" onchange="pgUploadCover('${id}',this.files[0]);this.value=''">
+    </div>`;
+
+  if(!st) return `<div class="pg-grid">${cover}</div><div class="pf-hint" style="margin-top:8px">${t('pg_loading')}</div>`;
+  if(st.missing) return `<div class="pg-grid">${cover}</div>
+      <div class="pf-hint" style="margin-top:8px;color:var(--orange)">${t('pg_missing')}
+        <a style="cursor:pointer;color:var(--green)" onclick="pgReload('${id}')">↻</a></div>`;
+
+  const eyeTile = eye
+    ? `<div class="pg-tile">
+        <div class="pg-label">${t('pg_eye')}</div>
+        <div class="pg-img" onclick="${view}"><img src="${escH(eye.data)}" alt=""></div>
+        <div class="pg-actions">${picker('pg-in-eye','📷',t('pg_replace'))}${btn('🗑',t('pg_remove'),`pgDelete('${id}','${eye.id}')`)}</div>
+      </div>`
+    : `<label class="pg-add" for="pg-in-eye"><b>＋</b>${t('pg_add_eye')}</label>`;
+
+  const otherTiles = others.map(r=>`<div class="pg-tile">
+      <div class="pg-label">${t('pg_other')}</div>
+      <div class="pg-img" onclick="${view}"><img src="${escH(r.data)}" alt="${escH(r.caption||'')}"></div>
+      <div class="pg-cap ${r.caption?'':'empty'}" onclick="pgCaption('${id}','${r.id}')" title="${escH(r.caption||'')}">${r.caption?escH(r.caption):t('pg_caption_ph')}</div>
+      <div class="pg-actions">${btn('🗑',t('pg_remove'),`pgDelete('${id}','${r.id}')`)}</div>
+    </div>`).join('');
+
+  return `<div class="pg-grid">
+      ${cover}${eyeTile}${otherTiles}
+      <label class="pg-add" for="pg-in-other"><b>＋</b>${t('pg_add_other')}</label>
+    </div>
+    <input type="file" id="pg-in-eye" accept="image/*" style="display:none" onchange="pgUpload('${id}','eye',this.files);this.value=''">
+    <input type="file" id="pg-in-other" accept="image/*" multiple style="display:none" onchange="pgUpload('${id}','other',this.files);this.value=''">`;
+}
+
+function pgRerender(id){
+  const el = document.getElementById('pg-gallery');
+  const p = findById(id);
+  if(el && p && el.dataset.pid===id) el.innerHTML = pgGalleryHtml(p);
+}
+async function pgInitGallery(){
+  const el = document.getElementById('pg-gallery');
+  if(!el) return;
+  const id = el.dataset.pid;
+  if(PHOTO_CACHE.has(id)) return;
+  await loadPigeonPhotos(id);
+  pgRerender(id);
+}
+async function pgReload(id){ PHOTO_CACHE.delete(id); pgRerender(id); await loadPigeonPhotos(id,true); pgRerender(id); }
+
+async function pgUploadCover(id, file){
+  if(!file) return;
+  await uploadPigeonPhoto(id, file);   // bestehende Funktion (Kompression, Speichern in pigeons.photo, Fehlerhinweis)
+  pgRerender(id);
+}
+async function pgRemoveCover(id){
+  if(!confirm('Titelbild entfernen? Danach wird wieder die Farbvorschau angezeigt.')) return;
+  try{
+    await apiPatch('pigeons', id, { photo:null });
+    const p = findById(id); if(p) p.photo = null;
+    const img = document.getElementById('detail-photo-img'); if(img && p) img.src = pigeonThumbSrc(p);
+    if(document.getElementById('table-wrap')) renderTableOnly();
+    pgRerender(id);
+  }catch(e){ alert('Titelbild konnte nicht entfernt werden: '+e.message); }
+}
+
+// kind: 'eye' (genau ein Bild, wird ersetzt) | 'other' (beliebig viele, auch mehrere Dateien auf einmal)
+async function pgUpload(id, kind, fileList){
+  const files = [...(fileList||[])];
+  if(!files.length) return;
+  const st = PHOTO_CACHE.get(id);
+  if(!st || st.missing){ alert(t('pg_missing')); return; }
+  const status = document.getElementById('pg-status');
+  const say = s => { if(status) status.textContent = s; };
+  const list = kind==='eye' ? files.slice(0,1) : files;
+  let sort = st.rows.reduce((m,r)=>Math.max(m, Number(r.sort_order)||0), 0);
+  for(let i=0;i<list.length;i++){
+    const f = list[i];
+    if(f.size > 15*1024*1024){ alert(f.name+': Datei zu groß (max. 15 MB).'); continue; }
+    try{
+      say(`Lade hoch… (${i+1}/${list.length})`);
+      const data = await compressImageFile(f, kind==='eye' ? 1000 : 1400, .82);
+      const row = { id:crypto.randomUUID(), pigeonid:id, kind, data, caption:null, sort_order: kind==='eye' ? 0 : ++sort };
+      await apiPost('pigeon_photos', row);
+      if(kind==='eye'){
+        // Neues Augenfoto ist gespeichert → erst jetzt das alte entfernen (kein Datenverlust bei Fehlern)
+        const old = st.rows.filter(r=>r.kind==='eye');
+        if(old.length) await apiDeleteBy('pigeon_photos', 'id=in.('+old.map(r=>r.id).join(',')+')');
+        st.rows = st.rows.filter(r=>r.kind!=='eye');
+      }
+      st.rows.push(row);
+    }catch(e){
+      alert('Bild konnte nicht gespeichert werden: '+e.message);
+      break;
+    }
+  }
+  say('');
+  pgRerender(id);
+}
+async function pgDelete(id, photoId){
+  if(!confirm('Dieses Bild wirklich löschen?')) return;
+  try{
+    const deleted = await apiDeleteBy('pigeon_photos', 'id=eq.'+encodeURIComponent(photoId));
+    if(!deleted.length) throw new Error('Es wurde nichts gelöscht (fehlende Rechte?).');
+    const st = PHOTO_CACHE.get(id); if(st) st.rows = st.rows.filter(r=>r.id!==photoId);
+    pgRerender(id);
+  }catch(e){ alert('Löschen fehlgeschlagen: '+e.message); }
+}
+async function pgCaption(id, photoId){
+  const st = PHOTO_CACHE.get(id), row = st && st.rows.find(r=>r.id===photoId);
+  if(!row) return;
+  const v = prompt('Beschriftung für dieses Bild:', row.caption||'');
+  if(v===null) return;
+  const cap = v.trim() || null;
+  try{
+    await apiPatchBy('pigeon_photos', 'id=eq.'+encodeURIComponent(photoId), { caption:cap });
+    row.caption = cap;
+    pgRerender(id);
+  }catch(e){ alert('Beschriftung konnte nicht gespeichert werden: '+e.message); }
+}
+
+// Gleiche Segment-Auswahl wie im Formular; in der Ansicht nur lesbar (ro).
+function pfGenderSegHtml(pfx, g, ro){
+  const oc = k => ro ? '' : ` onclick="pfSetGender('${pfx}','${k}')"`;
+  return `<div class="pf-seg ${ro?'ro':''}" id="${pfx}-gender-seg">
+    <button type="button" class="m ${g==='M'?'on':''}"${oc('M')}>♂ ${t('pf_male')}<small>${t('pf_male_alt')}</small></button>
+    <button type="button" class="f ${g==='F'?'on':''}"${oc('F')}>♀ ${t('pf_female')}<small>${t('pf_female_alt')}</small></button>
+  </div>`;
+}
+
+// ── DETAILANSICHT (lesend) – gleiche Anordnung wie das Formular ─────────────
+// Bestand, Taubentyp und Status sind hier die Schnellbearbeitung (speichert sofort per quickEditPigeonField).
+function renderPigeonView(p){
+  const has = x => x!==null && x!==undefined && x!=='';
+  const ro = (label, val, cls) => `<div class="form-field"><label>${label}</label><div class="pf-v ${has(val)?'':'empty'} ${cls||''}" ${has(val)?`title="${escH(String(val))}"`:''}>${has(val)?escH(String(val)):'—'}</div></div>`;
+  const f = findFather(p), mo = findMother(p);
+  const fR = f ? ring(f) : (p.ringnumberfather||''), mR = mo ? ring(mo) : (p.ringnumbermother||'');
+  const ib = calcInbreeding(p);
+  const sx = sex_(p), g = sx==='M' ? 'M' : sx==='F' ? 'F' : '';
+  const stateName = p.pigeonstate || (p.pigeonstateid ? (S.pigeonStates.find(s=>s.pigeonstateid===p.pigeonstateid)||{}).name||'' : '');
+  const parentCell = (label, par, txt) => `<div class="form-field"><label>${label}</label>
+      <div class="pf-v ${par||txt?'':'empty'}">${par
+        ? `<a onclick="selectPigeon('${par.pigeonid}')">${escH(ring(par))}</a>${par.name?`<span style="color:var(--text2);overflow:hidden;text-overflow:ellipsis">${escH(par.name)}</span>`:''}`
+        : txt ? `<span style="font-family:monospace">${escH(txt)}</span><span style="color:var(--text3);font-size:11px">${t('pf_not_in_db')}</span>` : '—'}</div></div>`;
+  const typeOpts = [['', t('type_unset')], ['Reisetaube','✈ '+t('type_racing')], ['Zuchttaube','🥚 '+t('type_breeding')],
+                    ['Heimtaube','🏠 '+t('type_home')], ['Verkauf','💰 '+t('type_sale')]]
+    .map(([v,l])=>`<option value="${v}" ${(p.pigeontype||'')===v?'selected':''}>${l}</option>`).join('');
+  const noneLabel = (!p.pigeonstateid && p.pigeonstate) ? tStatus(p.pigeonstate) : t('status_none');
+  const stateOpts = `<option value="">${escH(noneLabel)}</option>` +
+    S.pigeonStates.map(s=>`<option value="${escH(s.pigeonstateid)}" ${p.pigeonstateid===s.pigeonstateid?'selected':''}>${escH(tStatus(s.name))}</option>`).join('');
+  const calc = [[t('fld_inbreedcoeff'), p.inbreedcoefficient!=null?Number(p.inbreedcoefficient).toFixed(4):null],
+                [t('fld_calc_inbreed'), ib>0?`${(ib*100).toFixed(2)} %`:null],
+                [t('fld_user1'),p.userdefined1],[t('fld_user2'),p.userdefined2],[t('fld_user3'),p.userdefined3]].filter(([,v])=>has(v));
+  const sup = x => x;
+  return `<div class="pf-view">
+    <div class="pf-block">
+      <div class="pf-id">
+        ${ro(t('fld_ring'), p.ringnumber ? ring(p) : '', 'mono')}
+        ${ro(t('fld_name_short'), p.name)}
+        <div class="form-field"><label>${t('fld_gender')}</label>${pfGenderSegHtml('v', g, true)}</div>
+        ${ro(t('fld_color'), p.color ? tColor(p.color) : '')}
+      </div>
+    </div>
+
+    <div class="pf-block">
+      <div class="pf-4">
+        <div class="form-field"><label>${t('fld_instock')}</label>
+          <div class="pf-v">${qeSwitchHtml(p,'instock',x=>!!x.instock,t('fld_instock'))}<span>${p.instock?t('yes_word'):t('no_word')}</span></div></div>
+        ${ro(t('fld_location'), p.standort)}
+        <div class="form-field"><label>${t('fld_pigeontype')}</label>
+          <select onchange="quickEditPigeonField('${p.pigeonid}','pigeontype',this.value||null,event)">${typeOpts}</select></div>
+        <div class="form-field"><label>${t('fld_status')}</label>
+          <select onchange="quickEditPigeonField('${p.pigeonid}','pigeonstateid',this.value||null,event)">${stateOpts}</select></div>
+      </div>
+    </div>
+
+    <div class="pf-block">
+      <div class="pf-title">${t('sec_parents')} · ${t('pf_ped_preview')}</div>
+      <div class="pf-parents">
+        <div class="pf-pfields">
+          ${parentCell('♂ '+t('fld_father'), f, fR)}
+          ${parentCell('♀ '+t('fld_mother'), mo, mR)}
+        </div>
+        <div class="pf-ped">${pfPedMarkup(
+          { ringnumber:p.ringnumber, name:p.name, gender:g, color:p.color, date_year:p.date_year },
+          { p:f, text:f?'':fR }, { p:mo, text:mo?'':mR },
+          findFather(f), findMother(f), findFather(mo), findMother(mo), true)}</div>
+      </div>
+    </div>
+
+    <div class="pf-block">
+      <div class="pf-title">${t('pg_title')}</div>
+      <div id="pg-gallery" data-pid="${p.pigeonid}">${pgGalleryHtml(p)}</div>
+      <div id="pg-status" class="pf-hint" style="margin-top:6px"></div>
+    </div>
+
+    <details class="pf-more" open>
+      <summary>${t('pf_origin')}</summary>
+      <div class="pf-more-body"><div class="form-grid">
+        ${ro(t('fld_breeder'), p.breeder)}${ro(t('fld_strain'), p.strain)}${ro(t('fld_owner'), p.owner)}${ro(t('fld_race'), p.race)}
+      </div></div>
+    </details>
+
+    <details class="pf-more">
+      <summary>${t('pf_ringdata')}<span>${t('pf_ringdata_hint')}</span></summary>
+      <div class="pf-more-body"><div class="form-grid">
+        ${ro(t('fld_ring_old'), p.ringnumberold)}${ro(t('fld_year'), p.date_year)}${ro(t('fld_country'), p.countrycode)}${ro(t('fld_assocno'), p.associationno)}
+        ${ro(t('fld_birthday'), p.birthday)}${ro(t('fld_died'), p.died)}${ro(t('fld_bought'), p.bought)}${ro(t('fld_sold'), p.sold)}
+      </div></div>
+    </details>
+
+    ${calc.length ? `<details class="pf-more">
+      <summary>${t('pf_calc')}</summary>
+      <div class="pf-more-body"><div class="form-grid">${calc.map(([l,v])=>ro(l,v)).join('')}</div></div>
+    </details>` : ''}
+
+    <div class="pf-block">
+      <div class="pf-title">${t('pf_notes')}</div>
+      <div class="form-grid">
+        <div class="form-field form-full"><label>${t('fld_info_notes')}</label><div class="pf-v ta ${has(p.info)?'':'empty'}">${has(p.info)?escH(p.info):'—'}</div></div>
+        <div class="form-field form-full"><label>${t('fld_internal_info')}</label><div class="pf-v ta ${has(p.internalinfo)?'':'empty'}" style="min-height:40px">${has(p.internalinfo)?escH(p.internalinfo):'—'}</div></div>
+      </div>
     </div>
   </div>`;
 }
@@ -5265,15 +6003,7 @@ let NEU = { ringnumber:'', parsed:null, dupMatch:null };
 
 function neuFormReset(){
   NEU = { ringnumber:'', parsed:null, dupMatch:null };
-  ['neu_ring','neu_name','neu_color','neu_race','neu_strain','neu_breeder','neu_owner','neu_standort',
-   'neu_father_inp','neu_mother_inp','neu_info','neu_internalinfo']
-    .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  ['neu_gender','neu_pigeonstateid','neu_instock','neu_pigeontype','neu_father_id','neu_mother_id']
-    .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=el.tagName==='SELECT'?(el.options[0]?.value||''):''; });
-  const prev=document.getElementById('neu-ring-preview');
-  if(prev) prev.innerHTML='';
-  const msg=document.getElementById('form-msg');
-  if(msg) msg.style.display='none';
+  render();   // baut das Formular komplett leer neu auf
 }
 
 function neuRingChanged(val){
@@ -5293,6 +6023,9 @@ function neuRingChanged(val){
   }
   const parsed = parseRingComponents(val);
   NEU.parsed = parsed;
+  [['neu_year',parsed?.date_year],['neu_country',parsed?.countrycode],['neu_assoc',parsed?.associationno]].forEach(([id,v])=>{
+    const el=document.getElementById(id); if(el) el.placeholder = v ? String(v) : t('pf_auto');
+  });
   if(parsed){
     if(prev) prev.innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;background:var(--bg3);border-radius:var(--radius-sm);padding:10px 14px">
       <div><span style="color:var(--text3);font-size:11px;display:block;margin-bottom:2px">Erkannt</span><strong>${escH(parsed.ringnumber)}</strong></div>
@@ -5315,9 +6048,9 @@ async function submitNeu(){
   const gs = id => document.getElementById(id)?.value||null;
   const row = { pigeonid: crypto.randomUUID(), deleted:false };
   row.ringnumber    = parsed?.ringnumber || fmtRingnumber(rawRing) || rawRing;
-  row.countrycode   = parsed?.countrycode   || null;
-  row.associationno = parsed?.associationno || null;
-  row.date_year     = parsed?.date_year     || null;
+  row.countrycode   = normCountryCode(g('neu_country')) || parsed?.countrycode   || null;
+  row.associationno = g('neu_assoc')                    || parsed?.associationno || null;
+  row.date_year     = (g('neu_year') ? Number(g('neu_year')) : null) || parsed?.date_year || null;
   if(g('neu_name'))          row.name          = g('neu_name');
   const gnd=gs('neu_gender'); if(gnd) row.gender=gnd;
   if(g('neu_color'))         row.color         = g('neu_color');
@@ -5326,6 +6059,8 @@ async function submitNeu(){
   if(g('neu_breeder'))       row.breeder       = g('neu_breeder');
   if(g('neu_owner'))         row.owner         = g('neu_owner');
   if(g('neu_standort'))      row.standort      = g('neu_standort');
+  if(g('neu_ringold'))       row.ringnumberold = fmtRingnumber(g('neu_ringold')) || g('neu_ringold');
+  ['birthday','died','bought','sold'].forEach(k=>{ if(g('neu_'+k)) row[k]=g('neu_'+k); });
   if(g('neu_father_id'))     row.fatherid      = g('neu_father_id');
   if(g('neu_mother_id'))     row.motherid      = g('neu_mother_id');
   if(g('neu_info'))          row.info          = g('neu_info');
@@ -6460,6 +7195,108 @@ async function triggerPdfExport(pid, gens, withPhoto){
 }
 
 // ── Druck/Export-Auswahlmenü (🖨-Buttons im Stammbaum) ──────────
+
+// ── EIN gemeinsamer Druck-/Export-Dialog für alle Stammbaum-Varianten ──────────
+// Stil (Fächer / Familie), Generationen, Foto, Reisedaten · Vorschau scrollbar · Drucken, PDF, PNG.
+let PP = null;
+function pedPrintOpen(pid){
+  pedPrintClose();
+  PP = { pid, gens:4, orient:'hoch', orientManual:false, color:'standard', frame:'neutral', timer:null, built:null };
+  const o = document.createElement('div');
+  o.id = 'pp-overlay';
+  o.style.cssText = 'position:fixed;inset:0;z-index:700;background:var(--bg);display:flex;flex-direction:column';
+  const seg = (name, items) => `<div class="pf-seg" id="pp-seg-${name}">${items.map(([v,l])=>`<button type="button" data-v="${v}" onclick="pedPrintSet('${name}','${v}')">${l}</button>`).join('')}</div>`;
+  const grp = (label, inner) => `<div style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--text3)">${label} ${inner}</div>`;
+  o.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg2)">
+      <div class="serif" style="font-size:16px">🖨 Stammbaum drucken / exportieren</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">
+        <button class="btn btn-sm" onclick="pedPrintDo('print')">🖨 Drucken</button>
+        <button class="btn btn-outline btn-sm" onclick="pedPrintDo('pdf')">📄 PDF</button>
+        <button class="btn btn-outline btn-sm" onclick="pedPrintDo('png')">🖼 PNG</button>
+        <button class="btn btn-outline btn-sm" onclick="pedPrintClose()">✕ Schließen</button>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--border)">
+      ${grp('Generationen', seg('gens',[[3,'3'],[4,'4'],[5,'5']]))}
+      ${grp('Format', seg('orient',[['hoch','A4 hoch'],['quer','A4 quer']]))}
+      ${grp('Farben', seg('color',[['standard','Standard'],['geschlecht','Geschlecht'],['sw','S/W']]))}
+      ${grp('Rahmen', seg('frame',[['neutral','Neutral'],['geschlecht','Geschlecht']]))}
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="ped-print-photo" checked onchange="pedPrintPreview()"> ${t('with_photo')}</label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="ped-print-travel" checked onchange="pedPrintPreview()"> ${t('with_travel')}</label>
+    </div>
+    <div id="pp-status" style="font-size:12px;color:var(--text3);padding:4px 14px;min-height:22px"></div>
+    <iframe id="pp-frame" style="flex:1;width:100%;border:0;background:#cfcfcf"></iframe>`;
+  document.body.appendChild(o);
+  pedPrintSet('gens', PP.gens);
+}
+function pedPrintClose(){ const o=document.getElementById('pp-overlay'); if(o) o.remove(); PP=null; }
+function pedPrintSet(name, v){
+  if(!PP) return;
+  if(name==='gens'){
+    PP.gens = parseInt(v);
+    if(!PP.orientManual) PP.orient = PP.gens>=5 ? 'quer' : 'hoch';   // 5 Generationen: automatisch quer
+  } else {
+    PP[name] = v;
+    if(name==='orient') PP.orientManual = true;
+  }
+  ['gens','orient','color','frame'].forEach(n=>{
+    document.querySelectorAll('#pp-seg-'+n+' button').forEach(b=>b.classList.toggle('on', b.dataset.v===String(PP[n])));
+  });
+  pedPrintPreview();
+}
+function pedPrintPreview(){
+  if(!PP) return;
+  clearTimeout(PP.timer);
+  PP.timer = setTimeout(pedPrintBuild, 150);
+}
+async function pedPrintBuild(){
+  if(!PP) return;
+  const st = document.getElementById('pp-status');
+  if(st) st.textContent = 'Vorschau wird erstellt…';
+  try{
+    const photo = !!document.getElementById('ped-print-photo')?.checked;
+    const erfolge = await loadPrintErfolgeText();
+    const sig = [PP.gens,PP.orient,PP.color,PP.frame].join('|');
+    const built = await buildStandardPedigreeHtml(PP.pid, PP.gens, photo, erfolge);
+    if(!PP || sig!==[PP.gens,PP.orient,PP.color,PP.frame].join('|')) return;   // inzwischen geändert
+    if(!built){ if(st) st.textContent=''; return; }
+    PP.built = built;
+    const fr = document.getElementById('pp-frame');
+    fr.onload = ()=>pedPrintFit();
+    fr.srcdoc = built.html;
+    if(st) st.textContent = 'Seitenformat: A4 '+(built.pageWmm>built.pageHmm?'quer':'hoch')+' · scrollen zum Prüfen';
+  }catch(e){ if(st) st.textContent='Fehler: '+e.message; }
+}
+function pedPrintFit(){
+  const fr = document.getElementById('pp-frame');
+  if(!fr || !PP || !PP.built) return;
+  const d = fr.contentDocument; if(!d) return;
+  d.documentElement.classList.add('pv');
+  const pw = PP.built.pageWmm*96/25.4 + 28;
+  d.body.style.zoom = Math.min(1, fr.clientWidth/pw);
+}
+async function pedPrintDo(kind){
+  if(!PP || !PP.built){ return; }
+  const st = document.getElementById('pp-status');
+  const photo = !!document.getElementById('ped-print-photo')?.checked;
+  const erfolge = await loadPrintErfolgeText();
+  const bld = buildStandardPedigreeHtml;
+  if(kind==='print'){
+    const fr = document.getElementById('pp-frame'); const d = fr.contentDocument;
+    const restore = ()=>pedPrintFit();
+    d.documentElement.classList.remove('pv'); d.body.style.zoom='';
+    try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ alert('Drucken nicht möglich: '+e.message+'\nBitte PDF speichern und von dort drucken.'); }
+    setTimeout(restore, 800);
+    return;
+  }
+  if(st) st.textContent = kind==='pdf' ? 'PDF wird erstellt…' : 'Bild wird erstellt…';
+  try{
+    if(kind==='pdf') await exportFamilyPedigreePdf(PP.pid, PP.gens, photo, erfolge, bld);
+    else             await exportFamilyPedigreeImage(PP.pid, PP.gens, photo, erfolge, bld);
+  } finally { if(st) st.textContent = ''; }
+}
+
 function closePedigreePrintMenu(){
   const m = document.getElementById('ped-print-menu');
   if(m) m.remove();
@@ -7898,7 +8735,7 @@ function renderVererbungCard(pigeonid, erArg){
 function renderPigeonTripsSection(p){
   const cached=PT_CACHE[p.pigeonid];
   if(!cached){
-    loadPigeonTrips(p.pigeonid).then(()=>{ if(S.selected&&S.selected.pigeonid===p.pigeonid) render(); });
+    loadPigeonTrips(p.pigeonid).then(()=>{ if(S.selected&&S.selected.pigeonid===p.pigeonid) rerenderDetailArea(); });
     return `<div class="section-label" style="margin-top:14px">Reiseleistung</div>
       <div style="color:var(--text3);font-size:13px;padding:8px 0">Lade Reiseleistung…</div>`;
   }
@@ -11452,38 +12289,13 @@ function bindAutocomplete(){
   // Paarungscheck
   bindAC('paarungM_inp','paarungM_drop','M', id=>{ S.paarungM=findById(id); render(); });
   bindAC('paarungF_inp','paarungF_drop','F', id=>{ S.paarungF=findById(id); render(); });
-  // Edit-Modus Elternfelder
-  bindAC('e_father_inp','e_father_drop',null, id=>{
-    const p=findById(id); if(!p) return;
-    const inp=document.getElementById('e_father_inp');
-    const hid=document.getElementById('e_father_id');
-    if(inp) inp.value=ring(p);
-    if(hid) hid.value=p.pigeonid;
-    const drop=document.getElementById('e_father_drop');
-    if(drop) drop.classList.remove('open');
-  });
-  bindAC('e_mother_inp','e_mother_drop',null, id=>{
-    const p=findById(id); if(!p) return;
-    const inp=document.getElementById('e_mother_inp');
-    const hid=document.getElementById('e_mother_id');
-    if(inp) inp.value=ring(p);
-    if(hid) hid.value=p.pigeonid;
-    const drop=document.getElementById('e_mother_drop');
-    if(drop) drop.classList.remove('open');
-  });
-  // Neue Taube – Elternfelder
-  bindAC('neu_father_inp','neu_father_drop','M', id=>{
-    const p=findById(id); if(!p) return;
-    document.getElementById('neu_father_inp').value=ring(p);
-    document.getElementById('neu_father_id').value=p.pigeonid;
-    document.getElementById('neu_father_drop').classList.remove('open');
-  });
-  bindAC('neu_mother_inp','neu_mother_drop','F', id=>{
-    const p=findById(id); if(!p) return;
-    document.getElementById('neu_mother_inp').value=ring(p);
-    document.getElementById('neu_mother_id').value=p.pigeonid;
-    document.getElementById('neu_mother_drop').classList.remove('open');
-  });
+  // Taubenformular (Bearbeiten + Neu): Elternfelder; unbekanntes Geschlecht bleibt auswählbar
+  bindAC('e_father_inp','e_father_drop','!F', id=>pfPickParent('e','father',id));
+  bindAC('e_mother_inp','e_mother_drop','!M', id=>pfPickParent('e','mother',id));
+  bindAC('neu_father_inp','neu_father_drop','!F', id=>pfPickParent('neu','father',id));
+  bindAC('neu_mother_inp','neu_mother_drop','!M', id=>pfPickParent('neu','mother',id));
+  pfInitAll();
+  pgInitGallery();
   // Schnellerfassung – Elternfelder
   bindAC('q_father_inp','q_father_drop','M', id=>{
     const p=findById(id); if(!p) return;
@@ -11507,7 +12319,7 @@ function bindAC(inpId, dropId, filterSex, onSelect){
     const q=inp.value.trim().toLowerCase();
     if(q.length<2){ drop.classList.remove('open'); drop.innerHTML=''; return; }
     let hits=S.pigeons.filter(p=>(p.ringnumber||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q));
-    if(filterSex) hits=hits.filter(p=>sex_(p)===filterSex);
+    if(filterSex) hits=hits.filter(p=>filterSex==='!F'?sex_(p)!=='F':filterSex==='!M'?sex_(p)!=='M':sex_(p)===filterSex);
     hits=hits.slice(0,8);
     drop.innerHTML=hits.length ? hits.map(p=>`
       <div class="ac-item" onclick="(${onSelect.toString()})('${p.pigeonid}')">
@@ -11527,6 +12339,7 @@ function escH(s){ if(s===null||s===undefined)return''; return String(s).replace(
 
 // ── NACHKOMMEN ────────────────────────────────────────────────
 function showNachkommen(id){
+  if(splitActive() && document.getElementById('split-detail')){ splitSelect(id,'nachkommen'); return; }
   pushPigeonNavIfNeeded();
   if(S.selectedNach!==id){ S.nachStatusFilter=null; S.nachGenFilter=null; S.nachPerfFilter=null; }
   S.selectedNach=id; S.tab='nachkommen';
@@ -11621,6 +12434,27 @@ function statusStyle(p){
   return {key:'instock',label:t('status_instock'),color:'var(--green)',bg:'color-mix(in srgb,var(--green) 10%,var(--bg3))'};
 }
 
+// Leistungsdaten der Nachkommen (Kinder + Enkel) für die Anzeige in den Nachkommen-Listen.
+// Wird in renderNachkommen() aus computeErfolgsScore() befüllt; Urenkel haben keine Bewertung.
+var NACH_PERF = {};
+function nachPerfRank(p){
+  var d = NACH_PERF[p.pigeonid];
+  if(!d) return 0;
+  return (d.elite?3000:d.erfolgreich?2000:d.gesetzt>0?1000:0) + Math.round(d.preisquoteD||0);
+}
+function nachPerfSort(a,b){ return nachPerfRank(b)-nachPerfRank(a); }
+// compact=true: eine Zeile für Karten; false: Zelle für die Tabelle
+function nachPerfHtml(p, compact){
+  var d = NACH_PERF[p.pigeonid];
+  if(!d) return compact ? '' : '<span style="color:var(--text3)">—</span>';
+  var badge = d.elite ? '<span style="background:rgba(240,196,25,.15);color:#f0c419;border:1px solid rgba(240,196,25,.35);border-radius:20px;padding:1px 8px;font-size:10.5px;font-weight:600;white-space:nowrap">★ Elite</span>'
+    : d.erfolgreich ? '<span style="background:rgba(80,180,110,.16);color:var(--green);border:1px solid rgba(80,180,110,.35);border-radius:20px;padding:1px 8px;font-size:10.5px;font-weight:600;white-space:nowrap">✓ Erfolgreich</span>' : '';
+  if(!d.gesetzt) return compact ? '<div style="font-size:10.5px;color:var(--text3);margin-top:4px">noch nicht geflogen</div>' : '<span style="color:var(--text3)">nicht geflogen</span>';
+  var stats = d.preise+'/'+d.gesetzt+' Preise · '+Math.round(d.preisquoteD)+' %'+(d.topAS80?' · '+d.topAS80+'× AS>'+VERERBER_ELITE_AS_SCHWELLE:'');
+  if(compact) return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px">'+badge+'<span style="font-size:10.5px;color:var(--text2)">'+stats+'</span></div>';
+  return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+badge+'<span style="font-size:11.5px;color:var(--text2);white-space:nowrap">'+stats+'</span></div>';
+}
+
 function birdCard(p){
   var via=p._via?findById(p._via):null;
   var sx=sex_(p);
@@ -11633,6 +12467,7 @@ function birdCard(p){
     +'<div style="font-size:11px;color:var(--text3);margin-top:3px">'
     +[p.date_year,tColor(p.color),p.strain].filter(Boolean).map(escH).join(' · ')
     +'</div>'
+    +nachPerfHtml(p,true)
     +(via?'<div style="font-size:10px;color:var(--text3);margin-top:3px">via <span style="font-family:monospace;color:var(--blue)">'+escH(ring(via))+'</span></div>':'')
     +'<div style="display:flex;gap:6px;margin-top:7px">'
     +'<span onclick="event.stopPropagation();showPedigree(\''+p.pigeonid+'\')" style="font-size:11px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px"'
@@ -11650,6 +12485,7 @@ function renderGen(arr,gen,emptyMsg,groupKey){
     if(!groups[st.label]) groups[st.label]={style:st,birds:[]};
     groups[st.label].birds.push(p);
   });
+  Object.keys(groups).forEach(function(k){ groups[k].birds.sort(nachPerfSort); });
   // Feste Priorität: Im Bestand, Nicht im Bestand, danach alles Weitere (Verstorben, Verkauft, ...).
   var order=['instock','not_instock','died','sold'];
   var sorted=Object.entries(groups).sort(function(a,b){
@@ -11686,7 +12522,8 @@ function renderGenTable(birds, genKey, rootId, emptyMsg){
     var ia=order.indexOf(sa.key); if(ia<0) ia=order.length;
     var ib=order.indexOf(sb.key); if(ib<0) ib=order.length;
     if(ia!==ib) return ia-ib;
-    return ring(a).localeCompare(ring(b));
+    var pd = nachPerfRank(b)-nachPerfRank(a);
+    return pd!==0 ? pd : ring(a).localeCompare(ring(b));
   });
   var rows=sorted.map(function(p){
     var st=statusStyle(p), sx=sex_(p);
@@ -11700,10 +12537,10 @@ function renderGenTable(birds, genKey, rootId, emptyMsg){
     return '<tr style="cursor:pointer" onclick="selectPigeon(\''+p.pigeonid+'\')">'
       +'<td style="font-family:monospace;font-size:12px;color:var(--green);white-space:nowrap">'+escH(ring(p))+' '+(sx==='M'?'♂':sx==='F'?'♀':'')+'</td>'
       +'<td>'+(p.name?escH(p.name):'<span style="color:var(--text3)">—</span>')+'</td>'
-      +'<td style="text-align:center;color:var(--text3);font-size:12px;white-space:nowrap">'+genLabel+'</td>'
       +'<td style="text-align:center">'+(p.date_year||'—')+'</td>'
       +'<td>'+(tColor(p.color)?escH(tColor(p.color)):'<span style="color:var(--text3)">—</span>')+'</td>'
       +'<td>'+partnerHtml+'</td>'
+      +'<td>'+nachPerfHtml(p,false)+'</td>'
       +'<td><span style="background:'+st.bg+';color:'+st.color+';padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap">'+st.label+'</span></td>'
       +'<td style="text-align:right;white-space:nowrap">'
       +'<span onclick="event.stopPropagation();showPedigree(\''+p.pigeonid+'\')" title="Stammbaum" style="font-size:11px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px" onmouseover="this.style.color=\'var(--green)\'" onmouseout="this.style.color=\'var(--text3)\'">🌳</span> '
@@ -11711,7 +12548,7 @@ function renderGenTable(birds, genKey, rootId, emptyMsg){
       +'</td></tr>';
   }).join('');
   return '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-    +'<thead><tr><th>Ring</th><th>Name</th><th>Generation</th><th>Jg.</th><th>Farbe</th><th>Partner</th><th>Status</th><th></th></tr></thead>'
+    +'<thead><tr><th>Ring</th><th>Name</th><th>Jg.</th><th>Farbe</th><th>Partner</th><th>Leistung</th><th>Status</th><th></th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table></div>';
 }
 
@@ -11739,6 +12576,8 @@ function renderNachkommen(pid){
   perDescendant.forEach(function(d){
     perfMap[d.pigeon.pigeonid] = { erfolgreich: !!(d.erfolgreich && d.pigeon.instock), elite: !!d.elite };
   });
+  NACH_PERF = {};
+  perDescendant.forEach(function(d){ NACH_PERF[d.pigeon.pigeonid] = d; });
   var erfolgreichCount = perDescendant.filter(function(d){ return d.erfolgreich && d.pigeon.instock; }).length;
   var eliteCount = perDescendant.filter(function(d){ return d.elite; }).length;
 
