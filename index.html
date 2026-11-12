@@ -2939,7 +2939,7 @@ function render(){
       m.innerHTML=S.selected ? renderTaubenSubnav('detail',S.selected)+renderDetail(S.selected) : renderTaubenOverviewNav(S.taubenView)+(S.taubenView==='statistik'?renderStats():renderList());
     }
   }
-  else if(S.tab==='stammbaum')  m.innerHTML=S.selectedPed ? renderTaubenSubnav('stammbaum',findById(S.selectedPed))+renderPedigree(S.selectedPed) : (showTab('tauben'),'');
+  else if(S.tab==='stammbaum')  m.innerHTML=S.selectedPed ? renderTaubenSubnav('stammbaum',findById(S.selectedPed))+renderPedigree(S.selectedPed) : (setTimeout(()=>showTab('tauben'),0),'');
   else if(S.tab==='nachkommen') m.innerHTML=S.selectedNach ? renderTaubenSubnav('nachkommen',findById(S.selectedNach))+renderNachkommen(S.selectedNach) : renderTaubenSubnav('nachkommen',null)+renderNachSearch();
   else if(S.tab==='paarung')    m.innerHTML=renderTaubenSubnav('paarung', S.paarungM||S.paarungF||null) + renderPaarung();
   else if(S.tab==='neu')        m.innerHTML=renderAddSubnav('neu')+renderNeu();
@@ -5992,6 +5992,7 @@ async function executeScanSave(){
   const uuidMap = {};
   S.pigeons.forEach(p => { if(p.ringnumber) uuidMap[normRing(p.ringnumber)]=p.pigeonid; });
 
+  const saveErrors = []; let savedCount = 0;
   for(const k of PED_KEYS){
     const p   = SCAN.pigeons[k];
     const act = SCAN.actions[k];
@@ -6039,7 +6040,7 @@ async function executeScanSave(){
         // (Standard: AUS) — importierte Abstammungen sind erstmal nur Ahnen-Datensätze.
         row.pigeonid=newId; row.deleted=false; row.instock=!!SCAN.instock[k];
         await apiPost('pigeons', row);
-        uuidMap[normRing(p.ringnumber)] = newId;
+        uuidMap[normRing(p.ringnumber)] = newId; savedCount++;
       } else if(act==='update'){
         const m = SCAN.matches[k];
         const updates={};
@@ -6049,20 +6050,29 @@ async function executeScanSave(){
         // Bestandstaube-Umschaltung greift auch beim Ergänzen bestehender Tauben
         if(SCAN.instock[k] && !m.instock) updates.instock = true;
         if(Object.keys(updates).length) await apiPatch('pigeons',m.pigeonid,updates);
-        uuidMap[normRing(p.ringnumber)] = m.pigeonid;
+        uuidMap[normRing(p.ringnumber)] = m.pigeonid; savedCount++;
       }
-    } catch(e){ console.warn(`Fehler bei ${p.ringnumber}:`, e.message); }
+    } catch(e){ console.warn(`Fehler bei ${p.ringnumber}:`, e.message); saveErrors.push(`${p.ringnumber}: ${e.message}`); }
   }
 
   setS('Lade Datenbank neu…');
-  await loadData();
   const probandRing = SCAN.pigeons['proband']?.ringnumber;
+  const probandId = probandRing ? uuidMap[normRing(probandRing)] : null;
+  await loadData();
   scanReset();
-  if(probandRing){
-    const found = S.pigeons.find(p=>normRing(p.ringnumber)===normRing(probandRing));
-    if(found){ showPedigree(found.pigeonid); return; }
+  // Proband sicher in den Speicher holen (neu angelegte Tauben können außerhalb der ersten Ladeseiten liegen)
+  let found = probandRing ? S.pigeons.find(p=>normRing(p.ringnumber)===normRing(probandRing)) : null;
+  if(!found && probandId){
+    try{
+      const rows = await apiGet('/pigeons?pigeonid=eq.'+encodeURIComponent(probandId));
+      if(rows && rows[0]){ if(!LOADED_PIGEON_IDS.has(rows[0].pigeonid)){ LOADED_PIGEON_IDS.add(rows[0].pigeonid); S.pigeons.push(rows[0]); } found = rows[0]; invalidatePedigreeCache(); }
+    }catch(e){ console.warn('Proband nachladen fehlgeschlagen', e); }
   }
-  showTab('stammbaum');
+  if(saveErrors.length){
+    alert('⚠️ '+saveErrors.length+' Taube(n) konnten nicht gespeichert werden:\n\n'+saveErrors.slice(0,8).join('\n')+(saveErrors.length>8?'\n…':''));
+  }
+  if(found){ showPedigree(found.pigeonid); return; }
+  showTab('tauben');
 }
 
 // ── NEUE TAUBE ─────────────────────────────────────────────────
