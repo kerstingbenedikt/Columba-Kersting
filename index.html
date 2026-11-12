@@ -1161,9 +1161,14 @@ function fmtRingnumber(raw){
   let country = '', rest = s;
   if(m && m[1] && m[2]){ country = m[1].toUpperCase(); rest = m[2]; }
   if(country) country = COUNTRY_ALIAS[country] || country;
+  let segs = rest.split('-').filter(Boolean);
+  // Belgisches Format ohne Länderkürzel: "5031856-20" (Seriennr.-Jahrgang) → BE-20-5031856.
+  // Deutsche Ringe haben immer 3 Segmente, ein 2-Segment-Ring mit 2-stelligem Jahrgang am Ende ist daher belgisch.
+  if(!country && segs.length===2 && /^\d{3,8}$/.test(segs[0]) && /^(\d{2}|(19|20)\d{2})$/.test(segs[1])){
+    return `BE-${segs[1].slice(-2)}-${segs[0]}`;
+  }
   if(!country) country = 'DE'; // bare Format ohne Länderkürzel = Deutschland
 
-  let segs = rest.split('-').filter(Boolean);
   if(!segs.length) return `${country}-${rest}`;
 
   if(country==='DE'){
@@ -6042,6 +6047,7 @@ async function runScanAI(){
       if(p.ringnumberfather) p.ringnumberfather = fmtRingnumber(p.ringnumberfather) || p.ringnumberfather;
       if(p.ringnumbermother) p.ringnumbermother = fmtRingnumber(p.ringnumbermother) || p.ringnumbermother;
       if(p.countrycode)      p.countrycode      = normCountryCode(p.countrycode);
+      else if(p.ringnumber){ const cm = String(p.ringnumber).match(/^([A-Z]{2})-/); if(cm) p.countrycode = cm[1]; }
     });
     PED_KEYS.forEach(k => {
       const p = SCAN.pigeons[k];
