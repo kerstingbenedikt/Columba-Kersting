@@ -5107,6 +5107,14 @@ const PED_LABEL = {
   mfff:'Ururgroßvater m.v.v.', mffm:'Ururgroßmutter m.v.v.', mfmf:'Ururgroßvater m.v.m.', mfmm:'Ururgroßmutter m.v.m.',
   mmff:'Ururgroßvater m.m.v.', mmfm:'Ururgroßmutter m.m.v.', mmmf:'Ururgroßvater m.m.m.', mmmm:'Ururgroßmutter m.m.m.'
 };
+// Nummerierung: 0 Proband, Vater 2n+1, Mutter 2n+2 (1/2 Eltern, 3–6 Großeltern, 7–14 Urgroßeltern, 15–30 Ururgroßeltern)
+function pedSlot(key){
+  if(key==='proband') return 0;
+  const k = key==='father'?'f':key==='mother'?'m':key;
+  let i=0; for(const ch of k) i = 2*i + (ch==='f'?1:2);
+  return i;
+}
+Object.keys(PED_LABEL).forEach(k=>{ PED_LABEL[k] = pedSlot(k)+' · '+PED_LABEL[k]; });
 const PARENT_MAP = {
   proband:{f:'father',m:'mother'}, father:{f:'ff',m:'fm'}, mother:{f:'mf',m:'mm'},
   ff:{f:'fff',m:'ffm'}, fm:{f:'fmf',m:'fmm'}, mf:{f:'mff',m:'mfm'}, mm:{f:'mmf',m:'mmm'},
@@ -5251,7 +5259,7 @@ function fixGenderSlotMismatches(){
 
 let SCAN = {
   step:'upload', imageData:null, imagePreview:null, imageMediaType:'image/jpeg',
-  pigeons:{}, matches:{}, actions:{}, instock:{}, rawResponse:null, expandedKey:null
+  pigeons:{}, matches:{}, actions:{}, instock:{}, rawResponse:null, expandedKey:null, serverWarnings:[], pdfText:''
 };
 
 // Positions-Reihenfolge für die Auswahl-Liste beim Tauschen (Proband zuerst,
@@ -5328,7 +5336,7 @@ function swapScanSubtree(keyA, keyB){
 function scanReset(){
   stopScanProgress();
   SCAN={step:'upload',imageData:null,imagePreview:null,imageMediaType:'image/jpeg',
-        pigeons:{},matches:{},actions:{},instock:{},rawResponse:null,expandedKey:null};
+        pigeons:{},matches:{},actions:{},instock:{},rawResponse:null,expandedKey:null,serverWarnings:[],pdfText:''};
 }
 
 function renderScan(){
@@ -5351,10 +5359,10 @@ function renderScanUpload(){
       ondragover="event.preventDefault();this.classList.add('drag-over')"
       ondragleave="this.classList.remove('drag-over')"
       ondrop="event.preventDefault();this.classList.remove('drag-over');handleScanFile(event.dataTransfer.files[0])">
-      <input type="file" accept="image/*" onchange="handleScanFile(this.files[0])">
+      <input type="file" accept="image/*,application/pdf,.pdf" onchange="handleScanFile(this.files[0])">
       <div class="scan-drop-icon">📄</div>
-      <div class="scan-drop-text">Foto hochladen oder hierher ziehen</div>
-      <div class="scan-drop-sub">Abstammungsschein · Pedigree · JPG / PNG · max. 10 MB</div>
+      <div class="scan-drop-text">Foto, Scan oder PDF hochladen oder hierher ziehen</div>
+      <div class="scan-drop-sub">Abstammungsschein · Pedigree · JPG / PNG / PDF · max. 10 MB</div>
     </div>
     <div class="scan-steps">
       <div class="scan-step active"><div class="scan-step-dot">1</div><span>Foto hochladen</span></div>
@@ -5627,6 +5635,12 @@ function renderScanResult(){
   // Debug: KI-Rohantwort einsehbar machen, auch wenn Daten erkannt wurden (nicht nur
   // im Fehlerfall) — nötig, um Positions-/Zuordnungsfehler von der eigentlichen
   // KI-Antwort zu unterscheiden statt nur das gerenderte Ergebnis zu sehen.
+  const warnList = [...(SCAN.serverWarnings||[])];
+  const warnBlock = warnList.length ? `<div style="margin-bottom:12px;background:rgba(224,160,80,.1);border:1px solid rgba(224,160,80,.4);border-radius:var(--radius-sm);padding:10px 14px">
+      <div style="font-size:12px;font-weight:700;color:#e0a050;margin-bottom:4px">⚠️ Bitte prüfen (${warnList.length})</div>
+      <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--text2);line-height:1.5">${warnList.map(w=>`<li>${escH(w)}</li>`).join('')}</ul>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">Nummern: 0 Proband · 1 Vater · 2 Mutter · 3–6 Großeltern · 7–14 Urgroßeltern · 15–30 Ururgroßeltern (ungerade = Vogel, gerade = Weibchen). Falsch zugeordnete Kästchen unten anklicken und mit der richtigen Nummer tauschen.</div>
+    </div>` : '';
   const rawDebugBlock = SCAN.rawResponse ? `
     <details style="margin-bottom:14px">
       <summary style="cursor:pointer;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px">🔧 KI-Rohantwort (Debug)</summary>
@@ -5639,7 +5653,7 @@ function renderScanResult(){
   function scanNode(k){
     const p = SCAN.pigeons[k];
     if(!p || !p.ringnumber){
-      return `<div class="ped-box empty" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:11px">—<br>${escH(PED_LABEL[k]||'')}</div></div>`;
+      return `<div class="ped-box empty" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:11px">—<br>Nr. ${pedSlot(k)} leer</div></div>`;
     }
     const m   = SCAN.matches[k];
     const act = SCAN.actions[k] ?? (m?'update':'new');
@@ -5660,6 +5674,7 @@ function renderScanResult(){
         <span style="font-size:9px;font-weight:700;flex-shrink:0;color:${sx==='M'?'var(--blue)':sx==='F'?'var(--purple)':'var(--text3)'}">${sx==='M'?'♂':sx==='F'?'♀':'?'}</span>
         <div class="ped-ring" style="font-size:${k==='proband'?'12px':'10px'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escH(p.ringnumber)}</div>
         <span title="${m?'In Datenbank':'Neu'}" style="font-size:11px;flex-shrink:0">${statusIcon}</span>
+        <span title="Position Nr. ${pedSlot(k)}" style="font-size:9px;font-weight:700;flex-shrink:0;color:#1a1200;background:var(--gold,#c9a227);border-radius:8px;padding:0 5px">${pedSlot(k)}</span>
       </div>
       ${p.name?`<div class="ped-name" style="font-size:${k==='proband'?'13px':'11px'}">${escH(p.name)}</div>`:''}
       <div style="font-size:9px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[p.date_year,tColor(p.color),p.strain].filter(Boolean).join(' · ')}</div>
@@ -5780,6 +5795,7 @@ function renderScanResult(){
       </div>
     </div>
     ${legend}
+    ${warnBlock}
     ${rawDebugBlock}
     ${treeHtml}
     ${editHtml}
@@ -5792,9 +5808,70 @@ function renderScanResult(){
   </div>`;
 }
 
+// ── PDF: Seite 1 als Bild + Text aus der Textebene (pdf.js, bei Bedarf nachgeladen) ──
+function loadPdfJs(){
+  if(window.pdfjsLib) return Promise.resolve();
+  return new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=()=>{ try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(); }catch(e){ rej(e); } };
+    s.onerror=()=>rej(new Error('pdf.js konnte nicht geladen werden'));
+    document.head.appendChild(s);
+  });
+}
+// Textteile spaltenweise (links→rechts) und je Spalte von oben nach unten ordnen
+function pdfItemsToColumnText(items){
+  const it = items.filter(i=>i.str && i.str.trim()).map(i=>({t:i.str.trim(), x:i.transform[4], y:i.transform[5]}));
+  if(!it.length) return '';
+  const xs = [...new Set(it.map(i=>Math.round(i.x/5)*5))].sort((a,b)=>a-b);
+  const bounds=[]; let start=xs[0], prev=xs[0];
+  for(let i=1;i<xs.length;i++){ if(xs[i]-prev>60){ bounds.push([start,prev]); start=xs[i]; } prev=xs[i]; }
+  bounds.push([start,prev]);
+  return bounds.map((b,ci)=>{
+    const col = it.filter(i=>{ const rx=Math.round(i.x/5)*5; return rx>=b[0] && rx<=b[1]; }).sort((a,c)=>c.y-a.y || a.x-c.x);
+    const lines=[]; col.forEach(i=>{ const l=lines[lines.length-1]; if(l && Math.abs(l.y-i.y)<3) l.t+=' '+i.t; else lines.push({y:i.y,t:i.t}); });
+    return 'Spalte '+(ci+1)+':\n'+lines.map(l=>l.t).join('\n');
+  }).join('\n\n');
+}
+async function pdfToScanInput(file){
+  await loadPdfJs();
+  const buf = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({data:buf}).promise;
+  const page = await pdf.getPage(1);
+  const vp0 = page.getViewport({scale:1});
+  const scale = Math.min(3, 2600/Math.max(vp0.width,vp0.height));
+  const vp = page.getViewport({scale});
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(vp.width); canvas.height = Math.round(vp.height);
+  await page.render({canvasContext:canvas.getContext('2d'), viewport:vp}).promise;
+  const dataUrl = canvas.toDataURL('image/jpeg',0.9);
+  let text='';
+  try{ text = pdfItemsToColumnText((await page.getTextContent()).items); }catch(e){ text=''; }
+  return {dataUrl, text};
+}
+
 function handleScanFile(file){
   if(!file) return;
   if(file.size>10*1024*1024){ alert('Datei zu groß (max. 10 MB)'); return; }
+  const isPdf = file.type==='application/pdf' || /\.pdf$/i.test(file.name||'');
+  SCAN.pdfText = '';
+  if(isPdf){
+    SCAN.step='analyzing'; render();
+    pdfToScanInput(file).then(r=>{
+      SCAN.imageMediaType='image/jpeg';
+      SCAN.imageData=r.dataUrl.split(',')[1];
+      SCAN.imagePreview=r.dataUrl;
+      SCAN.pdfText=r.text;
+      runScanAI();
+    }).catch(err=>{
+      // Fallback: PDF unverändert an die KI schicken (Gemini liest PDFs direkt)
+      console.warn('PDF-Vorverarbeitung fehlgeschlagen:',err);
+      const reader=new FileReader();
+      reader.onload=e=>{ SCAN.imageMediaType='application/pdf'; SCAN.imageData=e.target.result.split(',')[1]; SCAN.imagePreview=null; runScanAI(); };
+      reader.readAsDataURL(file);
+    });
+    return;
+  }
   SCAN.imageMediaType = file.type||'image/jpeg';
   const reader = new FileReader();
   reader.onload = e => {
@@ -5848,13 +5925,14 @@ async function runScanAI(){
         'Authorization':'Bearer '+(AUTH.token||SUPA_KEY),
         'apikey':SUPA_KEY
       },
-      body: JSON.stringify({imageData:SCAN.imageData, mediaType:SCAN.imageMediaType})
+      body: JSON.stringify({imageData:SCAN.imageData, mediaType:SCAN.imageMediaType, pdfText:SCAN.pdfText||''})
     });
     const json = await resp.json();
     if(!resp.ok||!json.ok) throw new Error(json.error||`HTTP ${resp.status}`);
 
     const d = json.data||{};
     SCAN.rawResponse = d;
+    SCAN.serverWarnings = Array.isArray(d._warnings) ? d._warnings.slice() : [];
 
     // Format erkennen und parsen
     if(d.proband||d.father||d.mother||d.ff||d.fff){
