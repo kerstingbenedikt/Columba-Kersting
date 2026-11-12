@@ -46,8 +46,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 header{background:var(--bg2);border-bottom:2px solid transparent;border-image:var(--grad) 1;padding:13px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100}
 .header-left{display:flex;align-items:center;gap:12px}
 .logo{width:38px;height:38px;background:transparent;border-radius:0;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
-.line-overlay input[type=text]{background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:inherit}
-.line-overlay input[type=text]:focus{outline:none;border-color:var(--gold)}
+.profile-overlay input[type=password],.line-overlay input[type=text]{background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:inherit}
+.profile-overlay input[type=password]{padding:9px 11px;font-size:14px;width:100%}
+.profile-overlay input[type=password]:focus,.line-overlay input[type=text]:focus{outline:none;border-color:var(--gold)}
+.profile-btn{width:34px;height:34px;border-radius:50%;border:1.5px solid transparent;background:linear-gradient(var(--bg3),var(--bg3)) padding-box,var(--grad) border-box;color:var(--text);font-weight:600;font-size:14px;cursor:pointer;margin-left:10px;flex-shrink:0;font-family:inherit}
+.profile-btn:hover{color:var(--gold)}
 .pg-ico{vertical-align:-3px;color:var(--gold)}
 .app-sub{font-family:'DM Sans',sans-serif;font-weight:400;font-size:.55em;letter-spacing:.2em;text-transform:uppercase;color:var(--text3);margin-left:8px}
 header h1{font-family:'Playfair Display',serif;font-size:18px;font-weight:600}
@@ -435,6 +438,7 @@ main.main-wide{max-width:1840px}
   </div>
   <div class="header-right" id="headerStats"></div>
   <div id="langSwitch" style="display:flex;margin-left:10px"></div>
+  <button id="profile-btn" class="profile-btn" onclick="showProfile()" title="Profil &amp; Sitzung" aria-label="Profil" style="display:none">?</button>
 </header>
 
 <nav id="nav">
@@ -786,6 +790,7 @@ async function signIn(email, pw){
   AUTH.user  = d.user;
   // Session im localStorage speichern
   localStorage.setItem('bv_session', JSON.stringify({token:d.access_token, refresh:d.refresh_token, user:d.user}));
+  idleTouch();
   return d;
 }
 
@@ -803,7 +808,92 @@ async function refreshSession(refreshToken){
   return true;
 }
 
-async function signOut(){
+
+// ── Profil & Sitzung ───────────────────────────────────────────
+// Die Sitzung selbst läuft über Supabase (Access-Token ~1 h, wird automatisch per
+// Refresh-Token erneuert). Wie lange der Refresh-Token gültig ist, legt der Server fest
+// (Supabase → Authentication → Sessions). Zusätzlich kann hier eine automatische
+// Abmeldung nach Inaktivität eingestellt werden (nur auf diesem Gerät).
+const IDLE_OPTIONS=[[0,'Nie (angemeldet bleiben)'],[15,'nach 15 Minuten'],[60,'nach 1 Stunde'],[240,'nach 4 Stunden'],[480,'nach 8 Stunden'],[1440,'nach 1 Tag'],[10080,'nach 7 Tagen']];
+function idleMinutes(){ try{ return parseInt(localStorage.getItem('bv_idle')||'0',10)||0; }catch(e){ return 0; } }
+function idleTouch(){ try{ localStorage.setItem('bv_last',String(Date.now())); }catch(e){} }
+function idleExpired(){
+  const m=idleMinutes(); if(!m) return false;
+  let last=0; try{ last=parseInt(localStorage.getItem('bv_last')||'0',10)||0; }catch(e){}
+  return last>0 && (Date.now()-last) > m*60000;
+}
+let _idleOn=false, _idleLastWrite=0;
+function idleStart(){
+  idleTouch();
+  if(_idleOn) return; _idleOn=true;
+  const act=()=>{ const n=Date.now(); if(n-_idleLastWrite>15000){ _idleLastWrite=n; idleTouch(); } };
+  ['pointerdown','keydown','scroll','touchstart'].forEach(ev=>window.addEventListener(ev,act,{passive:true,capture:true}));
+  const check=()=>{ if(AUTH.token && idleExpired()){ signOut('Du wurdest wegen Inaktivität automatisch abgemeldet.'); } };
+  setInterval(check,30000);
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) check(); });
+}
+function initProfileButton(){
+  const b=document.getElementById('profile-btn'); if(!b) return;
+  const em=(AUTH.user&&AUTH.user.email)||'?';
+  b.textContent=em.charAt(0).toUpperCase(); b.style.display='inline-flex'; b.style.alignItems='center'; b.style.justifyContent='center';
+}
+function showProfile(){
+  const old=document.querySelector('.profile-overlay'); if(old) old.remove();
+  const em=(AUTH.user&&AUTH.user.email)||'';
+  const cur=idleMinutes();
+  const ov=document.createElement('div'); ov.className='lightbox-overlay profile-overlay'; ov.style.cursor='default';
+  ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+  const panel=document.createElement('div');
+  panel.style.cssText='background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:min(420px,94vw);padding:22px;cursor:default';
+  panel.onclick=e=>e.stopPropagation();
+  panel.innerHTML=
+   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div class="card-title" style="margin:0">Profil</div><span onclick="this.closest(\'.profile-overlay\').remove()" style="cursor:pointer;color:var(--text3);font-size:22px;line-height:1;padding:2px 6px">×</span></div>'
+   +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:18px"><div class="profile-btn" style="margin:0;display:flex;align-items:center;justify-content:center;cursor:default;width:46px;height:46px;font-size:19px">'+escH(em.charAt(0).toUpperCase()||'?')+'</div><div><div style="font-weight:600">'+escH(em)+'</div><div style="font-size:12px;color:var(--text3)">PIGMAN PigeonManager</div></div></div>'
+   +'<div class="form-field" style="margin-bottom:6px"><label>Automatisch abmelden</label><select id="idle-sel" onchange="idleSet(this.value)">'
+   +IDLE_OPTIONS.map(o=>'<option value="'+o[0]+'"'+(o[0]===cur?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></div>'
+   +'<div style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.5">Gilt nur für dieses Gerät und zählt ab der letzten Aktivität. Zusätzlich begrenzt der Server die maximale Sitzungsdauer; ist sie abgelaufen, ist eine neue Anmeldung nötig.</div>'
+   +'<details style="margin-bottom:18px" id="pw-details"><summary style="cursor:pointer;font-size:13px;color:var(--text2)">Passwort ändern</summary>'
+   +'<div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">'
+   +'<input type="password" id="pw-old" placeholder="Aktuelles Passwort" autocomplete="current-password">'
+   +'<input type="password" id="pw-new" placeholder="Neues Passwort (mind. 8 Zeichen)" autocomplete="new-password">'
+   +'<input type="password" id="pw-new2" placeholder="Neues Passwort wiederholen" autocomplete="new-password">'
+   +'<div id="pw-msg" style="font-size:12px;min-height:16px"></div>'
+   +'<button class="btn btn-outline" id="pw-btn" style="justify-content:center" onclick="changePassword()">Passwort speichern</button></div></details>'
+   +'<button class="btn" style="width:100%;justify-content:center" onclick="document.querySelector(\'.profile-overlay\').remove();signOut()">Abmelden</button>';
+  ov.appendChild(panel); document.body.appendChild(ov);
+}
+
+async function changePassword(){
+  const msg=document.getElementById('pw-msg'), btn=document.getElementById('pw-btn');
+  const say=(t,ok)=>{ msg.style.color=ok?'#6fcf97':'#e07070'; msg.textContent=t; };
+  const o=document.getElementById('pw-old').value, n=document.getElementById('pw-new').value, n2=document.getElementById('pw-new2').value;
+  if(!o||!n||!n2) return say('Bitte alle drei Felder ausfüllen.');
+  if(n.length<8) return say('Das neue Passwort braucht mindestens 8 Zeichen.');
+  if(n!==n2) return say('Die neuen Passwörter stimmen nicht überein.');
+  if(n===o) return say('Das neue Passwort muss sich vom aktuellen unterscheiden.');
+  btn.disabled=true; say('Prüfe …',true);
+  try{
+    // Aktuelles Passwort prüfen (ohne die laufende Sitzung zu verändern)
+    const chk=await fetch(SUPA_AUTH_URL+'/token?grant_type=password',{method:'POST',headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:AUTH.user.email,password:o})});
+    if(!chk.ok){ say('Das aktuelle Passwort ist nicht korrekt.'); btn.disabled=false; return; }
+    const r=await fetch(SUPA_AUTH_URL+'/user',{method:'PUT',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+AUTH.token,'Content-Type':'application/json'},body:JSON.stringify({password:n})});
+    if(!r.ok){
+      let d={}; try{ d=await r.json(); }catch(e){}
+      const m=(d.msg||d.message||d.error_description||'')+'';
+      if(/different from the old/i.test(m)) say('Das neue Passwort muss sich vom aktuellen unterscheiden.');
+      else if(/weak|short|at least|characters/i.test(m)) say('Das neue Passwort ist zu schwach oder zu kurz.');
+      else if(r.status===401||/jwt|expired/i.test(m)) say('Sitzung abgelaufen – bitte neu anmelden und erneut versuchen.');
+      else say('Passwort konnte nicht geändert werden'+(m?': '+m:'.'));
+      btn.disabled=false; return;
+    }
+    ['pw-old','pw-new','pw-new2'].forEach(id=>{ document.getElementById(id).value=''; });
+    say('Passwort geändert.',true);
+  }catch(e){ say('Verbindungsfehler – bitte erneut versuchen.'); }
+  btn.disabled=false;
+}
+function idleSet(v){ try{ localStorage.setItem('bv_idle',String(parseInt(v,10)||0)); }catch(e){} idleTouch(); }
+
+async function signOut(msg){
   try{
     await fetch(SUPA_AUTH_URL+'/logout', {
       method:'POST',
@@ -812,12 +902,13 @@ async function signOut(){
   } catch(e){}
   AUTH = {token:null, user:null};
   localStorage.removeItem('bv_session');
-  renderLogin();
+  renderLogin(typeof msg==='string'?msg:undefined);
 }
 
 async function restoreSession(){
   const raw = localStorage.getItem('bv_session');
   if(!raw) return false;
+  if(idleExpired()){ localStorage.removeItem('bv_session'); return false; }
   try{
     const s = JSON.parse(raw);
     // Erst versuchen Token direkt zu verwenden
@@ -858,12 +949,87 @@ function renderLogin(errMsg){
           onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
           Anmelden
         </button>
+        <div style="text-align:center"><a href="#" onclick="renderForgot();return false" style="font-size:13px;color:var(--text2);text-decoration:underline">Passwort vergessen?</a></div>
       </div>
       <div style="text-align:center;font-size:11px;color:var(--text3);margin-top:20px">
         Zugang nur für autorisierte Nutzer
       </div>
     </div>
   </div>`;
+}
+
+
+// ── Passwort vergessen / neu vergeben ──────────────────────────
+// Ablauf: E-Mail mit Link (Supabase /recover) → Link öffnet die App mit #type=recovery
+// → hier neues Passwort setzen. Voraussetzung in Supabase: Authentication → URL
+// Configuration → die Adresse dieser App unter "Redirect URLs" eintragen.
+const _lgIn='width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:16px;outline:none';
+const _lgLb='font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px';
+const _lgBtn='background:var(--green);color:#000;font-weight:700;font-size:15px;border:none;border-radius:10px;padding:12px;cursor:pointer;margin-top:4px';
+function lgShell(title,inner,msg,ok){
+  document.body.innerHTML=`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:16px;box-sizing:border-box">
+   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:36px 32px;width:340px;max-width:100%;box-shadow:0 8px 40px #0008">
+    <div style="text-align:center;margin-bottom:22px"><div style="font-family:Georgia,serif;font-size:22px;font-weight:700;color:var(--text);letter-spacing:.04em">PIGMAN</div><div style="font-size:14px;color:var(--text2);margin-top:8px">${title}</div></div>
+    ${msg?`<div style="background:${ok?'#0f2a1a':'#2a0f0f'};color:${ok?'#6fcf97':'#e07070'};border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:16px">${msg}</div>`:''}
+    <div style="display:flex;flex-direction:column;gap:14px">${inner}</div></div></div>`;
+}
+function renderForgot(msg,ok){
+  lgShell('Passwort zurücksetzen',
+   `<div style="font-size:13px;color:var(--text3);line-height:1.5">Gib deine E-Mail-Adresse ein. Du erhältst einen Link, mit dem du ein neues Passwort vergeben kannst.</div>
+    <div><label style="${_lgLb}">E-Mail</label><input id="fg-email" type="email" autocomplete="email" placeholder="name@beispiel.de" style="${_lgIn}" onkeydown="if(event.key==='Enter')sendReset()"></div>
+    <button id="fg-btn" onclick="sendReset()" style="${_lgBtn}">Link senden</button>
+    <div style="text-align:center"><a href="#" onclick="renderLogin();return false" style="font-size:13px;color:var(--text2);text-decoration:underline">Zurück zur Anmeldung</a></div>`,msg,ok);
+}
+async function sendReset(){
+  const em=document.getElementById('fg-email').value.trim();
+  if(!em||!em.includes('@')){ renderForgot('Bitte eine gültige E-Mail-Adresse eingeben.'); return; }
+  const btn=document.getElementById('fg-btn'); btn.disabled=true; btn.textContent='Sende …';
+  try{
+    const redirect=location.origin+location.pathname;
+    const r=await fetch(SUPA_AUTH_URL+'/recover?redirect_to='+encodeURIComponent(redirect),{method:'POST',headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:em})});
+    if(r.status===429){ renderForgot('Zu viele Anfragen. Bitte in einigen Minuten erneut versuchen.'); return; }
+    // Aus Sicherheitsgründen immer dieselbe Antwort, egal ob die Adresse existiert
+    renderForgot('Falls ein Konto mit dieser E-Mail existiert, wurde ein Link zum Zurücksetzen gesendet. Bitte auch den Spam-Ordner prüfen.',true);
+  }catch(e){ renderForgot('Verbindungsfehler – bitte erneut versuchen.'); }
+}
+function renderReset(tok,refresh,msg){
+  window._rec={tok,refresh};
+  lgShell('Neues Passwort vergeben',
+   `<div><label style="${_lgLb}">Neues Passwort</label><input id="rs-pw" type="password" autocomplete="new-password" placeholder="mind. 8 Zeichen" style="${_lgIn}"></div>
+    <div><label style="${_lgLb}">Wiederholen</label><input id="rs-pw2" type="password" autocomplete="new-password" style="${_lgIn}" onkeydown="if(event.key==='Enter')saveReset()"></div>
+    <button id="rs-btn" onclick="saveReset()" style="${_lgBtn}">Passwort speichern</button>`,msg);
+}
+async function saveReset(){
+  const a=document.getElementById('rs-pw').value, b=document.getElementById('rs-pw2').value, rec=window._rec;
+  if(a.length<8) return renderReset(rec.tok,rec.refresh,'Das Passwort braucht mindestens 8 Zeichen.');
+  if(a!==b) return renderReset(rec.tok,rec.refresh,'Die Passwörter stimmen nicht überein.');
+  const btn=document.getElementById('rs-btn'); btn.disabled=true; btn.textContent='Speichere …';
+  try{
+    const r=await fetch(SUPA_AUTH_URL+'/user',{method:'PUT',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+rec.tok,'Content-Type':'application/json'},body:JSON.stringify({password:a})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){
+      const m=(d.msg||d.message||d.error_description||'')+'';
+      return renderReset(rec.tok,rec.refresh,/different from the old/i.test(m)?'Das neue Passwort muss sich vom bisherigen unterscheiden.':/weak|short|at least|characters/i.test(m)?'Das Passwort ist zu schwach oder zu kurz.':(r.status===401||/jwt|expired/i.test(m))?'Der Link ist abgelaufen. Bitte einen neuen anfordern.':'Passwort konnte nicht gespeichert werden'+(m?': '+m:'.'));
+    }
+    // Danach direkt angemeldet
+    localStorage.setItem('bv_session',JSON.stringify({token:rec.tok,refresh:rec.refresh,user:d}));
+    idleTouch();
+    history.replaceState(null,'',location.pathname+location.search);
+    location.reload();
+  }catch(e){ renderReset(rec.tok,rec.refresh,'Verbindungsfehler – bitte erneut versuchen.'); }
+}
+// Rückkehr über den Link aus der E-Mail
+function handleAuthHash(){
+  const h=location.hash.replace(/^#/,''); if(!h||h.indexOf('=')<0) return false;
+  const q=new URLSearchParams(h);
+  if(q.get('type')==='recovery' && q.get('access_token')){ renderReset(q.get('access_token'),q.get('refresh_token')||''); return true; }
+  if(q.get('error')||q.get('error_code')){
+    history.replaceState(null,'',location.pathname+location.search);
+    const exp=/expired|invalid/i.test((q.get('error_description')||'')+(q.get('error_code')||''));
+    renderForgot(exp?'Der Link ist abgelaufen oder wurde bereits verwendet. Bitte einen neuen anfordern.':'Zurücksetzen fehlgeschlagen. Bitte erneut versuchen.');
+    return true;
+  }
+  return false;
 }
 
 async function doLogin(){
@@ -885,13 +1051,8 @@ async function startApp(){
   if(!document.getElementById('main')){
     location.reload(); return;
   }
-  // Logout-Button im Header einblenden
-  const logoutBtn = document.getElementById('logout-btn');
-  if(logoutBtn){
-    logoutBtn.style.display='flex';
-    logoutBtn.innerHTML = `<span style="font-size:12px;color:var(--text3);margin-right:6px">${AUTH.user?.email||''}</span>
-      <button class="btn btn-outline btn-sm" onclick="signOut()">Abmelden</button>`;
-  }
+  initProfileButton();
+  idleStart();
   loadData();
   loadRVenFromServer();
 }
@@ -13152,6 +13313,7 @@ function bindNachSearch(){
 
 // ── App-Start: Session prüfen ─────────────────────────────────
 (async function(){
+  if(handleAuthHash()) return;
   const ok = await restoreSession();
   if(ok){
     startApp();
