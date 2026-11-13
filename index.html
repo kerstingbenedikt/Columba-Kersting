@@ -43,14 +43,26 @@ html,body{overflow-x:hidden;max-width:100%}
 }
 :root[data-theme=light]{
   color-scheme:light;
-  --bg:#f3f5f9;--bg2:#ffffff;--bg3:#eef1f7;--bg4:#e1e6f0;
-  --green:#a8801a;--green2:#8a6a12;--green3:#f3e3a6;--gold:#a8801a;
-  --text:#1b2333;--text2:#444e63;--text3:#697386;
-  --border:#d3d9e5;--border2:#b4bfd2;
+  --bg:#fafaf8;--bg2:#ffffff;--bg3:#f0f1f4;--bg4:#e2e5ec;
+  --green:#8a6608;--green2:#6f5206;--green3:#f6e7ad;--gold:#9a7410;
+  --text:#14171f;--text2:#363c4b;--text3:#586071;
+  --border:#cdd2dc;--border2:#98a1b4;
+  --blue:#1f6fcf;--purple:#7a2fc0;--orange:#b9540f;--amber:#8f6a0c;
 }
-:root[data-theme=light] .filter-badge{color:#5a4508}
-:root[data-theme=light] .search-wrap input{background:#fff}
+:root[data-theme=light] .filter-badge{color:#4a3904}
+:root[data-theme=light] .search-wrap input{background:#fff;border-color:var(--gold)}
 :root[data-theme=light] .lightbox-overlay{background:rgba(20,28,45,.8)}
+:root[data-theme=light] th{color:var(--text2);font-weight:600}
+:root[data-theme=light] td{color:var(--text)}
+:root[data-theme=light] .card,:root[data-theme=light] .filter-panel{box-shadow:0 1px 3px rgba(20,23,31,.08)}
+/* fest verdrahtete helle/blasse Textfarben im hellen Design abdunkeln */
+:root[data-theme=light] [style*="color:#e8e8e8"],:root[data-theme=light] [style*="color:#ddd"],:root[data-theme=light] [style*="color:#e0e0e0"],:root[data-theme=light] [style*="color:#cfcfcf"],:root[data-theme=light] [style*="color:#e8f0e8"]{color:var(--text) !important}
+:root[data-theme=light] [style*="color:#aaa"],:root[data-theme=light] [style*="color:#ccc"],:root[data-theme=light] [style*="color:#bbb"],:root[data-theme=light] [style*="color:#888"]{color:var(--text3) !important}
+:root[data-theme=light] [style*="color:#e07070"]{color:#b3261e !important}
+:root[data-theme=light] [style*="color:#6fcf97"]{color:#1b7a43 !important}
+:root[data-theme=light] [style*="color:#7ab3e0"]{color:#1a62a8 !important}
+:root[data-theme=light] [style*="color:#e0a030"],:root[data-theme=light] [style*="color:#e0a050"],:root[data-theme=light] [style*="color:#f5a623"]{color:#8f5a00 !important}
+:root[data-theme=light] [style*="color:#c97fd4"]{color:#8a3a99 !important}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh}
 .serif{font-family:'Playfair Display',serif}
 
