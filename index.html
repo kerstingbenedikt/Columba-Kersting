@@ -41,6 +41,16 @@ html,body{overflow-x:hidden;max-width:100%}
   --blue:#2080e0;--purple:#a855f7;--orange:#e8893a;--amber:#d4a843;
   --radius:12px;--radius-sm:8px;
 }
+:root[data-theme=light]{
+  color-scheme:light;
+  --bg:#f3f5f9;--bg2:#ffffff;--bg3:#eef1f7;--bg4:#e1e6f0;
+  --green:#a8801a;--green2:#8a6a12;--green3:#f3e3a6;--gold:#a8801a;
+  --text:#1b2333;--text2:#444e63;--text3:#697386;
+  --border:#d3d9e5;--border2:#b4bfd2;
+}
+:root[data-theme=light] .filter-badge{color:#5a4508}
+:root[data-theme=light] .search-wrap input{background:#fff}
+:root[data-theme=light] .lightbox-overlay{background:rgba(20,28,45,.8)}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh}
 .serif{font-family:'Playfair Display',serif}
 
@@ -456,6 +466,11 @@ main.main-wide{max-width:1840px}
 /* Schriftgröße (App-weit): wird vor dem Rendern angewendet */
 var FS_OPTS=[[90,'Klein (90 %)'],[100,'Normal (100 %)'],[112,'Groß (112 %)'],[125,'Größer (125 %)'],[140,'Sehr groß (140 %)'],[160,'Maximal (160 %)']];
 function fsGet(){ try{ var v=parseInt(localStorage.getItem('pigman_fs'),10); return v>=80&&v<=200?v:100; }catch(e){ return 100; } }
+function thGet(){ try{ var v=localStorage.getItem('pigman_theme'); return (v==='light'||v==='dark'||v==='auto')?v:'dark'; }catch(e){ return 'dark'; } }
+function thApply(v){ var l=(v==='light')||(v==='auto'&&window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches); document.documentElement.setAttribute('data-theme',l?'light':'dark'); }
+function thSet(v){ try{ localStorage.setItem('pigman_theme',v); }catch(e){} thApply(v); }
+thApply(thGet());
+try{ if(window.matchMedia) matchMedia('(prefers-color-scheme: light)').addEventListener('change',function(){ if(thGet()==='auto') thApply('auto'); }); }catch(e){}
 function fsApply(v){ document.documentElement.style.zoom=(v/100); }
 function fsSet(v){ v=parseInt(v,10)||100; try{ localStorage.setItem('pigman_fs',String(v)); }catch(e){} fsApply(v); }
 fsApply(fsGet());
@@ -884,6 +899,8 @@ function showProfile(){
   panel.innerHTML=
    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div class="card-title" style="margin:0">Profil</div><span onclick="this.closest(\'.profile-overlay\').remove()" style="cursor:pointer;color:var(--text3);font-size:22px;line-height:1;padding:2px 6px">×</span></div>'
    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:18px"><div class="profile-btn" style="margin:0;display:flex;align-items:center;justify-content:center;cursor:default;width:46px;height:46px;font-size:19px">'+escH(em.charAt(0).toUpperCase()||'?')+'</div><div><div style="font-weight:600">'+escH(em)+'</div><div style="font-size:12px;color:var(--text3)">PIGMAN PigeonManager</div></div></div>'
+   +'<div class="form-field" style="margin-bottom:14px"><label>Design</label><select id="th-sel" onchange="thSet(this.value)">'
+   +[['dark','Dunkel'],['light','Hell'],['auto','Automatisch (wie Gerät)']].map(o=>'<option value="'+o[0]+'"'+(o[0]===thGet()?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></div>'
    +'<div class="form-field" style="margin-bottom:6px"><label>Schriftgröße (gesamte App)</label><select id="fs-sel" onchange="fsSet(this.value)">'
    +FS_OPTS.map(o=>'<option value="'+o[0]+'"'+(o[0]===fsGet()?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></div>'
    +'<div style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.5">Vergrößert Tabellen, Filter, Buttons und Dialoge einheitlich. Gilt nur für dieses Gerät.</div>'
