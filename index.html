@@ -8274,8 +8274,9 @@ function groupPigeonTripsByYear(rows){
   const byYear={};
   rows.forEach(r=>{
     const yr=r.vintage||'—';
-    if(!byYear[yr]) byYear[yr]={gesetzt:0,preise:0,asSum:0,top10:[]};
+    if(!byYear[yr]) byYear[yr]={gesetzt:0,preise:0,asSum:0,top10:[],coef:null};
     byYear[yr].gesetzt++;
+    { const bc=bestCoef(r,r); if(bc && (byYear[yr].coef==null || (byYear[yr].coef.small&&!bc.small) || (bc.small===byYear[yr].coef.small && bc.coef<byYear[yr].coef.coef))) byYear[yr].coef=bc; }
     const hasPreis = rvField(r,'prize_rv')!=null || r.prize_reggr!=null || r.prize_reg!=null || r.prize_fg!=null || r.manual_prize!=null;
     if(hasPreis) byYear[yr].preise++;
     const asVals=[rvField(r,'as_rv'),r.as_fg,r.as_reg,r.as_nat,r.manual_as].filter(v=>v!=null && v!=='');
@@ -9621,6 +9622,7 @@ function renderPigeonTripsSection(p){
         <td style="font-size:12px;text-align:center">${r.prize_reg??'—'}</td>
         <td style="font-size:12px;text-align:center">${escH(manualStr||'—')}</td>
         <td style="font-size:12px;text-align:center;color:var(--green)">${bestAS!=null?bestAS.toFixed(2):'—'}</td>
+        <td style="font-size:12px;text-align:center">${coefCell(bestCoef(r,r))}</td>
       </tr>`;
     }).join('');
     return `<div class="section-label" style="margin-top:14px;display:flex;align-items:center;gap:8px">
@@ -9632,9 +9634,11 @@ function renderPigeonTripsSection(p){
           <th style="font-size:12px">Datum</th><th style="font-size:12px">Ort</th>
           <th style="font-size:12px;text-align:center">Pr.RV</th><th style="font-size:12px;text-align:center">Pr.RegGr</th>
           <th style="font-size:12px;text-align:center">Pr.Reg</th><th style="font-size:12px;text-align:center">Manuell</th><th style="font-size:12px;text-align:center">AS</th>
+          <th style="font-size:12px;text-align:center" title="Bester Koeffizient = Platz × 1000 ÷ gesetzte Tauben (kleiner ist besser)">Koeff.</th>
         </tr></thead>
         <tbody>${trRows}</tbody>
       </table></div>
+      <div style="font-size:12px;color:var(--text3);margin-top:8px">Koeff. = Platz × 1000 ÷ gesetzte Tauben der günstigsten Liste (kleiner ist besser); kursiv mit * = Liste unter 300 Tauben.</div>
       ${anyCalcRV?'<div style="font-size:12px;color:var(--text3);margin-top:8px">* RV-Platz selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (unter 200 gesetzte Tauben).</div>':''}`;
   }
 
@@ -9655,6 +9659,7 @@ function renderPigeonTripsSection(p){
           <span style="font-weight:600">${escH(String(y.yr))}</span>
           <span style="color:var(--text2)">${y.gesetzt}/${y.preise} Preise</span>
           <span style="color:var(--text3)">Σ AS ${y.asSum.toFixed(2)}</span>
+          <span style="color:var(--text3)" title="Bester Koeffizient der Saison">Koeff. ${coefCell(y.coef)}</span>
           <span style="color:var(--amber);min-width:70px;text-align:right">${y.top10Str?'Top10: '+escH(y.top10Str):''}</span>
         </div>`).join('')}
     </div>
@@ -10897,6 +10902,21 @@ function ctCoef(row, trip, cfg){
   ok.forEach(c=>{ c.coef=c.platz*1000/c.gesetzt; if(!best||c.coef<best.coef) best=c; if(c.as!=null&&(as==null||c.as>as)) as=c.as; if(c.platz<minPlatz) minPlatz=c.platz; });
   return Object.assign({}, best, {as:as, minPlatz:minPlatz});
 }
+// Bester Koeffizient eines Flugergebnisses über RV/RegGr/Reg (Preis·1000/gesetzt, kleiner = besser).
+// Bevorzugt Listen ab 300 gesetzten Tauben; gibt es keine, zählt die beste kleinere Liste (small=true).
+function bestCoef(row, trip){
+  if(!row||!trip) return null;
+  const all={lists:['rv','reggr','reg','manual'], minList:300, stepUp:false};
+  let c=ctCoef(row,trip,all);
+  if(c) return {coef:c.coef, list:c.list, platz:c.platz, gesetzt:c.gesetzt, small:false};
+  c=ctCoef(row,trip,Object.assign({},all,{minList:1}));
+  return c?{coef:c.coef, list:c.list, platz:c.platz, gesetzt:c.gesetzt, small:true}:null;
+}
+function coefCell(c){
+  if(!c) return '—';
+  const tip=c.list+': Platz '+c.platz+' von '+c.gesetzt+' gesetzten Tauben'+(c.small?' (Liste unter 300 Tauben)':'');
+  return '<span title="'+tip+'" style="font-weight:600;'+(c.small?'font-style:italic;color:var(--text3)':'')+'">'+c.coef.toFixed(2)+(c.small?' *':'')+'</span>';
+}
 // Auswahl der n besten (kleinsten score) Einträge unter Beachtung der Entfernungsbedingungen (km > Schwelle je Platz); n=0: alle
 function ctSelect(items, n, slots){
   const sorted=items.slice().sort((a,b)=>a.score-b.score);
@@ -11404,6 +11424,7 @@ function renderTripDetail(){
       +'<td>'+rvCellFor(r)+'</td><td>'+(r.prize_fg||'—')+'</td>'
       +'<td>'+(r.prize_reggr||'—')+'</td><td>'+(r.prize_reg||'—')+'</td>'
       +'<td>'+(r.as_reg>0?Number(r.as_reg).toFixed(2):'—')+'</td>'
+      +'<td style="text-align:center">'+coefCell(bestCoef(r,trip))+'</td>'
       +'<td style="text-align:center">'+tripFlagCell(r,'v','V')+'</td>'
       +'<td style="text-align:center">'+tripFlagCell(r,'j','J')+'</td>'
       +'<td style="text-align:center">'+tripFlagCell(r,'m','M')+'</td></tr>';
@@ -11411,6 +11432,7 @@ function renderTripDetail(){
   const tableHtml = rowsForGroup => '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
       +'<thead><tr><th>'+t('th_placement')+'</th><th>'+t('th_placement_breeder')+'</th><th>'+t('th_ring')+'</th><th>'+t('th_name')+'</th>'+(RT.breederFilter?'':'<th>'+t('th_breeder')+'</th>')+'<th>'+t('th_speed')+'</th>'
       +'<th>'+t('th_prize')+'RV</th><th>'+t('th_prize')+'FG</th><th>'+t('th_prize')+'RegGr</th><th>'+t('th_prize')+'Reg</th><th>'+t('th_as')+' Reg</th>'
+      +'<th style="text-align:center" title="Bester Koeffizient = Platz × 1000 ÷ gesetzte Tauben (kleiner ist besser); kursiv mit * = Liste unter 300 Tauben">Koeff.</th>'
       +'<th title="Verbandsmeisterschaft-Vorbenennung">V</th><th title="Jährige">J</th><th title="Medaillen-Vorbenennung">M</th></tr></thead>'
       +'<tbody>'+rowsForGroup.map(rowHtml).join('')+'</tbody></table></div>';
 
@@ -13829,15 +13851,17 @@ const BL_COLUMN_DEFS = [
   { key:'ass',      label:'Ass A-D' },
   { key:'prizes',   label:'Preise' },
   { key:'sumas',    label:'Σ AS' },
+  { key:'koef',     label:'Bester Koeff.' },
   { key:'kmsum',    label:'Σ km (Preisflüge)' },
 ];
 const BL_COLUMN_BY_KEY = Object.fromEntries(BL_COLUMN_DEFS.map(c=>[c.key,c]));
 // Default-Ansicht: auf die wesentlichen Kennzahlen reduziert (Ring, Name, Preise, Σ AS).
 // Jahrgang, Züchter, Ass A-D und Σ km bleiben über den Spalten-Picker einblendbar.
-const BL_DEFAULT_COLUMNS = ['ring','name','prizes','sumas'];
+const BL_DEFAULT_COLUMNS = ['ring','name','prizes','sumas','koef'];
 try{
   const savedBL = JSON.parse(localStorage.getItem('bestenlisteCols')||'null');
   BL.columns = Array.isArray(savedBL) && savedBL.length ? savedBL.filter(k=>BL_COLUMN_BY_KEY[k]) : [...BL_DEFAULT_COLUMNS];
+  try{ if(!localStorage.getItem('bl_koef_added')){ localStorage.setItem('bl_koef_added','1'); if(!BL.columns.includes('koef')){ const i=BL.columns.indexOf('sumas'); BL.columns.splice(i>=0?i+1:BL.columns.length,0,'koef'); localStorage.setItem('bestenlisteCols',JSON.stringify(BL.columns)); } } }catch(e){}
 }catch(e){ BL.columns = [...BL_DEFAULT_COLUMNS]; }
 function toggleBLColumn(key){
   const i = BL.columns.indexOf(key);
@@ -13945,7 +13969,8 @@ function bestenliste(breederFilter, rvFilter){
     b.flights.push({
       tripNumber: trip.number, location: trip.location, tripdate: trip.tripdate,
       platz: best?best.platz:null, as: flightAS, hasPreis, speed: r.speed!=null?Number(r.speed):null,
-      distance: trip.averagedistance3!=null?Number(trip.averagedistance3):null
+      distance: trip.averagedistance3!=null?Number(trip.averagedistance3):null,
+      coef: bestCoef(r,trip)
     });
   });
 
@@ -13962,7 +13987,9 @@ function bestenliste(breederFilter, rvFilter){
     if(p){ birthYear=p.date_year; ring=p.ringnumber||ring; name=p.name; }
     else { const parsed=parseRingComponents(b.ringnumber); birthYear=parsed?.date_year||null; }
     const flights=[...b.flights].sort((a,b2)=>(a.tripNumber||0)-(b2.tripNumber||0));
-    return {...b, pigeon:p, inDb, sex, birthYear, ring, name, flights, breedername:[...b.breedernames].join(', ')};
+    const cs=flights.map(f=>f.coef).filter(Boolean); const good=cs.filter(c=>!c.small); const pool=good.length?good:cs;
+    const koef=pool.length?pool.reduce((a,c)=>c.coef<a.coef?c:a):null;
+    return {...b, pigeon:p, inDb, sex, birthYear, ring, name, flights, koef, breedername:[...b.breedernames].join(', ')};
   });
 
   const years=[...new Set(entries.map(e=>e.year))].sort((a,b)=>Number(b)-Number(a));
@@ -13971,7 +13998,7 @@ function bestenliste(breederFilter, rvFilter){
   // Klickt der Nutzer auf eine der Spalten "Preise"/"Σ AS"/"Σ km" (siehe
   // setBLSort), wird stattdessen danach sortiert — Gleichstände fallen weiter
   // auf die Standard-Sortierung zurück, damit die Reihenfolge stabil bleibt.
-  const BL_SORT_FIELD = { prizes:e=>e.prizes, sumas:e=>e.asSum, kmsum:e=>e.kmSum||0 };
+  const BL_SORT_FIELD = { prizes:e=>e.prizes, sumas:e=>e.asSum, kmsum:e=>e.kmSum||0, koef:e=>e.koef?-(e.koef.coef+(e.koef.small?100000:0)):-1e9 };
   const sortFn = (BL.sortKey && BL_SORT_FIELD[BL.sortKey])
     ? (a,b)=>{
         const f=BL_SORT_FIELD[BL.sortKey];
@@ -14046,6 +14073,7 @@ function renderBestenliste(){
         <div style="font-size:12px;color:var(--text3);margin-bottom:2px">F${String(f.tripNumber!=null?f.tripNumber:(i+1)).padStart(2,'0')}</div>
         <div style="font-size:12px;font-weight:500">${f.platz!=null?f.platz:'—'}</div>
         <div style="font-size:12px;color:var(--green)">${f.as!=null?f.as.toFixed(2):'—'}</div>
+        <div style="font-size:12px;color:var(--text2)" title="Koeffizient">K ${f.coef?coefCell(f.coef):'—'}</div>
         <div style="font-size:12px;color:var(--text3)">${f.speed!=null?f.speed.toFixed(3)+' m/min':'—'}</div>
         <div style="font-size:12px;color:${f.hasPreis?'var(--text2)':'var(--text3)'}">${f.distance!=null?f.distance.toFixed(1)+' km':'—'}${f.hasPreis&&f.distance!=null?' ✓':''}</div>
       </div>`;
@@ -14077,6 +14105,7 @@ function renderBestenliste(){
     prizes:(e)=>`<td style="text-align:center;font-weight:600">${e.prizes}</td>`,
     sumas:(e)=>`<td style="text-align:center;font-weight:600;color:var(--green)">${e.asSum.toFixed(2)}</td>`,
     kmsum:(e)=>`<td style="text-align:center;font-weight:600">${e.kmSum?e.kmSum.toFixed(1)+' km':'—'}</td>`,
+    koef:(e)=>`<td style="text-align:center">${coefCell(e.koef)}</td>`,
   };
 
   const renderRow=(e,i,yr)=>{
@@ -14091,10 +14120,10 @@ function renderBestenliste(){
     ${open?`<tr><td colspan="${2+activeBLCols.length}" style="padding:0">${renderFlights(e)}</td></tr>`:''}`;
   };
 
-  const BL_TH = { ring:t('th_ring'), name:t('th_name'), jahrgang:t('year_abbr'), breeder:t('th_breeder'), ass:'Ass', prizes:t('col_prizes'), sumas:t('col_sum_as'), kmsum:'Σ km' };
-  const BL_TH_CENTER = new Set(['ass','prizes','sumas','kmsum']);
+  const BL_TH = { ring:t('th_ring'), name:t('th_name'), jahrgang:t('year_abbr'), breeder:t('th_breeder'), ass:'Ass', prizes:t('col_prizes'), sumas:t('col_sum_as'), kmsum:'Σ km', koef:'Koeff.' };
+  const BL_TH_CENTER = new Set(['ass','prizes','sumas','kmsum','koef']);
   // Spalten, die per Klick auf die Kopfzeile sortiert werden können.
-  const BL_SORTABLE = new Set(['prizes','sumas','kmsum']);
+  const BL_SORTABLE = new Set(['prizes','sumas','kmsum','koef']);
   const blHeaderCell=(c)=>{
     const center = BL_TH_CENTER.has(c.key) ? 'text-align:center;' : '';
     if(!BL_SORTABLE.has(c.key)){
@@ -14103,7 +14132,7 @@ function renderBestenliste(){
     }
     const active = BL.sortKey===c.key;
     const arrow = active ? (BL.sortDir==='asc' ? ' ▲' : ' ▼') : '';
-    const titleAttr = c.key==='kmsum'
+    const titleAttr = c.key==='koef' ? ' title="Bester Koeffizient (Platz × 1000 ÷ gesetzte Tauben, kleiner ist besser) — Klick zum Sortieren"' : c.key==='kmsum'
       ? ' title="Summe der mittleren Flugdistanz über alle Preisflüge dieser Taube — Klick zum Sortieren"'
       : ' title="Klick zum Sortieren"';
     return `<th style="${center}cursor:pointer;user-select:none;${active?'color:var(--text)':''}" onclick="setBLSort('${c.key}')"${titleAttr}>${BL_TH[c.key]}${arrow}</th>`;
