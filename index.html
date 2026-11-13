@@ -10016,6 +10016,272 @@ function humanFileSize(bytes){
   return bytes.toFixed(1)+' '+units[i];
 }
 
+// ── Columba-XT-Import (Vorschau + Import) ─────────────────────────
+// Liest die aus einer Columba-Standard-Sicherung (.sdf) erzeugte Datei
+// columba_import.json, gleicht sie mit der Live-DB ab und zeigt VOR dem
+// Import, was neu angelegt, ergänzt oder abweichend wäre.
+let CI = { data:null, fileName:null, busy:false, progress:null, error:null, res:null,
+           tab:'neu', q:'', limit:150, opt:{neu:true, fill:true, over:false},
+           importing:false, log:[], done:null };
+const CI_FIELDS = [
+  ['ringnumberfather','Vater (Ringnr.)'],['ringnumbermother','Mutter (Ringnr.)'],['fatherid','Vater (ID)'],['motherid','Mutter (ID)'],
+  ['countrycode','Land'],['associationno','Verbandsnr.'],['date_year','Jahrgang'],['number','Nummer'],['endnumber','Endnummer'],
+  ['gender','Geschlecht'],['name','Name'],['color','Farbe'],['race','Rasse / Züchter'],['strain','Linie/Stamm'],
+  ['info','Info'],['internalinfo','Interne Info'],['birthday','Geburtstag'],['died','Verstorben'],['bought','Gekauft'],['sold','Verkauft'],
+  ['userdefined1','Benutzer 1'],['userdefined2','Benutzer 2'],['userdefined3','Benutzer 3'],['pigeonstateid','Status'],['inbreedcoefficient','Inzuchtkoeff.']
+];
+const CI_LABEL = Object.fromEntries(CI_FIELDS);
+function ciMapPigeon(c, stateMap){
+  const rs = splitRingSex(c.rn||''); const ring = rs.ring ? (fmtRingnumber(rs.ring)||rs.ring) : null;
+  const fs = splitRingSex(c.rnf||''), ms = splitRingSex(c.rnm||'');
+  const segs = ring ? ring.split('-') : [];
+  let cc = normCountryCode(c.cc); if(!cc || cc==='0') cc = /^[A-Z]{1,3}$/.test(segs[0]||'') ? segs[0] : (cc==='0'?'DE':null);
+  let an = c.an || ((cc==='DE' && segs.length===4) ? segs[1] : null);
+  const last = segs.length ? parseInt(segs[segs.length-1],10) : NaN;
+  return {
+    ringnumber: ring,
+    ringnumberfather: fs.ring ? (fmtRingnumber(fs.ring)||fs.ring) : null,
+    ringnumbermother: ms.ring ? (fmtRingnumber(ms.ring)||ms.ring) : null,
+    countrycode: cc||null, associationno: an||null, date_year: c.y||null, number: c.n!=null?c.n:null,
+    endnumber: isNaN(last)?null:last,
+    gender: c.g===1?'1':c.g===2?'2':null,
+    name:c.nm, color:c.col, race:c.race, strain:c.str, info:c.inf, internalinfo:c.infi,
+    birthday:c.bd, died:c.died, bought:c.bought, sold:c.sold,
+    userdefined1:c.u1, userdefined2:c.u2, userdefined3:c.u3,
+    pigeonstateid: c.st ? (stateMap[c.st]||null) : null,
+    inbreedcoefficient: c.ibc ? c.ibc : null,
+  };
+}
+function ciNorm(f, v){
+  if(v===null||v===undefined||v==='') return '';
+  if(f==='gender'){ const g=String(v).trim().toLowerCase(); return ['m','1'].includes(g)?'1':['f','w','2'].includes(g)?'2':''; }
+  if(['birthday','died','bought','sold'].includes(f)) return String(v).slice(0,10);
+  if(['date_year','number','endnumber'].includes(f)){ const n=Number(v); return isNaN(n)?String(v):String(n); }
+  if(f==='inbreedcoefficient'){ const n=Number(v); return isNaN(n)||n===0?'':n.toFixed(4); }
+  if(f==='ringnumberfather'||f==='ringnumbermother') return normRing(v);
+  return String(v).trim().toLowerCase();
+}
+function ciShow(f, v){ if(v===null||v===undefined||v==='') return '—'; if(f==='gender') return v==='1'||String(v).toLowerCase()==='m'?'♂':'♀'; return String(v); }
+
+async function handleCiFile(file){
+  if(!file) return;
+  CI.busy=true; CI.error=null; CI.res=null; CI.done=null; CI.progress='Lese Datei…'; render();
+  try{
+    CI.data = JSON.parse(await file.text()); CI.fileName=file.name;
+    if(!CI.data.pigeons) throw new Error('Keine Columba-Importdatei (Feld "pigeons" fehlt).');
+    await analyzeColumba();
+  }catch(e){ CI.error='Fehler: '+e.message; }
+  CI.busy=false; CI.progress=null; render();
+}
+async function analyzeColumba(){
+  const D=CI.data;
+  CI.progress='Lade Tauben aus der Datenbank…'; render();
+  const db = await apiGetAll('/pigeons?select=*&order=pigeonid.asc');
+  if(!S.pigeonStates || !S.pigeonStates.length){ try{ S.pigeonStates = await apiGet('/pigeonstates?order=name.asc')||[]; }catch(e){} }
+  CI.progress='Gleiche Status ab…'; render();
+  // Status: gleiche ID, sonst gleicher Name
+  const stateMap={}, stateMiss={};
+  D.states.forEach(s=>{
+    const byId=S.pigeonStates.find(x=>x.pigeonstateid===s.id);
+    const byName=byId||S.pigeonStates.find(x=>String(x.name||'').trim().toLowerCase()===String(s.name||'').trim().toLowerCase());
+    if(byName) stateMap[s.id]=byName.pigeonstateid; else stateMiss[s.id]=s.name;
+  });
+  CI.progress='Vergleiche '+D.pigeons.length.toLocaleString('de')+' Tauben…'; render();
+  const byId=new Map(), byRing=new Map();
+  db.forEach(p=>{ byId.set(p.pigeonid,p);
+    [p.ringnumber,p.ringnumberold].forEach(r=>{ const n=normRing(r); if(n){ if(!byRing.has(n)) byRing.set(n,[]); if(!byRing.get(n).includes(p)) byRing.get(n).push(p); } }); });
+  const used=new Map();           // db-pigeonid -> columba id
+  const idMap=new Map();          // columba id -> Ziel-ID in der DB
+  const recs=[]; const conflicts=[];
+  const live=D.pigeons.filter(c=>!c.del_);
+  const skippedDeleted=D.pigeons.length-live.length;
+  // Durchgang 1: Zuordnung
+  live.forEach(c=>{
+    const m=ciMapPigeon(c,stateMap);
+    let dbp=byId.get(c.id), how=dbp?'id':null;
+    if(!dbp && m.ringnumber){
+      const cand=(byRing.get(normRing(m.ringnumber))||[]).filter(p=>!used.has(p.pigeonid));
+      if(cand.length===1){ dbp=cand[0]; how='ring'; }
+      else if(cand.length>1){ conflicts.push({c,m,why:'mehrere Tauben in der DB mit dieser Ringnummer ('+cand.length+')'}); return; }
+    }
+    if(!m.ringnumber){ conflicts.push({c,m,why:'Columba-Taube ohne Ringnummer'}); return; }
+    if(dbp){ used.set(dbp.pigeonid,c.id); idMap.set(c.id,dbp.pigeonid); }
+    else idMap.set(c.id,c.id);
+    recs.push({c,m,db:dbp||null,how});
+  });
+  // Durchgang 2: Eltern auflösen + Felder vergleichen
+  const stats={}; CI_FIELDS.forEach(([f])=>stats[f]={fill:0,diff:0,same:0});
+  recs.forEach(r=>{
+    r.m.fatherid = r.c.fid ? (idMap.get(r.c.fid)||null) : null;
+    r.m.motherid = r.c.mid ? (idMap.get(r.c.mid)||null) : null;
+    r.fills=[]; r.diffs=[];
+    if(!r.db){ r.kind='neu'; return; }
+    CI_FIELDS.forEach(([f])=>{
+      const nv=ciNorm(f,r.m[f]); if(!nv) return;
+      const ov=ciNorm(f,r.db[f]);
+      if(!ov){ r.fills.push({f,to:r.m[f]}); stats[f].fill++; }
+      else if(ov!==nv){
+        // Eltern-ID und Ringnummer des Elternteils nur dann als Abweichung zählen, wenn beides gesetzt ist
+        r.diffs.push({f,db:r.db[f],to:r.m[f]}); stats[f].diff++;
+      } else stats[f].same++;
+    });
+    r.kind = r.diffs.length ? 'abweichend' : r.fills.length ? 'ergaenzen' : 'gleich';
+  });
+  const cnt={neu:0,ergaenzen:0,abweichend:0,gleich:0};
+  recs.forEach(r=>cnt[r.kind]++);
+  const matchedById=recs.filter(r=>r.how==='id').length, matchedByRing=recs.filter(r=>r.how==='ring').length;
+  const dbOnly=db.filter(p=>!used.has(p.pigeonid)).length;
+  // Reisen / Flugergebnisse (nur Vorschau)
+  CI.progress='Lade Reisen aus der Datenbank…'; render();
+  let tripInfo=null;
+  try{
+    const dbTrips=await apiGetAll('/trips?select=tripid,tripdate,location,vintage');
+    const dbPT=await apiGetAll('/pigeontrips?select=pigeonid,tripid');
+    const tById=new Map(dbTrips.map(t=>[t.tripid,t])); const tKey=t=>String(t.tripdate||t.date||'').slice(0,10)+'|'+String(t.location||t.loc||'').trim().toLowerCase();
+    const tByKey=new Map(dbTrips.map(t=>[tKey(t),t]));
+    const tripMap=new Map(); let tNew=0, tSame=0;
+    D.trips.forEach(t=>{ const x=tById.get(t.id)||tByKey.get(tKey(t)); if(x){ tripMap.set(t.id,x.tripid); tSame++; } else tNew++; });
+    const ptSet=new Set(dbPT.map(x=>x.pigeonid+'|'+x.tripid));
+    let ptHave=0, ptNew=0, ptNoTrip=0, ptNoPigeon=0;
+    D.pigeontrips.forEach(([pid,tid])=>{
+      const dp=idMap.get(pid), dt=tripMap.get(tid);
+      if(!dp || !byId.has(dp)){ ptNoPigeon++; return; }
+      if(!dt){ ptNoTrip++; return; }
+      if(ptSet.has(dp+'|'+dt)) ptHave++; else ptNew++;
+    });
+    tripInfo={dbTrips:dbTrips.length, dbPT:dbPT.length, tNew, tSame, total:D.trips.length, ptTotal:D.pigeontrips.length, ptHave, ptNew, ptNoTrip, ptNoPigeon};
+  }catch(e){ tripInfo={error:e.message}; }
+  CI.res={recs,conflicts,stats,cnt,matchedById,matchedByRing,dbOnly,dbTotal:db.length,skippedDeleted,stateMiss,stateMap,tripInfo,idMap};
+  CI.tab = cnt.neu?'neu':cnt.ergaenzen?'ergaenzen':'abweichend';
+}
+
+function ciRecordHtml(r){
+  const ring=escH(r.m.ringnumber||'?');
+  const head=`<div style="font-weight:600;color:var(--text)">${ring}${r.m.name?' · '+escH(r.m.name):''}<span style="font-weight:400;color:var(--text3);font-size:12px"> ${r.m.date_year?'· Jg. '+r.m.date_year:''}${r.how==='ring'?' · Zuordnung über Ringnr.':''}</span></div>`;
+  let body='';
+  if(r.kind==='neu'){
+    const bits=CI_FIELDS.filter(([f])=>f!=='fatherid'&&f!=='motherid'&&ciNorm(f,r.m[f])).map(([f,l])=>l+': '+escH(ciShow(f,r.m[f])));
+    body=`<div style="font-size:12px;color:var(--text3)">${bits.slice(0,10).join(' · ')}</div>`;
+  } else {
+    body=[...r.diffs.map(d=>`<div style="font-size:12px"><span style="color:#e0a030">≠ ${escH(CI_LABEL[d.f])}:</span> DB <strong>${escH(ciShow(d.f,d.db))}</strong> → Columba <strong>${escH(ciShow(d.f,d.to))}</strong></div>`),
+          ...r.fills.map(d=>`<div style="font-size:12px"><span style="color:var(--green)">+ ${escH(CI_LABEL[d.f])}:</span> ${escH(ciShow(d.f,d.to))} <span style="color:var(--text3)">(in DB leer)</span></div>`)].join('');
+  }
+  return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">${head}${body}</div>`;
+}
+function renderColumbaImport(){
+  const R=CI.res;
+  let h=`<div class="card" style="margin-top:16px">
+    <div class="card-title serif" style="font-size:18px">🕊️ Import aus Columba XT</div>`;
+  if(!R){
+    h+=`<p style="color:var(--text3);font-size:13px;margin:10px 0 14px">Lade die aufbereitete Columba-Datei (<code>columba_import.json</code>) hoch. Es wird zuerst nur <strong>verglichen</strong> — angezeigt wird, was neu angelegt, ergänzt oder abweichend wäre. Geschrieben wird erst nach deiner Freigabe.</p>
+      <div class="imp-drop" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')"
+        ondrop="event.preventDefault();this.classList.remove('drag-over');handleCiFile(event.dataTransfer.files[0])">
+        <input type="file" accept=".json" onchange="handleCiFile(this.files[0])">
+        <div style="font-size:15px;color:var(--text2);font-weight:500">columba_import.json hochladen oder hierher ziehen</div>
+      </div>
+      ${CI.progress?`<div style="font-size:12px;color:var(--text3);margin-top:10px">⏳ ${escH(CI.progress)}</div>`:''}
+      ${CI.error?`<div style="font-size:13px;color:#e07070;margin-top:10px">${escH(CI.error)}</div>`:''}</div>`;
+    return h;
+  }
+  const c=R.cnt, nF=R.recs.reduce((a,r)=>a+r.fills.length,0), nD=R.recs.reduce((a,r)=>a+r.diffs.length,0);
+  const tile=(k,l,n,col)=>`<div onclick="CI.tab='${k}';CI.limit=150;render()" style="cursor:pointer;flex:1;min-width:120px;background:var(--bg3);border:1px solid ${CI.tab===k?col:'var(--border)'};border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:22px;font-weight:700;color:${col}">${n.toLocaleString('de')}</div><div style="font-size:12px;color:var(--text3)">${l}</div></div>`;
+  h+=`<p style="color:var(--text3);font-size:13px;margin:10px 0">Quelle: <strong style="color:var(--text)">${escH(CI.fileName||'')}</strong> · ${R.recs.length.toLocaleString('de')} Columba-Tauben verglichen mit ${R.dbTotal.toLocaleString('de')} Tauben in PIGMAN
+     (${R.matchedById.toLocaleString('de')} über gleiche ID, ${R.matchedByRing.toLocaleString('de')} über Ringnummer).${R.skippedDeleted?` ${R.skippedDeleted} in Columba gelöschte Tauben werden übersprungen.`:''}</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      ${tile('neu','neu anlegen',c.neu,'var(--green)')}${tile('ergaenzen','ergänzen (leere Felder)',c.ergaenzen,'#5aa0e0')}
+      ${tile('abweichend','abweichende Werte',c.abweichend,'#e0a030')}${tile('gleich','unverändert',c.gleich,'var(--text3)')}
+      ${tile('konflikt','nicht zuordenbar',R.conflicts.length,'#d9534f')}${tile('felder','Feld-Statistik',nF+nD,'var(--text2)')}
+    </div>`;
+  // Liste je Tab
+  if(CI.tab==='felder'){
+    h+=`<div class="table-wrap"><table><thead><tr><th>Feld</th><th style="text-align:right">in DB leer → wird ergänzt</th><th style="text-align:right">abweichend</th><th style="text-align:right">identisch</th></tr></thead><tbody>
+      ${CI_FIELDS.map(([f,l])=>{const s=R.stats[f];return `<tr><td>${escH(l)}</td><td style="text-align:right">${s.fill.toLocaleString('de')}</td><td style="text-align:right;color:${s.diff?'#e0a030':'inherit'}">${s.diff.toLocaleString('de')}</td><td style="text-align:right;color:var(--text3)">${s.same.toLocaleString('de')}</td></tr>`;}).join('')}
+      </tbody></table></div>`;
+  } else if(CI.tab==='konflikt'){
+    h+=R.conflicts.slice(0,CI.limit).map(x=>`<div style="padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><strong>${escH(x.m.ringnumber||x.c.rn||'(keine Ringnr.)')}</strong> <span style="color:var(--text3)">— ${escH(x.why)}</span></div>`).join('')||'<div style="color:var(--text3)">Keine.</div>';
+  } else {
+    const q=CI.q.trim().toLowerCase();
+    let list=R.recs.filter(r=>r.kind===CI.tab);
+    if(q) list=list.filter(r=>(r.m.ringnumber||'').toLowerCase().includes(q)||(r.m.name||'').toLowerCase().includes(q));
+    h+=`<input class="input" placeholder="Filter: Ringnummer oder Name…" value="${escH(CI.q)}" oninput="CI.q=this.value;CI.limit=150;clearTimeout(CI._t);CI._t=setTimeout(render,250)" style="margin-bottom:8px;max-width:340px">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:6px">${list.length.toLocaleString('de')} Einträge${list.length>CI.limit?' — erste '+CI.limit+' angezeigt':''}</div>
+      <div style="max-height:520px;overflow-y:auto">${list.slice(0,CI.limit).map(ciRecordHtml).join('')||'<div style="color:var(--text3)">Keine.</div>'}
+      ${list.length>CI.limit?`<button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="CI.limit+=300;render()">weitere anzeigen</button>`:''}</div>`;
+  }
+  // Status, Reisen
+  const miss=Object.values(R.stateMiss);
+  if(miss.length) h+=`<div style="margin-top:12px;font-size:12px;color:#e0a030">Status in Columba ohne Entsprechung in PIGMAN (werden nicht übernommen): ${miss.map(escH).join(', ')}</div>`;
+  const T=R.tripInfo;
+  h+=`<div style="margin-top:16px;background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px"><strong>Reisen &amp; Flugergebnisse (nur Vorschau)</strong><br>`;
+  h+= T&&!T.error ? `Reisen: ${T.total} in Columba, davon ${T.tSame} bereits in PIGMAN (gleiche ID oder gleiches Datum+Ort), ${T.tNew} fehlen.<br>
+      Einzelergebnisse: ${T.ptTotal.toLocaleString('de')} in Columba — ${T.ptHave.toLocaleString('de')} schon in PIGMAN, ${T.ptNew.toLocaleString('de')} fehlen (Taube + Reise vorhanden), ${T.ptNoTrip.toLocaleString('de')} Reise fehlt, ${T.ptNoPigeon.toLocaleString('de')} Taube nicht zuordenbar.<br>
+      <span style="color:var(--text3)">Diese Daten werden im aktuellen Schritt <em>nicht</em> importiert, weil PIGMAN dafür andere Felder (RV/RegGr-Preise, Platzierung) nutzt als Columba.</span>`
+    : `<span style="color:#e07070">Nicht ermittelbar: ${escH(T&&T.error||'')}</span>`;
+  h+=`</div>`;
+  // Import
+  h+=`<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+    <div style="font-weight:600;margin-bottom:8px">Import-Optionen</div>
+    <label style="display:block;font-size:13px;margin-bottom:5px"><input type="checkbox" ${CI.opt.neu?'checked':''} onchange="CI.opt.neu=this.checked"> ${c.neu.toLocaleString('de')} neue Tauben anlegen (inkl. Vater/Mutter-Verknüpfung; „Im Bestand" wie in Columba)</label>
+    <label style="display:block;font-size:13px;margin-bottom:5px"><input type="checkbox" ${CI.opt.fill?'checked':''} onchange="CI.opt.fill=this.checked"> leere Felder bestehender Tauben ergänzen (${nF.toLocaleString('de')} Werte) — vorhandene Werte bleiben unangetastet</label>
+    <label style="display:block;font-size:13px;margin-bottom:10px"><input type="checkbox" ${CI.opt.over?'checked':''} onchange="CI.opt.over=this.checked"> <span style="color:#e0a030">abweichende Werte mit Columba-Werten überschreiben</span> (${nD.toLocaleString('de')} Werte, Standard: aus)</label>
+    ${CI.importing||CI.log.length?`<div style="background:var(--bg2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:10px;font-size:12px;font-family:monospace;max-height:200px;overflow-y:auto">${CI.log.map(escH).join('<br>')}</div>`:''}
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn" ${CI.importing||CI.done?'disabled':''} onclick="runColumbaImport()">${CI.importing?'⏳ Läuft…':CI.done?'✅ Import abgeschlossen':'▶ Import starten'}</button>
+      <button class="btn btn-outline" ${CI.importing?'disabled':''} onclick="CI.res=null;CI.data=null;CI.log=[];CI.done=null;render()">Verwerfen</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px">Tipp: vorher oben eine Datensicherung erstellen.</div>
+  </div></div>`;
+  return h;
+}
+async function runColumbaImport(){
+  const R=CI.res; if(!R||CI.importing) return;
+  const news=CI.opt.neu?R.recs.filter(r=>r.kind==='neu'):[];
+  const upd=R.recs.filter(r=>r.db && (r.fills.length&&CI.opt.fill || r.diffs.length&&CI.opt.over));
+  if(!news.length && !upd.length){ alert('Nichts zu importieren (alle Optionen aus oder keine Änderungen).'); return; }
+  if(!confirm('Import starten?\n\n• '+news.length.toLocaleString('de')+' neue Tauben anlegen\n• '+upd.length.toLocaleString('de')+' bestehende Tauben aktualisieren\n\nFortfahren?')) return;
+  CI.importing=true; CI.log=[]; CI.done=null; render();
+  const log=m=>{ CI.log.push(m); render(); };
+  const errors=[];
+  try{
+    const FIELDS=CI_FIELDS.map(x=>x[0]);
+    const full=r=>{ const o={pigeonid:r.c.id, ringnumber:r.m.ringnumber, instock:!!r.c.ins, deleted:false};
+      FIELDS.forEach(f=>{ if(f==='fatherid'||f==='motherid') return; o[f]=(r.m[f]===undefined||r.m[f]===''?null:r.m[f]); }); return o; };
+    if(news.length){
+      // Pass 1: ohne Eltern-IDs (vermeidet Reihenfolge-Probleme bei Fremdschlüsseln)
+      log('Lege '+news.length.toLocaleString('de')+' neue Tauben an…');
+      const rows=news.map(r=>Object.assign(full(r),{fatherid:null,motherid:null}));
+      let failed=await apiUpsertBatch('pigeons',rows,'pigeonid');
+      if(failed.length){ log('Wiederhole '+failed.length+' fehlgeschlagene Blöcke…'); failed=await apiUpsertBatch('pigeons',failed.flatMap(f=>f.chunk),'pigeonid'); }
+      if(failed.length) errors.push('Neue Tauben: '+failed.length+' Block/Blöcke fehlgeschlagen — '+failed[0].error.slice(0,200));
+      // Pass 2: Eltern verknüpfen (nur wenn Pass 1 vollständig)
+      if(!failed.length){
+        const withP=news.filter(r=>r.m.fatherid||r.m.motherid);
+        log('Verknüpfe Vater/Mutter bei '+withP.length.toLocaleString('de')+' neuen Tauben…');
+        const rows2=withP.map(r=>Object.assign(full(r),{fatherid:r.m.fatherid||null,motherid:r.m.motherid||null}));
+        const f2=await apiUpsertBatch('pigeons',rows2,'pigeonid');
+        if(f2.length) errors.push('Eltern-Verknüpfung: '+f2.length+' Block/Blöcke fehlgeschlagen — '+f2[0].error.slice(0,200));
+      }
+    }
+    if(upd.length){
+      log('Aktualisiere '+upd.length.toLocaleString('de')+' bestehende Tauben…');
+      let done=0;
+      await runWithConcurrency(upd,6,async r=>{
+        const body={};
+        if(CI.opt.fill) r.fills.forEach(x=>{ body[x.f]=x.to; });
+        if(CI.opt.over) r.diffs.forEach(x=>{ body[x.f]=x.to; });
+        if(!Object.keys(body).length) return;
+        try{ await apiPatch('pigeons',r.db.pigeonid,body); }catch(e){ errors.push((r.m.ringnumber||r.c.id)+': '+e.message.slice(0,120)); }
+        done++; if(done%250===0) log('… '+done.toLocaleString('de')+' / '+upd.length.toLocaleString('de'));
+      });
+    }
+    log(errors.length?'⚠ Fertig mit '+errors.length+' Fehler(n).':'✅ Import abgeschlossen. Lade Daten neu…');
+    errors.slice(0,8).forEach(e=>log('❌ '+e));
+    await loadData();
+    CI.done={errors:errors.length};
+  }catch(e){ log('❌ Abbruch: '+e.message); }
+  CI.importing=false; render();
+}
+
 function renderBackup(){
   if(!BK.serverListLoaded && !BK.busy) loadServerBackups();
 
@@ -10103,6 +10369,7 @@ create policy "backups_rw" on storage.objects
         <div style="font-size:12px;color:var(--text3)">.json (von diesem Backup-Werkzeug erstellt)</div>
       </div>
     </div>
+    ${renderColumbaImport()}
   </div>`;
 }
 
