@@ -10016,6 +10016,343 @@ function humanFileSize(bytes){
   return bytes.toFixed(1)+' '+units[i];
 }
 
+// ── SQL-Server-Compact-Leser (.sdf, unverschlüsselt) + Mini-ZIP-Leser ──
+// Liest Tabellen aus einer Columba-XT-Datenbank direkt im Browser.
+const SDF = (function(){
+  const PS=4096;
+  const u16=(b,o)=>b[o]|(b[o+1]<<8);
+  const u32=(b,o)=>(b[o]|(b[o+1]<<8)|(b[o+2]<<16)|(b[o+3]<<24))>>>0;
+  const i32=(b,o)=>b[o]|(b[o+1]<<8)|(b[o+2]<<16)|(b[o+3]<<24);
+  // 20-Bit-Slots, 3 pro 64-Bit-Wort
+  function packed(b,base,idx){
+    const k=idx%3, off=base+Math.floor(idx/3)*8;
+    if(off+8>b.length) return 0;
+    const lo=u32(b,off), hi=u32(b,off+4);
+    if(k===0) return lo&0xFFFFF;
+    if(k===1) return ((lo>>>20)|((hi&0xFF)<<12))&0xFFFFF;
+    return (hi>>>8)&0xFFFFF;
+  }
+  function open(buf){
+    const pageCount=Math.floor(buf.length/PS);
+    const page=n=>buf.subarray(n*PS,(n+1)*PS);
+    const lid=p=>u32(p,4)&0xFFFFF;
+    // logische → physische Seiten
+    const map=new Map();
+    const a=u32(page(0),44);
+    if(a>=pageCount) throw new Error('Kein gültiges SDF-Seitenverzeichnis (Map A)');
+    const A=page(a);
+    if(A[6]!==0x10||lid(A)!==1) throw new Error('Map A ungültig');
+    map.set(1,a);
+    const rangeB=(bp,start)=>{ const B=page(bp); for(let i=0;i<1527;i++){ const ph=packed(B,16,i); if(ph===0||ph>=pageCount) continue; map.set(start+i,ph); } };
+    const b0=packed(A,16,0);
+    if(b0===0||b0>=pageCount||page(b0)[6]!==0x20||lid(page(b0))!==2) throw new Error('Map B ungültig');
+    map.set(2,b0); rangeB(b0,1027);
+    let start=1027+1527;
+    for(let s=1;;s++){
+      if(16+Math.floor(s/3)*8+8>A.length) break;
+      const bp=packed(A,16,s);
+      if(bp!==0&&bp<pageCount) rangeB(bp,start);
+      start+=1527;
+    }
+    const phys=l=>map.has(l)?map.get(l):null;
+    // Zeilen einer Seite (mit Fortsetzungsinfo)
+    function rows(p){
+      const out=[]; const n=u32(p,20)&0xFFF;
+      for(let si=0;si<n;si++){
+        const so=4*(1017-si);
+        if(so+28>PS) continue;
+        const flags=p[so+27]; if(flags&1) continue;
+        const d=u32(p,so+24); const ro=d&0xFFF; const lf=(d>>>12)&0xFFF;
+        if(lf<4) continue; const len=lf-4; if(len===0) continue;
+        const st=ro+28, en=st+len; if(en>PS||st>en) continue;
+        if(ro+24+4>PS) continue;
+        const c=u32(p,ro+24);
+        out.push({slot:si,bytes:p.subarray(st,en),first:(flags&2)!==0,hasC:c!==0,cSlot:c&0xFFF,cPage:c>>>12});
+      }
+      return out;
+    }
+    // Heap-Seiten (logische Ids) ab einer Wurzelseite
+    function heapPages(rootLogical){
+      const rp=phys(rootLogical); if(rp==null) return [];
+      const R=page(rp); if(R[6]!==0x30) return [];
+      const ids=[]; const count=u32(R,16), indirect=u32(R,20), base=24, end=16+96;
+      if(indirect!==0){
+        for(let g=0;g<32;g++){
+          if(base+Math.floor(g/3)*8+8>end) break;
+          const bid=packed(R,base,g); if(!bid) continue;
+          const bp=phys(bid); if(bp==null) continue;
+          const B=page(bp); if(B[6]!==0x80) continue;
+          const f=u16(B,18), l=u16(B,20);
+          for(let bit=f;bit<=l;bit++){ const bo=32+(bit>>3); if(bo<B.length && ((B[bo]>>(bit&7))&1)) ids.push(bit+32512*g); }
+        }
+      } else {
+        for(let i=0;i<count;i++){
+          if(base+Math.floor(i/3)*8+8>end) break;
+          const id=packed(R,base,i); if(id) ids.push(id);
+        }
+      }
+      return ids;
+    }
+    // Katalog
+    const CAT=[ // [name,kind,colId,tableId]  kind: t=tiny s=small i=int b=big v=var x=bit
+      ['SysObjectType','s',0,255],['SysObjectOwner','v',1,255],['SysObjectName','v',2,255],['SysObjectIsSystem','x',3,255],['SysObjectVersion','b',4,255],
+      ['SysObjectOrdinal','s',5,255],['SysObjectCedbInfo','i',6,255],['SysTablePageId','i',7,1],['SysTableNick','i',8,1],['SysTableTrackingType','s',9,1],
+      ['SysTableDdlGranted','i',10,1],['SysTableReadOnly','x',11,1],['SysTableCompressed','x',12,1],['SysColumnType','s',13,4],['SysColumnSize','s',14,4],
+      ['SysColumnPrecision','t',15,4],['SysColumnScale','t',16,4],['SysColumnFixed','x',17,4],['SysColumnNullable','x',18,4],['SysColumnWriteable','x',19,4],
+      ['SysColumnAutoType','s',20,4],['SysColumnPosition','s',21,4],['SysColumnDefault','v',22,4],['SysColumnCompressed','x',23,4],['SysIndexRoot','i',24,2],
+      ['SysIndexKey','v',25,2],['SysIndexUnique','x',26,2],['SysIndexNullOption','s',27,2],['SysIndexPositional','x',28,2],['SysIndexHistogram','v',29,2],
+      ['SysConstraintType','i',30,8],['SysConstraintIndex','v',31,8],['SysConstraintTargetIndex','v',32,8],['SysConstraintTargetTable','v',33,8],
+      ['SysConstraintOnDelete','i',34,8],['SysConstraintOnUpdate','i',35,8],['SysConstraintKey','v',36,8],['SysConstraintColumn','v',37,8]];
+    const FS={t:1,s:2,i:4,b:8};
+    const PRES=Math.ceil(CAT.length/8);
+    let fixedEnd=4+PRES+2; CAT.forEach(f=>{ if(FS[f[1]]) fixedEnd+=FS[f[1]]; });
+    const varFields=CAT.filter(f=>f[1]==='v');
+    const isNullBit=(pr,id)=>{ const bi=id>>3; if(bi>=pr.length) return true; return ((pr[bi]>>(id&7))&1)!==0; };
+    function narrow(ch){ let s=''; for(const x of ch){ if(x===0) break; s+=String.fromCharCode(x); } return s; }
+    function decodeCat(r){
+      if(r.length<4+PRES) return null;
+      const pr=r.subarray(4,4+PRES);
+      if(isNullBit(pr,0)) return null;
+      let off=4+PRES+2; if(off+2>r.length) return null;
+      const type=u16(r,off);
+      const app=[1,2,4,8].includes(type)?type:0;
+      const row={kind:type};
+      for(const f of CAT){
+        const sz=FS[f[1]]; if(!sz) continue;
+        const ap=f[3]===255||f[3]===app;
+        if(!ap){ off+=sz; continue; }
+        if(off+sz>r.length) return null;
+        if(isNullBit(pr,f[2])){ off+=sz; continue; }
+        if(f[0]==='SysObjectCedbInfo'){ row.dbType=u16(r,off); }
+        else {
+          const v=sz===1?r[off]:sz===2?u16(r,off):sz===4?u32(r,off):u32(r,off);
+          if(f[0]==='SysColumnType') row.colType=v; else if(f[0]==='SysColumnSize') row.colSize=v;
+          else if(f[0]==='SysColumnPrecision') row.prec=v; else if(f[0]==='SysColumnScale') row.scale=v;
+          else if(f[0]==='SysTablePageId') row.pageId=v; else if(f[0]==='SysObjectOrdinal') row.ord=v;
+        }
+        off+=sz;
+      }
+      const dl=2*varFields.length;
+      if(fixedEnd+dl>r.length) return null;
+      const ent=[]; for(let i=0;i<varFields.length;i++) ent.push(u16(r,fixedEnd+2*i));
+      const vd=r.subarray(fixedEnd+dl);
+      let prev=0, vi=0;
+      for(const f of CAT){
+        if(f[1]!=='v') continue;
+        const last=vi===varFields.length-1;
+        const cum=last?vd.length:(ent[1+vi]&0x7FFF);
+        const ap=f[3]===255||f[3]===app;
+        const present=ap&&!isNullBit(pr,f[2]);
+        if(!present||prev>cum||cum>vd.length){ prev=cum; vi++; continue; }
+        const ch=vd.subarray(prev,cum); prev=cum;
+        if(f[0]==='SysObjectOwner') row.owner=narrow(ch); else if(f[0]==='SysObjectName') row.name=narrow(ch);
+        vi++;
+      }
+      return row;
+    }
+    // Zeilen über mehrere Seiten zusammensetzen
+    function assemble(first, ownerOk, pageRowsOf){
+      let bytes=Array.from(first.bytes);
+      let cur=first, hops=0;
+      while(cur.hasC && hops<64){
+        hops++;
+        const pp=phys(cur.cPage); if(pp==null) break;
+        const tp=page(pp);
+        if(!ownerOk(tp)) break;
+        const nxt=pageRowsOf(pp).find(x=>x.slot===cur.cSlot);
+        if(!nxt) break;
+        for(const x of nxt.bytes) bytes.push(x);
+        cur=nxt;
+      }
+      return Uint8Array.from(bytes);
+    }
+    const rowCache=new Map();
+    const pageRowsOf=pn=>{ let r=rowCache.get(pn); if(!r){ r=rows(page(pn)); rowCache.set(pn,r); } return r; };
+    // Katalog lesen
+    const catIds=heapPages(1027);
+    const catPhys=catIds.map(phys).filter(x=>x!=null);
+    const catSet=new Set(catPhys);
+    const catRows=[];
+    {
+      const targets=new Set();
+      const ct=sl=>{ if(!sl.hasC) return null; const pp=phys(sl.cPage); return (pp!=null&&catSet.has(pp))?pp:null; };
+      for(const pn of catPhys) for(const sl of pageRowsOf(pn)){ const t=ct(sl); if(t!=null) targets.add(t+':'+sl.cSlot); }
+      for(const pn of catPhys) for(const sl of pageRowsOf(pn)){
+        if(!sl.first||targets.has(pn+':'+sl.slot)) continue;
+        let bytes=Array.from(sl.bytes), cur=sl, hops=0;
+        while(hops<64){ const t=ct(cur); if(t==null) break; hops++; const nx=pageRowsOf(t).find(x=>x.slot===cur.cSlot); if(!nx) break; for(const x of nx.bytes) bytes.push(x); cur=nx; }
+        catRows.push(Uint8Array.from(bytes));
+      }
+    }
+    const tables=new Map(); const pend=[];
+    const objKey=pid=>{
+      const rp=phys(pid); if(rp==null) return [0,0];
+      const R=page(rp);
+      if(R[6]!==0x30) return [R[16],R[17]];
+      const op=u32(R,24)&0xFFFFF; if(!op) return [0,0];
+      const pp=phys(op); if(pp==null) return [0,0];
+      return [page(pp)[16],page(pp)[17]];
+    };
+    for(const rb of catRows){
+      const d=decodeCat(rb); if(!d) continue;
+      if(d.kind===1){ if(d.name==null||d.pageId==null) continue; if(!tables.has(d.name)){ const k=objKey(d.pageId); tables.set(d.name,{name:d.name,objId:k[0],objGen:k[1],root:d.pageId,cols:[]}); } }
+      else if(d.kind===4){ if(d.owner==null||d.name==null||d.ord==null||d.colType==null||d.colSize==null) continue; pend.push(d); }
+    }
+    const TYPE_OK=t=>t<=20&&t!==2&&t!==4&&t!==6;
+    for(const d of pend){ const t=tables.get(d.owner); if(t) t.cols.push({name:d.name,ord:d.ord,type:TYPE_OK(d.colType)?d.colType:-1,size:d.colSize,prec:d.prec||0}); }
+    tables.forEach(t=>t.cols.sort((x,y)=>x.ord-y.ord));
+    // Datenseiten einer Tabelle
+    function dataPages(t){
+      const out=[]; const seenLid=new Set();
+      for(const l of heapPages(t.root)){ const pp=phys(l); if(pp!=null && !seenLid.has(l)){ out.push(pp); seenLid.add(l); } }
+      const newest=new Map();
+      for(let pn=0;pn<pageCount;pn++){
+        const p=page(pn); if(p[6]!==0x40) continue;
+        if(p[16]!==t.objId||p[17]!==t.objGen) continue;
+        const l=lid(p), c=u32(p,8);
+        const o=newest.get(l); if(!o||c>o[0]) newest.set(l,[c,pn]);
+      }
+      [...newest.keys()].sort((x,y)=>x-y).forEach(l=>{ if(!seenLid.has(l)){ out.push(newest.get(l)[1]); seenLid.add(l); } });
+      return out;
+    }
+    // Werte dekodieren
+    const FIXSZ=(c)=>{
+      switch(c.type){ case 0:return 1; case 1:return 2; case 3:case 16:return 4; case 5:case 13:case 17:case 18:case 20:return 8; case 14:return 16; case 19:return 19;
+        case 10:case 7:return c.size||1; default:return c.size||4; } };
+    const isVar=c=>c.type===8||c.type===11||c.type===9||c.type===12;
+    const isLob=c=>c.type===9||c.type===12;
+    const latin=b=>{ let s=''; for(let i=0;i<b.length;i++) s+=String.fromCharCode(b[i]); return s; };
+    const utf16=b=>new TextDecoder('utf-16le').decode(b.subarray(0,b.length&~1));
+    const text=(b,comp)=>comp?latin(b):utf16(b);
+    const dv=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);
+    function iso(days,ticks){
+      const ms=Math.floor((ticks*10+1)/3);
+      const t=Date.UTC(1900,0,1)+days*86400000+ms;
+      if(!isFinite(t)||Math.abs(days)>3000000) return null;
+      const d=new Date(t); if(isNaN(d.getTime())) return null;
+      return d.toISOString().slice(0,23);
+    }
+    function guid(b){ const h=x=>x.toString(16).padStart(2,'0'); const v=dv(b);
+      return v.getUint32(0,true).toString(16).padStart(8,'0')+'-'+v.getUint16(4,true).toString(16).padStart(4,'0')+'-'+v.getUint16(6,true).toString(16).padStart(4,'0')+'-'+h(b[8])+h(b[9])+'-'+[...b.subarray(10,16)].map(h).join(''); }
+    function lob(c,chunk,comp){
+      const isText=c.type===9;
+      if(chunk.length<8) return isText?'':null;
+      const length=u32(chunk,0), tail=chunk.subarray(8);
+      let bytes;
+      if(length<=0xF8) bytes=tail.subarray(0,Math.min(tail.length,length));
+      else {
+        const per=PS-16, need=Math.ceil(length/per);
+        const slots=(b,off,max)=>{ const r=[]; for(let s=0;s<max;s++){ if(off+Math.floor(s/3)*8+8>b.length) break; const v=packed(b,off,s); if(v===0xFFFFF) break; r.push(v); } return r; };
+        let ids=[];
+        if(length<=0x5CA30) ids=slots(tail,0,Math.min(need,93));
+        else { const m=slots(tail,0,1); if(m.length){ const mp=phys(m[0]); if(mp!=null&&page(mp)[6]===0x90) ids=slots(page(mp),16,Math.min(need,1527)); } }
+        const parts=[]; let got=0;
+        for(const l of ids){ const pp=phys(l); if(pp==null) break; const pl=page(pp).subarray(16); const take=Math.min(pl.length,length-got); parts.push(pl.subarray(0,take)); got+=take; }
+        if(parts.length!==need) throw new Error('LOB-Kette unvollständig');
+        bytes=new Uint8Array(got); let o=0; parts.forEach(p=>{ bytes.set(p,o); o+=p.length; });
+      }
+      return isText?text(bytes,comp):bytes;
+    }
+    function fixedVal(c,ch){
+      const v=dv(ch);
+      switch(c.type){
+        case 3: return v.getInt32(0,true);
+        case 13: return iso(v.getInt32(4,true),v.getUint32(0,true));
+        case 18: return Number(v.getBigInt64(0,true))/10000;
+        case 16: return v.getFloat32(0,true);
+        case 17: return v.getFloat64(0,true);
+        case 14: return guid(ch);
+        case 0: return ch[0];
+        case 1: return v.getInt16(0,true);
+        case 5: return Number(v.getBigInt64(0,true));
+        case 7: return utf16(ch);
+        case 19: { let m=0n; for(let i=15;i>=0;i--) m=(m<<8n)|BigInt(ch[3+i]); const x=Number(m)/Math.pow(10,ch[1]); return ch[2]===1?x:-x; }
+        default: return null;
+      }
+    }
+    function decodeRow(t,r){
+      const cols=t.cols, n=cols.length;
+      const pb=Math.ceil(n/8);
+      const bitCols=cols.filter(c=>c.type===15), bb=Math.ceil(bitCols.length/8);
+      let off=4;
+      const pr=off+pb<=r.length?r.subarray(off,off+pb):new Uint8Array(0); off+=pb;
+      const br=off+bb<=r.length?r.subarray(off,off+bb):new Uint8Array(0); off+=bb;
+      const isNull=o=>{ const bi=o>>3; if(bi>=pr.length) return false; return ((pr[bi]>>(o&7))&1)!==0; };
+      const val=new Map();
+      for(const c of cols){
+        if(c.type===15||isVar(c)) continue;
+        const sz=FIXSZ(c); let v=null;
+        if(!isNull(c.ord)&&off+sz<=r.length) v=fixedVal(c,r.subarray(off,off+sz));
+        off+=sz; val.set(c.ord,v);
+      }
+      bitCols.forEach((c,bi)=>{ let v=null; if(!isNull(c.ord)){ const by=bi>>3; if(by<br.length) v=((br[by]>>(bi&7))&1)!==0; } val.set(c.ord,v); });
+      const vcols=cols.filter(isVar);
+      if(vcols.length && !vcols.every(c=>isNull(c.ord))){
+        const dl=2*vcols.length;
+        if(off+dl<=r.length){
+          const dir=r.subarray(off,off+dl); off+=dl; const vd=r.subarray(off);
+          const st=[],cm=[]; vcols.forEach((c,i)=>{ const e=u16(dir,2*i); st.push(e&0x7FFF); cm.push((e&0x8000)!==0); });
+          vcols.forEach((c,i)=>{
+            let v=null;
+            if(!isNull(c.ord)){
+              const s=st[i], e=i+1<st.length?st[i+1]:vd.length;
+              if(s<=e&&e<=vd.length){
+                const ch=vd.subarray(s,e);
+                if(isLob(c)) v=lob(c,ch,cm[i]);
+                else if(c.type===8) v=text(ch,cm[i]);
+                else v=Uint8Array.from(ch);
+              }
+            }
+            val.set(c.ord,v);
+          });
+        }
+      }
+      const o={}; cols.forEach(c=>{ o[c.name]=val.has(c.ord)?val.get(c.ord):null; });
+      return o;
+    }
+    function readTable(name){
+      const t=tables.get(name); if(!t) throw new Error('Tabelle "'+name+'" nicht gefunden');
+      const out=[]; let broken=0;
+      for(const pn of dataPages(t)){
+        const p=page(pn); const owner=p[16];
+        for(const sl of pageRowsOf(pn)){
+          if(!sl.first) continue;
+          const bytes=assemble(sl,tp=>tp[6]===0x40&&tp[16]===owner,pageRowsOf);
+          try{ out.push(decodeRow(t,bytes)); }catch(e){ broken++; }
+        }
+      }
+      out.broken=broken; return out;
+    }
+    return {tableNames:()=>[...tables.keys()], readTable, _tables:tables};
+  }
+  // ── ZIP ──
+  async function inflateRaw(data){
+    const ds=new DecompressionStream('deflate-raw');
+    const stream=new Blob([data]).stream().pipeThrough(ds);
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  async function unzipFind(buf, pred){
+    const u=buf; let e=-1;
+    for(let i=u.length-22;i>=Math.max(0,u.length-65557);i--){ if(u32(u,i)===0x06054b50){ e=i; break; } }
+    if(e<0) throw new Error('Keine gültige ZIP-Datei');
+    const n=u16(u,e+10); let off=u32(u,e+16);
+    for(let k=0;k<n;k++){
+      if(u32(u,off)!==0x02014b50) break;
+      const method=u16(u,off+10), csize=u32(u,off+20), usize=u32(u,off+24);
+      const nl=u16(u,off+28), el=u16(u,off+30), cl=u16(u,off+32), lho=u32(u,off+42);
+      const name=new TextDecoder().decode(u.subarray(off+46,off+46+nl));
+      off+=46+nl+el+cl;
+      if(!pred(name)) continue;
+      if(csize===0xFFFFFFFF||usize===0xFFFFFFFF) throw new Error('ZIP64 wird nicht unterstützt');
+      const lnl=u16(u,lho+26), lel=u16(u,lho+28); const ds=lho+30+lnl+lel;
+      const raw=u.subarray(ds,ds+csize);
+      return {name, data: method===0?raw:await inflateRaw(raw)};
+    }
+    return null;
+  }
+  return {open, unzipFind};
+})();
+
 // ── Columba-XT-Import (Vorschau + Import) ─────────────────────────
 // Liest die aus einer Columba-Standard-Sicherung (.sdf) erzeugte Datei
 // columba_import.json, gleicht sie mit der Live-DB ab und zeigt VOR dem
@@ -10075,12 +10412,40 @@ function ciNorm(f, v){
 }
 function ciShow(f, v){ if(v===null||v===undefined||v==='') return '—'; if(f==='instock') return (v===true||v==='true')?'Ja':'Nein'; if(f==='pigeonstateid'){ const s=(S.pigeonStates||[]).find(x=>x.pigeonstateid===v); return s?s.name:'?'; } if(f==='gender') return v==='1'||String(v).toLowerCase()==='m'?'♂':'♀'; return String(v); }
 
+function ciDataFromSdf(bytes){
+  let db;
+  try{ db=SDF.open(bytes); }catch(e){ throw new Error('Die Datei ist keine lesbare Columba-Datenbank ('+e.message+').'); }
+  const need=['Pigeons','PigeonStates','Trips','PigeonTrips'];
+  const T={}; need.forEach(n=>{ try{ T[n]=db.readTable(n); }catch(e){ throw new Error('Tabelle '+n+' nicht lesbar: '+e.message); } });
+  const nz=x=>(typeof x==='string'&&x.trim())?x.trim():null, dt=x=>x?String(x).slice(0,10):null;
+  const P=T.Pigeons.map(x=>({id:x.PigeonId,rn:nz(x.RingNumber),rno:nz(x.RingNumberOld),cc:nz(x.CountryCode),an:nz(x.AssociationNo),y:x.Date||null,n:x.Number,g:x.Gender,
+    nm:nz(x.Name),col:nz(x.Color),race:nz(x.Race),str:nz(x.Strain),ins:!!x.InStock,inf:nz(x.Info),infi:nz(x.InfoInternal),bd:dt(x.Birthday),died:dt(x.Died),
+    bought:dt(x.Bought),sold:dt(x.Sold),u1:nz(x.UserDefined1),u2:nz(x.UserDefined2),u3:nz(x.UserDefined3),ibc:x.InbreedCoefficient,fid:x.FatherId,mid:x.MotherId,
+    rnf:nz(x.RingNumberFather),rnm:nz(x.RingNumberMother),st:x.PigeonStateId,del_:!!x.Deleted}));
+  if(!P.length) throw new Error('Die Datenbank enthält keine Tauben.');
+  return { meta:{app:'Columba XT (direkt aus Sicherung)'}, pigeons:P,
+    states:T.PigeonStates.map(s=>({id:s.PigeonStateId,name:s.Name,num:s.Number,instock:!!s.InStock})),
+    trips:T.Trips.map(t=>({id:t.TripId,y:t.Vintage,n:t.Number,loc:t.Location,date:dt(t.TripDate),set:t.PigeonsSet})),
+    pigeontrips:T.PigeonTrips.map(t=>[t.PigeonId,t.TripId]) };
+}
 async function handleCiFile(file){
   if(!file) return;
   CI.busy=true; CI.error=null; CI.res=null; CI.done=null; CI.progress='Lese Datei…'; render();
   try{
-    CI.data = JSON.parse(await file.text()); CI.fileName=file.name;
-    if(!CI.data.pigeons) throw new Error('Keine Columba-Importdatei (Feld "pigeons" fehlt).');
+    const nm=file.name.toLowerCase();
+    if(nm.endsWith('.zip')||nm.endsWith('.sdf')){
+      let sdfBytes;
+      if(nm.endsWith('.zip')){
+        CI.progress='Entpacke ZIP…'; render();
+        const f=await SDF.unzipFind(new Uint8Array(await file.arrayBuffer()), n=>/\.sdf$/i.test(n));
+        if(!f) throw new Error('In der ZIP-Datei wurde keine .sdf-Datenbank gefunden (erwartet: columba-xt.sdf).');
+        sdfBytes=f.data;
+      } else sdfBytes=new Uint8Array(await file.arrayBuffer());
+      CI.progress='Lese Columba-Datenbank…'; render(); await new Promise(r=>setTimeout(r,30));
+      CI.data=ciDataFromSdf(sdfBytes);
+    } else CI.data = JSON.parse(await file.text());
+    CI.fileName=file.name;
+    if(!CI.data.pigeons) throw new Error('Keine Columba-Daten gefunden.');
     await analyzeColumba();
   }catch(e){ CI.error='Fehler: '+e.message; }
   CI.busy=false; CI.progress=null; render();
@@ -10198,11 +10563,12 @@ function renderColumbaImport(){
   let h=`<div class="card" style="margin-top:16px">
     <div class="card-title serif" style="font-size:18px">🕊️ Import aus Columba XT</div>`;
   if(!R){
-    h+=`<p style="color:var(--text3);font-size:13px;margin:10px 0 14px">Lade die aufbereitete Columba-Datei (<code>columba_import.json</code>) hoch. Es wird zuerst nur <strong>verglichen</strong> — angezeigt wird, was neu angelegt, ergänzt oder abweichend wäre. Geschrieben wird erst nach deiner Freigabe.</p>
+    h+=`<p style="color:var(--text3);font-size:13px;margin:10px 0 14px">Lade die <strong>Columba-Datensicherung (.zip)</strong> direkt hoch — sie wird im Browser entpackt und gelesen, es ist kein Zwischenschritt nötig. Es wird zuerst nur <strong>verglichen</strong> — angezeigt wird, was neu angelegt, ergänzt oder abweichend wäre. Geschrieben wird erst nach deiner Freigabe.</p>
       <div class="imp-drop" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')"
         ondrop="event.preventDefault();this.classList.remove('drag-over');handleCiFile(event.dataTransfer.files[0])">
-        <input type="file" accept=".json" onchange="handleCiFile(this.files[0])">
-        <div style="font-size:15px;color:var(--text2);font-weight:500">columba_import.json hochladen oder hierher ziehen</div>
+        <input type="file" accept=".zip,.sdf,.json" onchange="handleCiFile(this.files[0])">
+        <div style="font-size:15px;color:var(--text2);font-weight:500">Columba-Sicherung (.zip) hochladen oder hierher ziehen</div>
+        <div style="font-size:12px;color:var(--text3)">auch .sdf oder die bisherige columba_import.json möglich</div>
       </div>
       ${CI.progress?`<div style="font-size:12px;color:var(--text3);margin-top:10px">⏳ ${escH(CI.progress)}</div>`:''}
       ${CI.error?`<div style="font-size:13px;color:#e07070;margin-top:10px">${escH(CI.error)}</div>`:''}</div>`;
