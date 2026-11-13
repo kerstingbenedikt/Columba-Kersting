@@ -10767,7 +10767,240 @@ create policy "backups_rw" on storage.objects
   </div>`;
 }
 
+// ── Wettbewerbs-Auswertung (z. B. Vanrobaeys Superstars) ──────────
+// Frei konfigurierbar: Wertungsjahr, zählende Preislisten, Mindest-Taubenzahl der Liste,
+// je Wertung Art (Team je Flug / je Taube / Summe), Taubengruppe, Anzahl Tauben je Flug,
+// Anzahl Wertungsflüge, Mindestentfernung und Entfernungsbedingungen.
+// Koeffizient je Taube und Flug = Preis × 1000 / gesetzte Tauben der Liste; je Flug zählt
+// die günstigste Liste (kleinster Koeffizient). Kleiner ist besser.
+const CT_LISTS=[['rv','RV'],['reggr','RegGr'],['reg','Reg'],['manual','manuell erfasst']];
+const CT_KEY='pigman_contests_v1';
+let CT={ cfgs:[], active:null, rows:null, rowsYear:null, loading:false, error:null, showAll:{}, ready:false };
+function ctPreset(year){
+  return {id:'c'+Date.now().toString(36)+Math.floor(Math.random()*1000), name:'Vanrobaeys Superstars', year:year, lists:['rv','reggr','reg','manual'], minList:300, excludedTrips:[], breeder:null,
+    cats:[
+      {id:'alt',   name:'Superstar – Altreise',       type:'team',   who:'alt',  teamSize:3, nFlights:4,  minKm:150, slots:[300,400,400,500], vOnly:true, enabled:true},
+      {id:'jung',  name:'Superstar – Jungtierreise',  type:'team',   who:'jung', teamSize:3, nFlights:4,  minKm:100, slots:[100,100,100,200], vOnly:true, enabled:true},
+      {id:'jahr',  name:'Superstar des Jahres',       type:'combo',  parts:['alt','jung'], enabled:true},
+      {id:'balt',  name:'Beste Alttaube',             type:'pigeon', who:'alt',  nFlights:10, minKm:150, slots:[], enabled:true},
+      {id:'bjung', name:'Beste Jungtaube',            type:'pigeon', who:'jung', nFlights:4,  minKm:100, slots:[], enabled:true},
+      {id:'jugend',name:'Jugendcup (Jugendliche)',    type:'team',   who:'all',  teamSize:3, nFlights:4,  minKm:0,   slots:[], vOnly:true, enabled:false}
+    ]};
+}
+function ctLoadCfg(){
+  try{ const s=JSON.parse(localStorage.getItem(CT_KEY)||'null'); if(s&&Array.isArray(s.cfgs)&&s.cfgs.length){ CT.cfgs=s.cfgs; CT.active=s.active; } }catch(e){}
+  if(!CT.cfgs.length){ const y=(RT.trips.map(t=>t.vintage).filter(Boolean).sort((a,b)=>b-a)[0])||new Date().getFullYear(); const c=ctPreset(y); CT.cfgs=[c]; CT.active=c.id; }
+  if(!CT.cfgs.find(c=>c.id===CT.active)) CT.active=CT.cfgs[0].id;
+  CT.cfgs.forEach(c=>{ if(c.breeder===undefined) c.breeder=null; (c.cats||[]).forEach(k=>{ if(k.type==='team'&&k.vOnly===undefined) k.vOnly=['alt','jung','jugend'].includes(k.id); }); });
+  CT.ready=true;
+}
+function ctSave(){ try{ localStorage.setItem(CT_KEY,JSON.stringify({cfgs:CT.cfgs,active:CT.active})); }catch(e){} }
+function ctCfg(){ return CT.cfgs.find(c=>c.id===CT.active)||CT.cfgs[0]; }
+async function openContest(){
+  RT.step='contest'; if(!CT.ready) ctLoadCfg(); render();
+  if(!RT.trips.length){ await loadTrips(); }
+  await ctLoadRows(); render();
+}
+async function ctLoadRows(){
+  const cfg=ctCfg(); if(CT.rowsYear===cfg.year && CT.rows) return;
+  CT.loading=true; CT.error=null; render();
+  try{
+    await waitArchiveLoaded();
+    const ids=RT.trips.filter(t=>String(t.vintage)===String(cfg.year)).map(t=>t.tripid);
+    const out=[];
+    for(let i=0;i<ids.length;i+=60){
+      const chunk=ids.slice(i,i+60);
+      const rows=await apiGetAll('/pigeontrips?pigeonid=not.is.null&tripid=in.('+chunk.join(',')+')&select=*');
+      rows.forEach(r=>out.push(r));
+    }
+    CT.rows=out; CT.rowsYear=cfg.year;
+    if(cfg.breeder===null||cfg.breeder===undefined){ // erste Auswertung: häufigster Züchter = eigener Betrieb
+      const cnt={}; out.forEach(r=>{ const k=zuechterKey(r); cnt[k]=(cnt[k]||0)+1; });
+      const top=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0]; cfg.breeder=top||''; ctSave();
+    }
+  }catch(e){ CT.error='Flugergebnisse konnten nicht geladen werden: '+e.message; CT.rows=[]; }
+  CT.loading=false;
+}
+// günstigster Koeffizient einer Ergebniszeile über die zählenden Listen
+function ctCoef(row, trip, cfg){
+  const e=Object.assign({}, row, {pigeonsset:trip.pigeonsset, pigeonsset_rv:trip.pigeonsset_rv, pigeonsset_rv_calc:trip.pigeonsset_rv_calc, pigeonsset_reggr:trip.pigeonsset_reggr, pigeonsset_reg:trip.pigeonsset_reg});
+  const cand=[];
+  if(cfg.lists.includes('rv')){ const p=rvField(e,'prize_rv'), g=rvGesetzt(e); if(p>0&&g>0) cand.push({list:'RV',platz:p,gesetzt:g}); }
+  if(cfg.lists.includes('reggr')){ const p=e.prize_reggr, g=trip.pigeonsset_reggr; if(p>0&&g>0) cand.push({list:'RegGr',platz:p,gesetzt:g}); }
+  if(cfg.lists.includes('reg')){ const p=e.prize_reg, g=trip.pigeonsset_reg; if(p>0&&g>0) cand.push({list:'Reg',platz:p,gesetzt:g}); }
+  if(cfg.lists.includes('manual')){ const p=Number(e.manual_prize), g=Number(e.manual_participants); if(p>0&&g>0) cand.push({list:'manuell',platz:p,gesetzt:g}); }
+  let best=null;
+  cand.filter(c=>c.gesetzt>=cfg.minList).forEach(c=>{ c.coef=c.platz*1000/c.gesetzt; if(!best||c.coef<best.coef) best=c; });
+  return best;
+}
+// Auswahl der n besten (kleinsten) Einträge unter Beachtung der Entfernungsbedingungen (km > Schwelle je Platz)
+function ctSelect(items, n, slots){
+  const thr=(slots||[]).slice(0,n).map(Number).filter(x=>!isNaN(x));
+  while(thr.length<n) thr.push(-1);
+  thr.sort((a,b)=>a-b);
+  const sorted=items.slice().sort((a,b)=>a.score-b.score);
+  const picks=[];
+  const indep=set=>{ const k=set.map(x=>x.km).sort((a,b)=>a-b); for(let i=0;i<k.length;i++){ const free=thr.filter(t=>t<k[i]).length; if(free<i+1) return false; } return true; };
+  for(const it of sorted){ if(picks.length>=n) break; if(indep(picks.concat([it]))) picks.push(it); }
+  return {picks, complete:picks.length>=n, total:picks.reduce((s,x)=>s+x.score,0)};
+}
+function ctCompute(){
+  const cfg=ctCfg(); const out={cats:{}, tripInfo:[]};
+  if(!CT.rows) return out;
+  const tripById={}; RT.trips.forEach(t=>{ tripById[t.tripid]=t; });
+  const pig={}; S.pigeons.forEach(p=>{ pig[p.pigeonid]=p; });
+  const trips=RT.trips.filter(t=>String(t.vintage)===String(cfg.year)).sort((a,b)=>String(a.tripdate).localeCompare(String(b.tripdate)));
+  const inc=t=>!cfg.excludedTrips.includes(t.tripid);
+  // Ergebnisse je Taube/Flug
+  const entries=[]; // {pigeon, trip, km, coef..., grp}
+  CT.rows.forEach(r=>{
+    const trip=tripById[r.tripid]; if(!trip||String(trip.vintage)!==String(cfg.year)||!inc(trip)) return;
+    const p=pig[r.pigeonid]; if(!p) return;
+    if(cfg.breeder && zuechterKey(r)!==cfg.breeder) return;
+    const c=ctCoef(r,trip,cfg); if(!c) return;
+    const dy=p.date_year!=null?Number(p.date_year):null, vy=Number(trip.vintage);
+    const grp = dy==null?null:(dy===vy?'jung':(dy<vy?'alt':null));
+    entries.push({pigeon:p,trip,v:!!r.v_flag,km:Number(trip.averagedistance3)||0,coef:c.coef,list:c.list,platz:c.platz,gesetzt:c.gesetzt,grp});
+  });
+  out.entryCount=entries.length; out.vCount=entries.filter(e=>e.v).length;
+  out.breeders=distinctBreeders(CT.rows);
+  trips.forEach(t=>{
+    const es=entries.filter(e=>e.trip.tripid===t.tripid);
+    out.tripInfo.push({trip:t, included:inc(t), n:es.length, best:es.length?Math.min.apply(null,es.map(e=>e.coef)):null});
+  });
+  const fit=(cat,e)=>(cat.who==='all'||e.grp===cat.who)&&e.km>=(cat.minKm||0)&&e.km>0&&(cat.type!=='team'||!cat.vOnly||e.v);
+  cfg.cats.filter(c=>c.enabled&&c.type!=='combo').forEach(cat=>{
+    const es=entries.filter(e=>fit(cat,e));
+    if(cat.type==='team'){
+      const byTrip={};
+      es.forEach(e=>{ (byTrip[e.trip.tripid]=byTrip[e.trip.tripid]||[]).push(e); });
+      const flights=[];
+      Object.keys(byTrip).forEach(tid=>{
+        const l=byTrip[tid].sort((a,b)=>a.coef-b.coef);
+        // je Taube nur ein Eintrag je Flug
+        const seen=new Set(), uniq=[]; l.forEach(e=>{ if(!seen.has(e.pigeon.pigeonid)){ seen.add(e.pigeon.pigeonid); uniq.push(e); } });
+        if(uniq.length<cat.teamSize) return;
+        const members=uniq.slice(0,cat.teamSize);
+        flights.push({trip:uniq[0].trip, km:uniq[0].km, score:members.reduce((s,x)=>s+x.coef,0), members, available:uniq.length});
+      });
+      const sel=ctSelect(flights,cat.nFlights,cat.slots);
+      out.cats[cat.id]={cat, type:'team', flights, sel};
+    } else {
+      const by={};
+      es.forEach(e=>{ const k=e.pigeon.pigeonid; (by[k]=by[k]||{pigeon:e.pigeon,flights:{}}); const ex=by[k].flights[e.trip.tripid]; if(!ex||e.coef<ex.score) by[k].flights[e.trip.tripid]={trip:e.trip,km:e.km,score:e.coef,list:e.list,platz:e.platz,gesetzt:e.gesetzt}; });
+      const list=Object.values(by).map(x=>{ const fl=Object.values(x.flights); const sel=ctSelect(fl,cat.nFlights,cat.slots); return {pigeon:x.pigeon,nAll:fl.length,sel}; });
+      out.cats[cat.id]={cat, type:'pigeon', list};
+    }
+  });
+  cfg.cats.filter(c=>c.enabled&&c.type==='combo').forEach(cat=>{
+    const parts=cat.parts.map(id=>out.cats[id]).filter(Boolean);
+    const ok=parts.length===cat.parts.length && parts.every(p=>p.sel&&p.sel.complete);
+    out.cats[cat.id]={cat,type:'combo',parts,total:parts.reduce((s,p)=>s+(p.sel?p.sel.total:0),0),complete:ok};
+  });
+  // Flüge, die in mehreren Team-Wertungen verwendet werden
+  const used={}; Object.values(out.cats).forEach(r=>{ if(r.type==='team') r.sel.picks.forEach(f=>{ (used[f.trip.tripid]=used[f.trip.tripid]||[]).push(r.cat.name); }); });
+  out.overlap=Object.keys(used).filter(k=>used[k].length>1).map(k=>({trip:tripById[k],cats:used[k]}));
+  return out;
+}
+const ctF=(x,d=1)=>x==null||isNaN(x)?'—':Number(x).toLocaleString('de',{minimumFractionDigits:d,maximumFractionDigits:d});
+function ctSetCfg(k,v){ const c=ctCfg(); c[k]=v; ctSave(); if(k==='year'||k==='lists'||k==='minList'){ if(k==='year'){ c.excludedTrips=[]; CT.rows=null; CT.rowsYear=null; ctLoadRows().then(render); return; } } render(); }
+function ctSetCat(id,k,v){ const c=ctCfg().cats.find(x=>x.id===id); if(!c) return; if(k==='slots') v=String(v).split(/[,;\s]+/).map(Number).filter(x=>!isNaN(x)&&x>=0); else if(['teamSize','nFlights','minKm'].includes(k)) v=Math.max(0,Number(v)||0); c[k]=v;
+  if(k==='type'){ if(v==='combo'&&!c.parts) c.parts=ctCfg().cats.filter(x=>x.type!=='combo'&&x.id!==id).slice(0,2).map(x=>x.id); if(v!=='combo'){ c.who=c.who||'all'; c.teamSize=c.teamSize||3; c.nFlights=c.nFlights||4; c.minKm=c.minKm||0; c.slots=c.slots||[]; } }
+  ctSave(); render(); }
+function ctToggleList(l,on){ const c=ctCfg(); c.lists=c.lists.filter(x=>x!==l); if(on) c.lists.push(l); ctSave(); render(); }
+function ctToggleTrip(tid,on){ const c=ctCfg(); c.excludedTrips=c.excludedTrips.filter(x=>x!==tid); if(!on) c.excludedTrips.push(tid); ctSave(); render(); }
+function ctSwitch(id){ CT.active=id; CT.rows=null; CT.rowsYear=null; ctSave(); ctLoadRows().then(render); }
+function ctNew(){ const y=ctCfg().year; const c=ctPreset(y); c.name='Neuer Wettbewerb'; CT.cfgs.push(c); ctSwitch(c.id); }
+function ctDup(){ const c=JSON.parse(JSON.stringify(ctCfg())); c.id='c'+Date.now().toString(36); c.name+=' (Kopie)'; CT.cfgs.push(c); ctSwitch(c.id); }
+function ctDel(){ if(CT.cfgs.length<2){ alert('Der letzte Wettbewerb kann nicht gelöscht werden.'); return; } if(!confirm('Wettbewerb "'+ctCfg().name+'" löschen?')) return; CT.cfgs=CT.cfgs.filter(c=>c.id!==CT.active); ctSwitch(CT.cfgs[0].id); }
+function ctAddCat(){ const c=ctCfg(); c.cats.push({id:'k'+Date.now().toString(36),name:'Neue Wertung',type:'team',who:'all',teamSize:3,nFlights:4,minKm:0,slots:[],enabled:true}); ctSave(); render(); }
+function ctDelCat(id){ const c=ctCfg(); c.cats=c.cats.filter(x=>x.id!==id); ctSave(); render(); }
+function ctExport(){ const b=new Blob([JSON.stringify({cfgs:CT.cfgs},null,1)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='wettbewerbe.json'; a.click(); }
+function ctImport(f){ if(!f) return; f.text().then(t=>{ try{ const j=JSON.parse(t); if(!Array.isArray(j.cfgs)||!j.cfgs.length) throw new Error('keine Wettbewerbe in der Datei'); j.cfgs.forEach(c=>{ c.id='c'+Date.now().toString(36)+Math.floor(Math.random()*999); CT.cfgs.push(c); }); ctSwitch(CT.cfgs[CT.cfgs.length-1].id); }catch(e){ alert('Import fehlgeschlagen: '+e.message); } }); }
+function ctPigName(p){ return escH((p.name?p.name+' · ':'')+(p.ringnumber||'?')); }
+function ctBreederOptions(cfg){
+  const bs=CT.rows?distinctBreeders(CT.rows):[];
+  if(cfg.breeder && !bs.find(b=>b.key===cfg.breeder)) bs.unshift({key:cfg.breeder,name:breederNameForKey(cfg.breeder)||cfg.breeder,number:null});
+  return bs.map(b=>'<option value="'+escH(b.key)+'"'+(b.key===cfg.breeder?' selected':'')+'>'+escH(zuechterLabel(b.name,b.number))+'</option>').join('');
+}
+function renderContest(){
+  if(!CT.ready) ctLoadCfg();
+  const cfg=ctCfg();
+  const years=[...new Set(RT.trips.map(t=>t.vintage).filter(Boolean))].sort((a,b)=>b-a);
+  if(!years.includes(cfg.year)) years.unshift(cfg.year);
+  const inp='background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text1);font-size:13px';
+  let h='<div><button class="back-btn" onclick="RT.step=\'list\';render()">← Alle Flüge</button>';
+  h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px"><div class="serif" style="font-size:22px">🏆 Wettbewerbs-Auswertung</div><div style="display:flex;gap:6px;flex-wrap:wrap">'
+   +'<select style="'+inp+'" onchange="ctSwitch(this.value)">'+CT.cfgs.map(c=>'<option value="'+c.id+'"'+(c.id===cfg.id?' selected':'')+'>'+escH(c.name)+' ('+c.year+')</option>').join('')+'</select>'
+   +'<button class="btn btn-outline btn-sm" onclick="ctNew()">＋ Neu</button><button class="btn btn-outline btn-sm" onclick="ctDup()">Kopieren</button><button class="btn btn-outline btn-sm" onclick="ctDel()">Löschen</button>'
+   +'<button class="btn btn-outline btn-sm" onclick="ctExport()">⬇ Export</button><label class="btn btn-outline btn-sm" style="cursor:pointer">⬆ Import<input type="file" accept=".json" style="display:none" onchange="ctImport(this.files[0])"></label></div></div>';
+  h+='<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Koeffizient je Taube und Flug = Preis × 1000 ÷ gesetzte Tauben der Liste; je Flug zählt die günstigste zählende Liste. Kleinere Werte sind besser. Einstellungen werden in diesem Browser gespeichert (Export/Import zum Übertragen).</div>';
+  h+='<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:6px">'
+   +'<label style="font-size:13px">Name <input style="'+inp+';width:200px" value="'+escH(cfg.name)+'" onchange="ctSetCfg(\'name\',this.value)"></label>'
+   +'<label style="font-size:13px">Wertungsjahr <select style="'+inp+'" onchange="ctSetCfg(\'year\',Number(this.value))">'+years.map(y=>'<option'+(y==cfg.year?' selected':'')+'>'+y+'</option>').join('')+'</select></label>'
+   +'<label style="font-size:13px">Züchter <select style="'+inp+';max-width:260px" onchange="ctSetCfg(\'breeder\',this.value)"><option value="">alle Züchter</option>'+ctBreederOptions(cfg)+'</select></label>'
+   +'<label style="font-size:13px">Mindest-Taubenzahl der Liste <input type="number" style="'+inp+';width:80px" value="'+cfg.minList+'" min="0" onchange="ctSetCfg(\'minList\',Number(this.value)||0)"></label>'
+   +'<span style="font-size:13px">Zählende Listen: '+CT_LISTS.map(([k,l])=>'<label style="margin-right:8px"><input type="checkbox" '+(cfg.lists.includes(k)?'checked':'')+' onchange="ctToggleList(\''+k+'\',this.checked)"> '+l+'</label>').join('')+'</span></div></div>';
+  // Wertungen
+  h+='<div class="card" style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="card-title" style="margin:0">Wertungen</div><button class="btn btn-outline btn-sm" onclick="ctAddCat()">＋ Wertung</button></div>'
+   +'<div class="table-wrap"><table><thead><tr><th>Aktiv</th><th>Name</th><th>Art</th><th>Tauben</th><th>Tauben je Flug</th><th title="nur Tauben mit V-Kennzeichen (Vorbenennung Verbandsmeisterschaft, bis 6 je Flug)">nur V-benannt</th><th>Flüge</th><th>Min. km</th><th>km-Bedingungen (je Flug „mehr als“)</th><th></th></tr></thead><tbody>'
+   +cfg.cats.map(c=>{ const combo=c.type==='combo';
+     return '<tr><td><input type="checkbox" '+(c.enabled?'checked':'')+' onchange="ctSetCat(\''+c.id+'\',\'enabled\',this.checked)"></td>'
+     +'<td><input style="'+inp+';width:210px" value="'+escH(c.name)+'" onchange="ctSetCat(\''+c.id+'\',\'name\',this.value)"></td>'
+     +'<td><select style="'+inp+'" onchange="ctSetCat(\''+c.id+'\',\'type\',this.value)"><option value="team"'+(c.type==='team'?' selected':'')+'>Team je Flug</option><option value="pigeon"'+(c.type==='pigeon'?' selected':'')+'>Einzeltaube</option><option value="combo"'+(combo?' selected':'')+'>Summe aus Wertungen</option></select></td>'
+     +(combo?'<td colspan="6" style="font-size:12px;color:var(--text3)">Summe aus: '+c.parts.map(id=>{ const x=cfg.cats.find(k=>k.id===id); return escH(x?x.name:id); }).join(' + ')+'</td>'
+      :'<td><select style="'+inp+'" onchange="ctSetCat(\''+c.id+'\',\'who\',this.value)"><option value="alt"'+(c.who==='alt'?' selected':'')+'>Alttauben/Jährige</option><option value="jung"'+(c.who==='jung'?' selected':'')+'>Jungtauben</option><option value="all"'+(c.who==='all'?' selected':'')+'>alle</option></select></td>'
+       +'<td>'+(c.type==='team'?'<input type="number" style="'+inp+';width:60px" min="1" value="'+c.teamSize+'" onchange="ctSetCat(\''+c.id+'\',\'teamSize\',this.value)">':'—')+'</td>'
+       +'<td style="text-align:center">'+(c.type==='team'?'<input type="checkbox" '+(c.vOnly?'checked':'')+' onchange="ctSetCat(\''+c.id+'\',\'vOnly\',this.checked)">':'—')+'</td>'
+       +'<td><input type="number" style="'+inp+';width:60px" min="1" value="'+c.nFlights+'" onchange="ctSetCat(\''+c.id+'\',\'nFlights\',this.value)"></td>'
+       +'<td><input type="number" style="'+inp+';width:70px" min="0" value="'+c.minKm+'" onchange="ctSetCat(\''+c.id+'\',\'minKm\',this.value)"></td>'
+       +'<td><input style="'+inp+';width:170px" placeholder="z. B. 300,400,400,500" value="'+escH((c.slots||[]).join(','))+'" onchange="ctSetCat(\''+c.id+'\',\'slots\',this.value)"></td>')
+     +'<td><button class="btn btn-outline btn-sm" onclick="ctDelCat(\''+c.id+'\')" title="Wertung entfernen">✕</button></td></tr>'; }).join('')
+   +'</tbody></table></div><div style="font-size:11px;color:var(--text3);margin-top:6px">„Team je Flug“: je Flug zählen die besten N eigenen Tauben, gewertet werden die besten Flüge. „Einzeltaube“: je Taube zählen ihre besten Flüge. km-Bedingungen: jeder Eintrag verlangt einen eigenen Flug mit mehr als dieser Entfernung (z. B. 300,400,400,500 = 1 Flug &gt;300, 2 Flüge &gt;400, 1 Flug &gt;500).</div></div>';
+  if(CT.loading) return h+'<div class="card" style="margin-top:14px;color:var(--text3)">⏳ Lade Flugergebnisse…</div></div>';
+  if(CT.error) return h+'<div class="card" style="margin-top:14px;color:#e07070">'+escH(CT.error)+'</div></div>';
+  if(!CT.rows) return h+'</div>';
+  const R=ctCompute();
+  if(cfg.cats.some(c=>c.enabled&&c.type==='team'&&c.vOnly) && !R.vCount) h+='<div class="card" style="margin-top:14px;font-size:13px;color:#e0a030">⚠ Für diesen Züchter/dieses Jahr sind keine Tauben mit V-Kennzeichen (Vorbenennung) importiert. Die Team-Wertungen mit „nur V-benannt“ bleiben daher leer — entweder die Flugergebnisse mit V-Spalte neu importieren oder das Häkchen entfernen.</div>';
+  // Reiseplan
+  h+='<div class="card" style="margin-top:14px"><div class="card-title">Reiseplan '+cfg.year+' ('+R.tripInfo.length+' Flüge, '+R.entryCount+' wertbare Einzelergebnisse)</div><div class="table-wrap"><table><thead><tr><th>Gewertet</th><th>Nr.</th><th>Datum</th><th>Auflassort</th><th style="text-align:right">km</th><th style="text-align:right">RV</th><th style="text-align:right">RegGr</th><th style="text-align:right">Reg</th><th style="text-align:right">eigene Ergebnisse</th><th style="text-align:right">bester Koeff.</th></tr></thead><tbody>'
+   +R.tripInfo.map(i=>{ const t=i.trip; return '<tr style="'+(i.included?'':'opacity:.5')+'"><td><input type="checkbox" '+(i.included?'checked':'')+' onchange="ctToggleTrip(\''+t.tripid+'\',this.checked)"></td><td>'+t.number+'</td><td>'+shortTripDate(t.tripdate)+'</td><td>'+escH(t.location||'')+'</td><td style="text-align:right">'+(t.averagedistance3!=null?Math.round(t.averagedistance3):'—')+'</td><td style="text-align:right">'+(t.pigeonsset_rv||t.pigeonsset_rv_calc||'—')+'</td><td style="text-align:right">'+(t.pigeonsset_reggr||'—')+'</td><td style="text-align:right">'+(t.pigeonsset_reg||'—')+'</td><td style="text-align:right">'+i.n+'</td><td style="text-align:right">'+ctF(i.best,1)+'</td></tr>'; }).join('')
+   +'</tbody></table></div><div style="font-size:11px;color:var(--text3);margin-top:6px">Nur Flüge mit Häkchen werden gewertet (zugelassener Reiseplan). Es zählen nur Listen mit mindestens '+cfg.minList+' gesetzten Tauben.</div></div>';
+  // Ergebnisse
+  cfg.cats.filter(c=>c.enabled).forEach(cat=>{
+    const r=R.cats[cat.id]; if(!r) return;
+    h+='<div class="card" style="margin-top:14px"><div class="card-title">'+escH(cat.name)+'</div>';
+    if(r.type==='team'){
+      const s=r.sel;
+      h+='<div style="font-size:14px;margin-bottom:8px">Gesamt: <strong style="font-size:20px">'+ctF(s.total,1)+'</strong> <span style="color:var(--text3)">('+s.picks.length+' von '+cat.nFlights+' Wertungsflügen'+(s.complete?'':' – <span style="color:#e0a030">Wertung unvollständig</span>')+')</span></div>';
+      h+='<div class="table-wrap"><table><thead><tr><th>Wertungsflug</th><th>Datum</th><th style="text-align:right">km</th><th>Gewertete Tauben (Koeffizient · Liste/Platz/gesetzt)</th><th style="text-align:right">Flug-Summe</th></tr></thead><tbody>'
+       +s.picks.sort((a,b)=>String(a.trip.tripdate).localeCompare(String(b.trip.tripdate))).map(f=>'<tr><td>'+f.trip.number+' · '+escH(f.trip.location||'')+'</td><td>'+shortTripDate(f.trip.tripdate)+'</td><td style="text-align:right">'+Math.round(f.km)+'</td><td>'+f.members.map(m=>ctPigName(m.pigeon)+' <span style="color:var(--text3)">'+ctF(m.coef,1)+' · '+m.list+' '+m.platz+'/'+m.gesetzt+'</span>').join('<br>')+'</td><td style="text-align:right"><strong>'+ctF(f.score,1)+'</strong></td></tr>').join('')
+       +'</tbody></table></div>';
+      const rest=r.flights.filter(f=>!s.picks.includes(f)).sort((a,b)=>a.score-b.score);
+      if(rest.length) h+='<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--text3)">Nicht gewertete Flüge ('+rest.length+')</summary><div class="table-wrap"><table><tbody>'+rest.map(f=>'<tr><td>'+f.trip.number+' · '+escH(f.trip.location||'')+'</td><td style="text-align:right">'+Math.round(f.km)+' km</td><td style="text-align:right">'+ctF(f.score,1)+'</td></tr>').join('')+'</tbody></table></div></details>';
+      if(!r.flights.length) h+='<div style="color:var(--text3);font-size:13px">Keine Flüge mit mindestens '+cat.teamSize+' wertbaren Tauben.</div>';
+    } else if(r.type==='pigeon'){
+      const full=r.list.filter(x=>x.sel.complete).sort((a,b)=>a.sel.total-b.sel.total);
+      const part=r.list.filter(x=>!x.sel.complete).sort((a,b)=>b.sel.picks.length-a.sel.picks.length||a.sel.total-b.sel.total);
+      const lim=CT.showAll[cat.id]?9999:15;
+      h+='<div style="font-size:12px;color:var(--text3);margin-bottom:6px">'+full.length+' Tauben mit '+cat.nFlights+' Wertungsflügen, '+part.length+' mit weniger.</div>';
+      h+='<div class="table-wrap"><table><thead><tr><th>Platz</th><th>Taube</th><th style="text-align:right">Summe Koeff.</th><th>Wertungsflüge (Koeffizient)</th></tr></thead><tbody>'
+       +full.slice(0,lim).map((x,i)=>'<tr><td>'+(i+1)+'</td><td>'+ctPigName(x.pigeon)+'</td><td style="text-align:right"><strong>'+ctF(x.sel.total,1)+'</strong></td><td style="font-size:12px;color:var(--text3)">'+x.sel.picks.sort((a,b)=>String(a.trip.tripdate).localeCompare(String(b.trip.tripdate))).map(f=>shortTripDate(f.trip.tripdate)+' '+escH(f.trip.location||'')+' '+ctF(f.score,1)).join(' · ')+'</td></tr>').join('')
+       +(CT.showAll[cat.id]?part.map(x=>'<tr style="opacity:.6"><td>–</td><td>'+ctPigName(x.pigeon)+'</td><td style="text-align:right">'+ctF(x.sel.total,1)+'</td><td style="font-size:12px;color:var(--text3)">nur '+x.sel.picks.length+' von '+cat.nFlights+' Flügen</td></tr>').join(''):'')
+       +'</tbody></table></div>'
+       +((full.length>lim||part.length)&&!CT.showAll[cat.id]?'<button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="CT.showAll[\''+cat.id+'\']=true;render()">alle anzeigen (inkl. unvollständige)</button>':'');
+    } else {
+      h+='<div style="font-size:14px">Gesamt: <strong style="font-size:20px">'+ctF(r.total,1)+'</strong> '+(r.complete?'':'<span style="color:#e0a030">(unvollständig – nicht alle Teilwertungen komplett)</span>')+'</div>'
+       +'<div style="font-size:12px;color:var(--text3);margin-top:4px">'+r.parts.map(p=>escH(p.cat.name)+': '+ctF(p.sel.total,1)).join(' + ')+'</div>';
+    }
+    h+='</div>';
+  });
+  if(R.overlap.length) h+='<div class="card" style="margin-top:14px;font-size:13px;color:#e0a030">⚠ Folgende Flüge werden in mehreren Team-Wertungen verwendet, in der Ausschreibung zählt ein Flugergebnis aber nur einmal: '+R.overlap.map(o=>escH((o.trip?o.trip.number+' '+o.trip.location:'?')+' ('+o.cats.join(', ')+')')).join('; ')+'</div>';
+  return h+'</div>';
+}
+
 function renderReisen(){
+  if(RT.step==='contest') return renderContest();
   if(RT.step==='import') return renderTripsImport();
   if(RT.step==='detail') return renderTripDetail();
   return renderTripsList();
@@ -10901,7 +11134,7 @@ function renderTripsList(){
     </div>`;
   }).join('');
 
-  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" title="Findet Reisen, die versehentlich mehrfach angelegt wurden (gleicher Jahrgang/Ort/Datum) und führt sie zusammen." onclick="showDuplicateTripsModal()">🧹 Duplikate bereinigen</button><button class="btn btn-outline" title="Gleicht Flugergebnisse ohne Taubenzuordnung (z.B. weil die Taube erst nach dem Import angelegt wurde) erneut per Ringnummer mit der Tauben-Datenbank ab." onclick="runBackfillMissingPigeonLinks(event)">🔗 Fehlende Verknüpfungen reparieren</button><button class="btn btn-outline" title="Für alle bereits importierten Flüge ohne eigene RV-Liste (zu wenig Tauben) die RV-Rangliste selbst berechnen und speichern — einmalig nötig für Altbestand, neue Importe machen das automatisch." onclick="runBackfillRVFallbackAll(event)">🧮 RV-Ranglisten nachrechnen</button><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div></div>'
+  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" title="Koeffizienten-Auswertung für Wettbewerbe wie den Vanrobaeys Supercup (frei konfigurierbar)." onclick="openContest()">🏆 Wettbewerbe</button><button class="btn btn-outline" title="Findet Reisen, die versehentlich mehrfach angelegt wurden (gleicher Jahrgang/Ort/Datum) und führt sie zusammen." onclick="showDuplicateTripsModal()">🧹 Duplikate bereinigen</button><button class="btn btn-outline" title="Gleicht Flugergebnisse ohne Taubenzuordnung (z.B. weil die Taube erst nach dem Import angelegt wurde) erneut per Ringnummer mit der Tauben-Datenbank ab." onclick="runBackfillMissingPigeonLinks(event)">🔗 Fehlende Verknüpfungen reparieren</button><button class="btn btn-outline" title="Für alle bereits importierten Flüge ohne eigene RV-Liste (zu wenig Tauben) die RV-Rangliste selbst berechnen und speichern — einmalig nötig für Altbestand, neue Importe machen das automatisch." onclick="runBackfillRVFallbackAll(event)">🧮 RV-Ranglisten nachrechnen</button><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div></div>'
     +(anyComputedRV?'<div style="font-size:11px;color:var(--text3);margin:-8px 0 12px">* RV-Taubenzahl selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene).</div>':'')
     +(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
 }
