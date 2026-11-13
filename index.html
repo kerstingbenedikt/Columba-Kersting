@@ -10034,7 +10034,9 @@ const CI_FIELDS = [
 const CI_CMP = [['instock','Im Bestand'],['pigeonstateid','Status'],['gender','Geschlecht'],['info','Info'],['internalinfo','Interne Info']];
 const CI_LABEL = Object.fromEntries(CI_FIELDS.concat(CI_CMP));
 function ciTextDiffers(a,b){ // Texte gelten erst bei mehr als 5 abweichenden Zeichen als verschieden
-  a=String(a).trim().toLowerCase(); b=String(b).trim().toLowerCase();
+  // Nur Buchstaben und Ziffern zählen: Leerzeichen, Zeilenumbrüche, Satzzeichen und Groß-/Kleinschreibung sind egal
+  const nz=x=>String(x).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/ß/g,'ss').replace(/[^\p{L}\p{N}]+/gu,'');
+  a=nz(a); b=nz(b);
   if(a===b) return false;
   let i=0; while(i<a.length&&i<b.length&&a[i]===b[i]) i++;
   let j=0; while(j<a.length-i&&j<b.length-i&&a[a.length-1-j]===b[b.length-1-j]) j++;
