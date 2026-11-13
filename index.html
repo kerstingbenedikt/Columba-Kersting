@@ -44,14 +44,19 @@ html,body{overflow-x:hidden;max-width:100%}
 :root[data-theme=light]{
   color-scheme:light;
   --bg:#fafaf8;--bg2:#ffffff;--bg3:#f0f1f4;--bg4:#e2e5ec;
-  --green:#8a6608;--green2:#6f5206;--green3:#f6e7ad;--gold:#9a7410;
+  --green:#8a6608;--green2:#7a5a06;--green3:#262b37;--gold:#9a7410;
   --text:#14171f;--text2:#363c4b;--text3:#586071;
   --border:#cdd2dc;--border2:#98a1b4;
   --blue:#1f6fcf;--purple:#7a2fc0;--orange:#b9540f;--amber:#8f6a0c;
 }
-:root[data-theme=light] .filter-badge{color:#4a3904}
 :root[data-theme=light] .search-wrap input{background:#fff;border-color:var(--gold)}
 :root[data-theme=light] .lightbox-overlay{background:rgba(20,28,45,.8)}
+:root[data-theme=light] .btn{color:#fff;border-color:#262b37}
+:root[data-theme=light] .btn:hover{background:#7a5a06;border-color:#7a5a06}
+:root[data-theme=light] .btn-outline{background:#fff;color:var(--text);border-color:var(--border2)}
+:root[data-theme=light] .btn-outline:hover{background:var(--bg3);border-color:var(--text)}
+:root[data-theme=light] .btn:disabled,:root[data-theme=light] .btn[disabled]{opacity:.55}
+:root[data-theme=light] .subnav-btn.active{color:#fff}
 :root[data-theme=light] th{color:var(--text2);font-weight:600}
 :root[data-theme=light] td{color:var(--text)}
 :root[data-theme=light] .card,:root[data-theme=light] .filter-panel{box-shadow:0 1px 3px rgba(20,23,31,.08)}
