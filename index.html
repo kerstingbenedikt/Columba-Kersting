@@ -7,6 +7,7 @@
 <title>PIGMAN PigeonManager</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
+html{-webkit-text-size-adjust:100%}
 /* Druckdialog: Elemente als kompakte Chips mit einem Farbpunkt */
 .pp-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:16px;padding:3px 8px 3px 4px;background:var(--bg3);opacity:.55}
 .pp-chip.on{opacity:1;border-color:color-mix(in srgb,var(--green) 55%,var(--border))}
@@ -53,7 +54,7 @@ header{background:var(--bg2);border-bottom:2px solid transparent;border-image:va
 .profile-btn{width:34px;height:34px;border-radius:50%;border:1.5px solid transparent;background:linear-gradient(var(--bg3),var(--bg3)) padding-box,var(--grad) border-box;color:var(--text);font-weight:600;font-size:14px;cursor:pointer;margin-left:10px;flex-shrink:0;font-family:inherit}
 .profile-btn:hover{color:var(--gold)}
 
-th .colf-btn{margin-left:6px;background:transparent;border:1px solid transparent;color:var(--text3);border-radius:4px;font-size:11px;line-height:1;padding:2px 4px;cursor:pointer}
+th .colf-btn{margin-left:6px;background:transparent;border:1px solid transparent;color:var(--text3);border-radius:4px;font-size:12px;line-height:1;padding:2px 4px;cursor:pointer}
 th .colf-btn:hover{color:var(--text);border-color:var(--border2)}
 th .colf-btn.on,th.colf-on{color:var(--gold)}
 th .colf-btn.on{border-color:var(--gold);background:rgba(201,162,39,.15)}
@@ -69,13 +70,13 @@ th .colf-btn.on{border-color:var(--gold);background:rgba(201,162,39,.15)}
 .colf-list{flex:1 1 auto;min-height:60px;max-height:min(260px,45vh);overflow:auto;border:1px solid var(--border);border-radius:6px;background:var(--bg3)}
 .colf-row{display:flex;align-items:center;gap:8px;padding:5px 8px;cursor:pointer}
 .colf-row:hover{background:var(--bg4)}.colf-row span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.colf-row em{font-style:normal;color:var(--text3);font-size:11px}
+.colf-row em{font-style:normal;color:var(--text3);font-size:12px}
 .colf-foot{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;flex:0 0 auto}
 .colf-title,.colf-tools,.colf-pop input[type=text]{flex:0 0 auto}
 .pg-ico{vertical-align:-3px;color:var(--gold)}
 .app-sub{font-family:'DM Sans',sans-serif;font-weight:400;font-size:.55em;letter-spacing:.2em;text-transform:uppercase;color:var(--text3);margin-left:8px}
 header h1{font-family:'Playfair Display',serif;font-size:18px;font-weight:600}
-.db-status{font-size:11px;color:var(--text3);margin-top:1px}
+.db-status{font-size:12px;color:var(--text3);margin-top:1px}
 .header-right{display:flex;align-items:center;gap:8px}
 .stat-pill{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:12px;color:var(--text2);white-space:nowrap}
 .stat-pill span{color:var(--green);font-weight:600;font-family:monospace}
@@ -105,7 +106,7 @@ main{padding:18px 20px;max-width:1300px;margin:0 auto}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
 .search-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
 .search-wrap{position:relative;flex:1 1 110px;min-width:110px;order:2}
-.search-wrap input{width:100%;background:#f4f7fc;color:#000 !important;-webkit-text-fill-color:#000;caret-color:#000;border:2px solid var(--gold);box-shadow:0 0 0 3px rgba(201,162,39,.18);font-weight:500;border-radius:var(--radius-sm);padding:9px 12px 9px 36px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .15s}
+.search-wrap input{width:100%;background:#f4f7fc;color:#000 !important;-webkit-text-fill-color:#000;caret-color:#000;border:2px solid var(--gold);box-shadow:0 0 0 3px rgba(201,162,39,.18);font-weight:500;border-radius:var(--radius-sm);padding:9px 12px 9px 36px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color .15s}
 .search-wrap input:focus{border-color:var(--green)}
 .search-wrap input::placeholder{color:var(--text3)}
 .search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none}
@@ -115,7 +116,7 @@ main{padding:18px 20px;max-width:1300px;margin:0 auto}
 .search-wrap input:focus{box-shadow:0 0 0 4px rgba(201,162,39,.4)}
 .search-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:20px;height:20px;border-radius:50%;display:none;align-items:center;justify-content:center;color:var(--text3);font-size:13px;cursor:pointer;background:none;border:none;line-height:1}
 .search-clear:hover{background:var(--bg4);color:var(--text)}
-select{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:8px 10px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;height:36px}
+select{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:8px 10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;height:36px}
 select:focus{border-color:var(--green)}
 .count-label{font-size:12px;color:var(--text3);white-space:nowrap}
 .archive-hint{font-size:12px;color:var(--accent,#a67c00);background:var(--accent-bg,rgba(166,124,0,.12));border:1px solid var(--accent,#a67c00);border-radius:6px;padding:5px 10px;margin:4px 0 2px}
@@ -126,26 +127,26 @@ select:focus{border-color:var(--green)}
 .filter-panel{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:0;background:var(--bg2);flex:0 0 auto;order:1;align-self:flex-start}
 .filter-panel[open]{flex-basis:100%}
 .count-label{order:3}
-.filter-panel summary{list-style:none;cursor:pointer;padding:10px 14px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);user-select:none}
+.filter-panel summary{list-style:none;cursor:pointer;padding:10px 14px;display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text2);user-select:none}
 .filter-panel summary::-webkit-details-marker{display:none}
-.filter-panel summary::before{content:'▸';display:inline-block;color:var(--text3);transition:transform .15s;font-size:11px}
+.filter-panel summary::before{content:'▸';display:inline-block;color:var(--text3);transition:transform .15s;font-size:12px}
 .filter-panel[open] summary::before{transform:rotate(90deg)}
 .filter-panel-body{padding:2px 14px 14px;border-top:1px solid var(--border)}
-.filter-badge{background:var(--green3);color:#e8f0e8;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600}
+.filter-badge{background:var(--green3);color:#e8f0e8;border-radius:10px;padding:1px 8px;font-size:12px;font-weight:600}
 
 /* ── Tabelle ── */
 .table-wrap{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--border)}
 .pigeon-cards{display:none}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:var(--bg3);color:var(--text3);font-weight:500;text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{background:var(--bg3);color:var(--text3);font-weight:500;text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
 th:hover{color:var(--text2)}
 td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
-.ring{font-family:monospace;font-size:11.5px;color:var(--text);background:var(--bg3);padding:2px 7px;border-radius:4px;border:1px solid var(--border)}
-.ring-sm{font-family:monospace;font-size:11px;color:var(--green);background:color-mix(in srgb,var(--green) 10%,var(--bg3));padding:1px 6px;border-radius:3px;cursor:pointer;transition:background .15s}
+.ring{font-family:monospace;font-size:13px;color:var(--text);background:var(--bg3);padding:2px 7px;border-radius:4px;border:1px solid var(--border)}
+.ring-sm{font-family:monospace;font-size:12px;color:var(--green);background:color-mix(in srgb,var(--green) 10%,var(--bg3));padding:1px 6px;border-radius:3px;cursor:pointer;transition:background .15s}
 .ring-sm:hover{background:color-mix(in srgb,var(--green) 20%,var(--bg3))}
-.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:500}
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:500}
 .badge-m{background:#1a2d4a;color:#7ab3e0}
 .badge-f{background:#2d1a3d;color:#c97fd4}
 .badge-u{background:var(--bg3);color:var(--text3);border:1px solid var(--border)}
@@ -159,11 +160,11 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .qe-switch input:checked + .qe-track:before{transform:translateX(15px);background:var(--green)}
 .qe-switch input:disabled + .qe-track{opacity:.5;cursor:not-allowed}
 .qe-row{display:flex;align-items:center;gap:6px}
-.qe-label{font-size:11px;color:var(--text3);white-space:nowrap}
+.qe-label{font-size:12px;color:var(--text3);white-space:nowrap}
 .qe-status-select{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;padding:3px 6px;max-width:140px}
 .qe-quickbar{display:flex;flex-wrap:wrap;gap:16px;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px}
 .qe-quickbar .qe-group{display:flex;flex-direction:column;gap:4px}
-.qe-quickbar .qe-group-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)}
+.qe-quickbar .qe-group-label{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)}
 
 /* ── Pagination ── */
 .pagination{display:flex;align-items:center;gap:6px;margin-top:12px;justify-content:flex-end;flex-wrap:wrap}
@@ -177,7 +178,7 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .back-btn:hover{border-color:var(--green);color:var(--text)}
 .detail-name{font-family:'Playfair Display',serif;font-size:26px;margin-bottom:3px}
 .detail-ring{font-family:monospace;font-size:14px;color:var(--green);margin-bottom:14px}
-.section-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin:18px 0 10px}
+.section-label{font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin:18px 0 10px}
 .parent-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;cursor:pointer;transition:border-color .15s,background .15s}
 .parent-card:hover{border-color:var(--green);background:var(--bg4)}
 .parent-card.male{border-left:3px solid var(--blue)}
@@ -185,7 +186,7 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .parent-card.unknown{cursor:default;opacity:.5}
 .parent-card.unknown:hover{border-color:var(--border);background:var(--bg3)}
 .field-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
-.field-item label{display:block;font-size:10px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.field-item label{display:block;font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
 .field-item span{font-size:13px;color:var(--text)}
 
 /* ── Buttons ── */
@@ -200,8 +201,8 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 /* ── Stammbaum-Grid ── */
 .ped-tree{display:flex;flex-direction:row;align-items:stretch;gap:0;min-width:860px;overflow-x:auto}
 .ped-col{display:flex;flex-direction:column;justify-content:space-around;position:relative;padding:0 6px}
-.ped-col-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;text-align:center;padding:4px 0 8px;border-bottom:1px solid var(--border);margin-bottom:4px}
-.ped-col-hdr{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;text-align:center;padding:4px 0;margin-bottom:6px}
+.ped-col-label{font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;text-align:center;padding:4px 0 8px;border-bottom:1px solid var(--border);margin-bottom:4px}
+.ped-col-hdr{font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;text-align:center;padding:4px 0;margin-bottom:6px}
 .ped-cell{display:flex;align-items:center;flex:1;position:relative;min-height:60px}
 .ped-cell-inner{width:100%}
 /* Verbindungslinien */
@@ -219,7 +220,7 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .ped-cell.pair-bottom::after{top:0;bottom:50%}
 /* Einzelkind (Proband) */
 .ped-cell.solo::after{display:none}
-.ped-col-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.ped-col-label{font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;padding-bottom:6px;border-bottom:1px solid var(--border)}
 .ped-box{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 10px;cursor:pointer;transition:border-color .15s,background .15s}
 .ped-box:hover{border-color:var(--green);background:var(--bg4)}
 .ped-box.male{border-left:3px solid var(--blue)}
@@ -232,9 +233,9 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .scan-node-active{outline:2px solid var(--green);outline-offset:1px}
 .scan-dd{cursor:grab;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .scan-drop-target{outline:2px dashed var(--gold,#c9a227)!important;outline-offset:2px;background:rgba(201,162,39,.18)!important}
-.ped-ring{font-family:monospace;font-size:11px;color:var(--green);font-weight:600}
+.ped-ring{font-family:monospace;font-size:12px;color:var(--green);font-weight:600}
 .ped-name{font-size:12px;color:var(--text);margin-top:2px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ped-info{font-size:11px;color:var(--text3);margin-top:1px}
+.ped-info{font-size:12px;color:var(--text3);margin-top:1px}
 
 /* ── Stammbaum Suche ── */
 .ped-result{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:10px}
@@ -250,7 +251,7 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .bar-label{font-size:12px;color:var(--text2);width:50px;flex-shrink:0;font-family:monospace;text-align:right}
 .bar-track{flex:1;background:var(--bg3);border-radius:4px;height:18px;overflow:hidden}
 .bar-fill{background:linear-gradient(90deg,var(--green3),var(--green2));height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;min-width:30px;transition:width .4s ease}
-.bar-fill span{font-size:11px;color:#e8f0e8;white-space:nowrap}
+.bar-fill span{font-size:12px;color:#e8f0e8;white-space:nowrap}
 .bar-row.clickable{cursor:pointer;border-radius:4px;transition:background .12s}
 .bar-row.clickable:hover{background:var(--bg3)}
 .bar-row.clickable:hover .bar-fill{filter:brightness(1.15)}
@@ -262,8 +263,8 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 /* ── Neue Taube / Formular ── */
 .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
 .form-field{display:grid;gap:5px}
-.form-field label{font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.4px}
-.form-field input,.form-field select,.form-field textarea{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:8px 10px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s}
+.form-field label{font-size:12px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.4px}
+.form-field input,.form-field select,.form-field textarea{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:8px 10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s}
 .form-field input:focus,.form-field select:focus,.form-field textarea:focus{border-color:var(--green)}
 .form-field textarea{min-height:80px;resize:vertical}
 .form-full{grid-column:1 / -1}
@@ -271,7 +272,7 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 
 /* ── Taubenformular (Neu anlegen + Bearbeiten, identisch) ── */
 .pf-block{margin-bottom:20px}
-.pf-title{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px}
+.pf-title{font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px}
 .pf-id{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1.1fr) minmax(0,1.7fr) minmax(0,1fr);gap:12px;align-items:start}
 .pf-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .pf-4{display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr);gap:12px}
@@ -279,25 +280,25 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .pf-seg button{flex:1;background:transparent;border:0;color:var(--text2);padding:8px 10px;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap}
 .pf-seg button+button{border-left:1px solid var(--border)}
 .pf-seg button{display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.25;white-space:normal;min-height:38px}
-.pf-seg button small{font-size:10px;font-weight:400;opacity:.8}
+.pf-seg button small{font-size:12px;font-weight:400;opacity:.8}
 .pf-seg button.on.m{background:color-mix(in srgb,var(--blue) 22%,var(--bg3));color:var(--blue);font-weight:600}
 .pf-seg button.on.f{background:color-mix(in srgb,var(--purple) 22%,var(--bg3));color:var(--purple);font-weight:600}
 .pf-parents{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:18px;align-items:start}
 .pf-pfields{display:grid;gap:12px}
-.pf-hint{font-size:11px;color:var(--text3);line-height:1.5}
+.pf-hint{font-size:12px;color:var(--text3);line-height:1.5}
 .pf-inwrap{position:relative}
 .pf-inwrap input{width:100%;box-sizing:border-box;padding-right:28px}
 .pf-x{position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--text3);font-size:14px;line-height:1}
 .pf-x:hover{color:var(--orange)}
 .pf-ped{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px}
-.pf-ph{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)}
+.pf-ph{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)}
 .pf-pb{background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--border2,var(--border));border-radius:6px;padding:5px 8px;min-height:38px;display:flex;flex-direction:column;justify-content:center;gap:1px;min-width:0;overflow:hidden;box-sizing:border-box}
 .pf-pb.m{border-left-color:var(--blue)}
 .pf-pb.f{border-left-color:var(--purple)}
-.pf-pb.empty{border-style:dashed;border-left-width:1px;align-items:center;color:var(--text3);font-size:11px}
-.pf-pb .r{font-family:monospace;font-size:11px;color:var(--green);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pf-pb .n{font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pf-pb .s{font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-pb.empty{border-style:dashed;border-left-width:1px;align-items:center;color:var(--text3);font-size:12px}
+.pf-pb .r{font-family:monospace;font-size:12px;color:var(--green);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-pb .n{font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-pb .s{font-size:12px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pf-pb.root{border-width:1px;border-left-width:3px}
 .pf-v{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:13px;color:var(--text);min-height:36px;box-sizing:border-box;display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .pf-v.empty{color:var(--text3)}
@@ -311,10 +312,10 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .pf-pb.nav:hover{border-color:var(--green)}
 .pg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 .pg-tile{position:relative;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;display:flex;flex-direction:column;min-width:0}
-.pg-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);padding:6px 8px 4px}
+.pg-label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);padding:6px 8px 4px}
 .pg-img{aspect-ratio:4/3;background:#fff;cursor:zoom-in}
 .pg-img img{width:100%;height:100%;object-fit:contain;display:block}
-.pg-cap{padding:5px 8px;font-size:11px;color:var(--text2);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:24px;box-sizing:border-box}
+.pg-cap{padding:5px 8px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:24px;box-sizing:border-box}
 .pg-cap.empty{color:var(--text3)}
 .pg-cap:hover{color:var(--green)}
 .pg-actions{position:absolute;top:4px;right:4px;display:flex;gap:4px}
@@ -334,8 +335,8 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .srow-l1{display:flex;gap:8px;align-items:baseline;min-width:0}
 .srow-ring{font-weight:700;font-size:13px;white-space:nowrap}
 .srow-name{font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.srow-l2{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--text3);margin-top:3px;flex-wrap:wrap}
-.srow-chip{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:0 7px;font-size:10.5px;color:var(--text2)}
+.srow-l2{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--text3);margin-top:3px;flex-wrap:wrap}
+.srow-chip{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:0 7px;font-size:12px;color:var(--text2)}
 .srow-chip.off{color:var(--orange)}
 .split-list,.split-detail{max-height:calc(100vh - 150px);min-height:420px;overflow:auto}
 .split-list{padding-right:2px}
@@ -370,7 +371,7 @@ main.main-wide{max-width:1840px}
 .autocomplete-drop.open{display:block}
 .ac-item{padding:7px 10px;cursor:pointer;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:8px;transition:background .1s}
 .ac-item:hover,.ac-item.selected{background:var(--bg3);color:var(--text)}
-.ac-ring{font-family:monospace;font-size:11px;color:var(--green)}
+.ac-ring{font-family:monospace;font-size:12px;color:var(--green)}
 
 /* ── Inzuchtrechner ── */
 .ibc-result{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;margin-top:12px}
@@ -408,7 +409,7 @@ main.main-wide{max-width:1840px}
   .toolbar{gap:6px}
   .search-wrap{min-width:0}
   .search-row{gap:6px}
-  .count-label{font-size:11px}
+  .count-label{font-size:12px}
   .filter-panel summary{padding:9px 12px;font-size:12.5px}
   .filter-panel-body{padding:2px 12px 12px}
   .btn,.btn-outline{padding:8px 13px}
@@ -451,6 +452,14 @@ main.main-wide{max-width:1840px}
   .db-status{display:none}
 }
 </style>
+<script>
+/* Schriftgröße (App-weit): wird vor dem Rendern angewendet */
+var FS_OPTS=[[90,'Klein (90 %)'],[100,'Normal (100 %)'],[112,'Groß (112 %)'],[125,'Größer (125 %)'],[140,'Sehr groß (140 %)'],[160,'Maximal (160 %)']];
+function fsGet(){ try{ var v=parseInt(localStorage.getItem('pigman_fs'),10); return v>=80&&v<=200?v:100; }catch(e){ return 100; } }
+function fsApply(v){ document.documentElement.style.zoom=(v/100); }
+function fsSet(v){ v=parseInt(v,10)||100; try{ localStorage.setItem('pigman_fs',String(v)); }catch(e){} fsApply(v); }
+fsApply(fsGet());
+</script>
 </head>
 <body>
 
@@ -747,7 +756,7 @@ function t(key){ return (I18N[LANG]&&I18N[LANG][key]) || I18N.de[key] || key; }
 function setLang(l){ LANG=l; localStorage.setItem('lang',l); renderLangSwitch(); render(); }
 function renderLangSwitch(){
   const el=document.getElementById('langSwitch'); if(!el) return;
-  el.innerHTML = ['de','en'].map(l=>`<button onclick="setLang('${l}')" style="cursor:pointer;border:1px solid var(--border);background:${LANG===l?'var(--green)':'var(--bg3)'};color:${LANG===l?'#0b1210':'var(--text2)'};font-weight:600;font-size:11px;padding:4px 9px;border-radius:20px 0 0 20px;border-radius:${l==='de'?'20px 0 0 20px':'0 20px 20px 0'}">${l.toUpperCase()}</button>`).join('');
+  el.innerHTML = ['de','en'].map(l=>`<button onclick="setLang('${l}')" style="cursor:pointer;border:1px solid var(--border);background:${LANG===l?'var(--green)':'var(--bg3)'};color:${LANG===l?'#0b1210':'var(--text2)'};font-weight:600;font-size:12px;padding:4px 9px;border-radius:20px 0 0 20px;border-radius:${l==='de'?'20px 0 0 20px':'0 20px 20px 0'}">${l.toUpperCase()}</button>`).join('');
 }
 
 // ── Übersetzung von Datenbank-Freitextwerten (Farben, Status) ──────────
@@ -875,6 +884,9 @@ function showProfile(){
   panel.innerHTML=
    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div class="card-title" style="margin:0">Profil</div><span onclick="this.closest(\'.profile-overlay\').remove()" style="cursor:pointer;color:var(--text3);font-size:22px;line-height:1;padding:2px 6px">×</span></div>'
    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:18px"><div class="profile-btn" style="margin:0;display:flex;align-items:center;justify-content:center;cursor:default;width:46px;height:46px;font-size:19px">'+escH(em.charAt(0).toUpperCase()||'?')+'</div><div><div style="font-weight:600">'+escH(em)+'</div><div style="font-size:12px;color:var(--text3)">PIGMAN PigeonManager</div></div></div>'
+   +'<div class="form-field" style="margin-bottom:6px"><label>Schriftgröße (gesamte App)</label><select id="fs-sel" onchange="fsSet(this.value)">'
+   +FS_OPTS.map(o=>'<option value="'+o[0]+'"'+(o[0]===fsGet()?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></div>'
+   +'<div style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.5">Vergrößert Tabellen, Filter, Buttons und Dialoge einheitlich. Gilt nur für dieses Gerät.</div>'
    +'<div class="form-field" style="margin-bottom:6px"><label>Automatisch abmelden</label><select id="idle-sel" onchange="idleSet(this.value)">'
    +IDLE_OPTIONS.map(o=>'<option value="'+o[0]+'"'+(o[0]===cur?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></div>'
    +'<div style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.5">Gilt nur für dieses Gerät und zählt ab der letzten Aktivität. Zusätzlich begrenzt der Server die maximale Sitzungsdauer; ist sie abgelaufen, ist eine neue Anmeldung nötig.</div>'
@@ -977,7 +989,7 @@ function renderLogin(errMsg){
         </button>
         <div style="text-align:center"><a href="#" onclick="renderForgot();return false" style="font-size:13px;color:var(--text2);text-decoration:underline">Passwort vergessen?</a></div>
       </div>
-      <div style="text-align:center;font-size:11px;color:var(--text3);margin-top:20px">
+      <div style="text-align:center;font-size:12px;color:var(--text3);margin-top:20px">
         Zugang nur für autorisierte Nutzer
       </div>
     </div>
@@ -1332,7 +1344,7 @@ const COLUMN_DEFS = [
       const s=pigeonReiseSummary(p.pigeonid);
       if(s===null) return '<span style="color:var(--text3);font-size:12px">Lade…</span>';
       if(!s.gesetzt) return '<span style="color:var(--text3)">—</span>';
-      return `<span style="font-size:12px">${s.preise}/${s.gesetzt} Preise</span><br><span style="font-size:11px;color:var(--text3)">Σ AS ${s.asSum.toFixed(2)}</span>`;
+      return `<span style="font-size:12px">${s.preise}/${s.gesetzt} Preise</span><br><span style="font-size:12px;color:var(--text3)">Σ AS ${s.asSum.toFixed(2)}</span>`;
     } },
   { key:'top10', label:'Top10',
     val:p=>{ const s=pigeonReiseSummary(p.pigeonid); return s?String(s.top10):''; },
@@ -1415,9 +1427,9 @@ function columnPickerMenuHTML(){
         <button type="button" class="btn btn-outline btn-sm" style="padding:2px 8px;line-height:1" title="Nach unten" ${i===arr.length-1?'disabled':''} onclick="moveColumn('${c.key}',1)">↓</button>`:''}
     </div>`;
   return `
-    <div style="font-size:11px;color:var(--text3);margin-bottom:6px;line-height:1.4">${t('col_picker_hint')}</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:6px;line-height:1.4">${t('col_picker_hint')}</div>
     ${activeDefs.map((c,i,arr)=>row(c,i,arr,true)).join('')}
-    ${inactiveDefs.length?`<div style="border-top:1px solid var(--border);margin:8px 0 4px;padding-top:6px;font-size:11px;color:var(--text3)">${t('col_picker_more')}</div>`:''}
+    ${inactiveDefs.length?`<div style="border-top:1px solid var(--border);margin:8px 0 4px;padding-top:6px;font-size:12px;color:var(--text3)">${t('col_picker_more')}</div>`:''}
     ${inactiveDefs.map((c,i,arr)=>row(c,i,arr,false)).join('')}
     <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
       <button class="btn btn-outline btn-sm" style="width:100%" onclick="resetColumns()">${t('col_picker_resetbtn')}</button>
@@ -2319,7 +2331,7 @@ async function exportPDF(){
 .scan-preview{max-width:100%;max-height:300px;border-radius:var(--radius-sm);border:1px solid var(--border);margin:12px auto;display:block}
 .scan-result-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .scan-field{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px}
-.scan-field label{font-size:10px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px}
+.scan-field label{font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px}
 .scan-field input,.scan-field select{width:100%;background:transparent;border:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;padding:0}
 .scan-field input::placeholder{color:var(--text3)}
 .scan-field select option{background:var(--bg3)}
@@ -2333,7 +2345,7 @@ async function exportPDF(){
 .scan-step{display:flex;align-items:center;gap:10px;padding:6px 0;color:var(--text3);font-size:13px}
 .scan-step.active{color:var(--text)}
 .scan-step.done{color:var(--green)}
-.scan-step-dot{width:22px;height:22px;border-radius:50%;background:var(--bg4);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;transition:all .2s}
+.scan-step-dot{width:22px;height:22px;border-radius:50%;background:var(--bg4);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;transition:all .2s}
 .scan-step.active .scan-step-dot{border-color:var(--green);background:var(--green3);color:#fff}
 .scan-step.done .scan-step-dot{background:var(--green);color:#fff;border-color:var(--green)}
 .scan-thinking{display:flex;align-items:center;gap:12px;padding:18px 16px;color:var(--text2);font-size:13px;background:var(--bg3);border-radius:var(--radius-sm);margin:12px 0}
@@ -2345,7 +2357,7 @@ async function exportPDF(){
 .scan-progress-wrap{height:6px;background:var(--bg4);border-radius:3px;overflow:hidden;margin:8px 0 4px}
 .scan-progress-fill{height:100%;background:var(--green);border-radius:3px;width:6%;transition:width .7s ease}
 .diff-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
-.diff-table th{color:var(--text3);font-weight:500;text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+.diff-table th{color:var(--text3);font-weight:500;text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);font-size:12px;text-transform:uppercase;letter-spacing:.03em}
 .diff-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text2)}
 .diff-table tr:last-child td{border-bottom:none}
 .diff-table tr:hover td{background:var(--bg3)}
@@ -2363,14 +2375,14 @@ async function exportPDF(){
 .imp-table th{background:var(--bg3);color:var(--text3);font-weight:500;padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:2}
 .imp-table td{padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle;white-space:nowrap}
 .imp-table tr:last-child td{border-bottom:none}
-.imp-badge-new{background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25);border-radius:20px;padding:1px 8px;font-size:11px;white-space:nowrap}
-.imp-badge-dup{background:rgba(212,168,67,.12);color:var(--amber);border:1px solid rgba(212,168,67,.3);border-radius:20px;padding:1px 8px;font-size:11px;white-space:nowrap}
-.imp-badge-err{background:rgba(192,80,77,.12);color:#e07070;border:1px solid rgba(192,80,77,.3);border-radius:20px;padding:1px 8px;font-size:11px;white-space:nowrap}
-.imp-badge-ok{background:rgba(201,162,39,.15);color:var(--green);border:1px solid rgba(201,162,39,.3);border-radius:20px;padding:1px 8px;font-size:11px;white-space:nowrap}
+.imp-badge-new{background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25);border-radius:20px;padding:1px 8px;font-size:12px;white-space:nowrap}
+.imp-badge-dup{background:rgba(212,168,67,.12);color:var(--amber);border:1px solid rgba(212,168,67,.3);border-radius:20px;padding:1px 8px;font-size:12px;white-space:nowrap}
+.imp-badge-err{background:rgba(192,80,77,.12);color:#e07070;border:1px solid rgba(192,80,77,.3);border-radius:20px;padding:1px 8px;font-size:12px;white-space:nowrap}
+.imp-badge-ok{background:rgba(201,162,39,.15);color:var(--green);border:1px solid rgba(201,162,39,.3);border-radius:20px;padding:1px 8px;font-size:12px;white-space:nowrap}
 .imp-progress{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin:8px 0}
 .imp-progress-bar{height:100%;background:var(--green);border-radius:3px;transition:width .3s}
 .imp-col-map{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:14px}
-.imp-col-map label{font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
+.imp-col-map label{font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
 .imp-col-map select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 8px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer}
 .imp-col-map select:focus{border-color:var(--green)}
 
@@ -3200,7 +3212,7 @@ function renderDetail(p, opts){
                  onclick="openPhotoLightbox(this.src)"
                  style="width:100%;height:100%;object-fit:contain;display:block;cursor:zoom-in">
             <label for="detail-photo-input" title="Foto hochladen"
-                   style="position:absolute;bottom:2px;right:2px;width:22px;height:22px;border-radius:50%;background:var(--green3);border:1px solid var(--green2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px">📷</label>
+                   style="position:absolute;bottom:2px;right:2px;width:22px;height:22px;border-radius:50%;background:var(--green3);border:1px solid var(--green2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px">📷</label>
             <input type="file" id="detail-photo-input" accept="image/*" style="display:none" onchange="uploadPigeonPhoto('${p.pigeonid}', this.files[0])">
           </div>
           <div>
@@ -3428,13 +3440,13 @@ function renderDetailEdit(p){
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
           <div>
             <div style="font-weight:700;color:var(--text)">Öffentliche Darstellung <button type="button" class="btn btn-outline btn-sm" style="margin-left:8px" onclick="showEliteCriteriaModal()">★ Kriterien</button></div>
-            <div style="font-size:11px;color:var(--text3);margin-top:3px">Elite wird automatisch aus der besten einzelnen Saison berechnet und ist hier nicht manuell änderbar.</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:3px">Elite wird automatisch aus der besten einzelnen Saison berechnet und ist hier nicht manuell änderbar.</div>
           </div>
           <span class="badge" style="background:${elite.elite?'rgba(80,180,110,.16)':'rgba(255,255,255,.05)'};color:${elite.elite?'var(--green)':'var(--text3)'};border:1px solid var(--border)">
             ${elite.ready?(elite.elite?'★ Elite':'Keine Elite-Einstufung'):'Elite wird geladen…'}
           </span>
         </div>
-        ${elite.best?`<div style="font-size:11px;color:var(--text3);margin:-6px 0 14px">Beste Saison ${escH(elite.best.vintage)}: ${elite.best.gesetzt}/${elite.best.preise} Flüge/Preise · ${elite.best.preisquote.toFixed(1)} % · ${elite.best.top} über ${VERERBER_ELITE_AS_SCHWELLE} AS</div>`:''}
+        ${elite.best?`<div style="font-size:12px;color:var(--text3);margin:-6px 0 14px">Beste Saison ${escH(elite.best.vintage)}: ${elite.best.gesetzt}/${elite.best.preise} Flüge/Preise · ${elite.best.preisquote.toFixed(1)} % · ${elite.best.top} über ${VERERBER_ELITE_AS_SCHWELLE} AS</div>`:''}
         ${ws._tableMissing?`<div style="background:#2a1a0a;color:var(--orange);border-radius:7px;padding:9px 11px;font-size:12px;margin-bottom:12px">Die Tabelle <code>website_pigeon_settings</code> fehlt noch. Bitte zuerst das mitgelieferte SQL einmal in Supabase ausführen.</div>`:''}
         <div class="form-grid">
           <div class="form-field"><label>Profil öffentlich</label><select id="w_profile_public"><option value="false" ${!ws.profile_public?'selected':''}>Nein</option><option value="true" ${ws.profile_public?'selected':''}>Ja</option></select></div>
@@ -3448,7 +3460,7 @@ function renderDetailEdit(p){
           <div class="form-field"><label>Veröffentlichen ab</label><input id="w_publish_from" type="datetime-local" value="${escH((ws.publish_from||'').slice(0,16))}"></div>
           <div class="form-field"><label>Veröffentlichen bis</label><input id="w_publish_until" type="datetime-local" value="${escH((ws.publish_until||'').slice(0,16))}"></div>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:10px">Für „Elite-Nachzucht“ sollte die ausgewählte Taube automatisch die aktuellen Elite-Kriterien erfüllen. Die Homepage kann dies zusätzlich serverseitig absichern.</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:10px">Für „Elite-Nachzucht“ sollte die ausgewählte Taube automatisch die aktuellen Elite-Kriterien erfüllen. Die Homepage kann dies zusätzlich serverseitig absichern.</div>
       </div>
       <div style="display:flex;gap:8px;margin-top:20px;justify-content:space-between">
         <div style="display:flex;gap:8px">
@@ -3574,7 +3586,7 @@ function renderPedigree(pid, opts){
 }
 function renderPedigreeInner(root, opts, embedded){
   function node(p,isRoot=false){
-    if(!p) return `<div class="ped-box empty" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:11px">—<br>${t('ped_unknown')}</div></div>`;
+    if(!p) return `<div class="ped-box empty" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:12px">—<br>${t('ped_unknown')}</div></div>`;
     const sx=sex_(p);
     const ib=calcInbreeding(p);
     const tags=[];
@@ -3588,21 +3600,21 @@ function renderPedigreeInner(root, opts, embedded){
     const infoFull  = (p.info||'').trim();
     const infoShort = infoFull.length>80 ? infoFull.slice(0,80)+'…' : infoFull;
     const infoHtml  = infoFull ? (isRoot
-      ? `<div style="margin-top:5px;font-size:11px;color:var(--text2);line-height:1.5;max-height:80px;overflow-y:auto;border-top:1px solid var(--border);padding-top:4px;white-space:pre-wrap">${escH(infoFull)}</div>`
-      : `<div title="${escH(infoFull)}" onclick="showPedigree('${p.pigeonid}')" style="margin-top:3px;font-size:9px;color:var(--text3);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;cursor:pointer;border-top:1px solid var(--border);padding-top:3px">${escH(infoShort)}</div>`)
+      ? `<div style="margin-top:5px;font-size:12px;color:var(--text2);line-height:1.5;max-height:80px;overflow-y:auto;border-top:1px solid var(--border);padding-top:4px;white-space:pre-wrap">${escH(infoFull)}</div>`
+      : `<div title="${escH(infoFull)}" onclick="showPedigree('${p.pigeonid}')" style="margin-top:3px;font-size:12px;color:var(--text3);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;cursor:pointer;border-top:1px solid var(--border);padding-top:3px">${escH(infoShort)}</div>`)
       : '';
     const ringLabel = p._virtual ? t('ped_virtual_label') : escH(ring(p));
     const clickAttr = p._virtual ? '' : `onclick="showPedigree('${p.pigeonid}')"`;
     return `<div class="ped-box ${sx==='M'?'male':sx==='F'?'female':''} ${isRoot?'root':''}" ${clickAttr} style="width:100%;box-sizing:border-box${p._virtual?';cursor:default':''}">
       <div style="display:flex;align-items:center;gap:4px;margin-bottom:1px">
-        <span style="font-size:9px;font-weight:700;flex-shrink:0;color:${sx==='M'?'var(--blue)':sx==='F'?'var(--purple)':'var(--text3)'}">${sx==='M'?'♂':sx==='F'?'♀':'?'}</span>
+        <span style="font-size:12px;font-weight:700;flex-shrink:0;color:${sx==='M'?'var(--blue)':sx==='F'?'var(--purple)':'var(--text3)'}">${sx==='M'?'♂':sx==='F'?'♀':'?'}</span>
         <div class="ped-ring" style="font-size:${szRing};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ringLabel}</div>
       </div>
-      ${p._virtual?`<div style="margin-top:2px;display:inline-block;background:var(--bg4);border:1px solid var(--border);border-radius:3px;padding:0 5px;font-size:9px;color:var(--text3)">🧬 ${t('ped_virtual_badge')}</div>`:''}
+      ${p._virtual?`<div style="margin-top:2px;display:inline-block;background:var(--bg4);border:1px solid var(--border);border-radius:3px;padding:0 5px;font-size:12px;color:var(--text3)">🧬 ${t('ped_virtual_badge')}</div>`:''}
       ${p.name&&!p._virtual?`<div class="ped-name" style="font-size:${szName};font-weight:${fwName}">${escH(p.name)}</div>`:''}
-      ${tags.length?`<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:2px">${tags.map(t=>`<span style="background:var(--bg4);border:1px solid var(--border);border-radius:3px;padding:0 4px;font-size:9px;color:var(--text3);white-space:nowrap">${t}</span>`).join('')}</div>`:''}
+      ${tags.length?`<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:2px">${tags.map(t=>`<span style="background:var(--bg4);border:1px solid var(--border);border-radius:3px;padding:0 4px;font-size:12px;color:var(--text3);white-space:nowrap">${t}</span>`).join('')}</div>`:''}
       ${infoHtml}
-      ${ib>0.01?`<div style="font-size:9px;margin-top:2px;color:${ib<0.03?'var(--green)':ib<0.1?'var(--orange)':'#e07070'}">⚠ ${(ib*100).toFixed(1)}% ${t('inbreeding_suffix')}</div>`:''}
+      ${ib>0.01?`<div style="font-size:12px;margin-top:2px;color:${ib<0.03?'var(--green)':ib<0.1?'var(--orange)':'#e07070'}">⚠ ${(ib*100).toFixed(1)}% ${t('inbreeding_suffix')}</div>`:''}
     </div>`;
   }
   const f=findFather(root),mo=findMother(root);
@@ -4513,7 +4525,7 @@ function pedShowSaveOverlay(blob, filename, file, canShare){
     + (canShare ? '<button class="btn" style="'+bs+'" onclick="pedShareSaved()">📤 Teilen / Speichern / Drucken</button>' : '')
     + '<a class="btn '+(canShare?'btn-outline':'')+'" style="'+bs+'" href="'+url+'" download="'+escH(filename)+'">⬇ Herunterladen</a>'
     + '<a class="btn btn-outline" style="'+bs+'" href="'+url+'" target="_blank" rel="noopener">↗ Öffnen</a>'
-    + (isImg ? '<img src="'+url+'" style="max-width:100%;background:#fff;margin-top:8px"><div style="color:#aaa;font-size:11px;margin:6px 0">Bild lange drücken → „Bild sichern“</div>' : '')
+    + (isImg ? '<img src="'+url+'" style="max-width:100%;background:#fff;margin-top:8px"><div style="color:#aaa;font-size:12px;margin:6px 0">Bild lange drücken → „Bild sichern“</div>' : '')
     + '<button class="btn btn-outline" style="'+bs+'" onclick="pedCloseSaveOverlay()">Schließen</button>';
   document.body.appendChild(o);
 }
@@ -4947,7 +4959,7 @@ function renderPaarung(){
           <div>
             <div style="font-size:15px;font-weight:500">${escH(current.name||ring(current))}</div>
             <div style="font-family:monospace;font-size:12px;color:var(--green)">${escH(ring(current))}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:2px">${current.date_year||''} ${current.color?'· '+escH(tColor(current.color)):''}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">${current.date_year||''} ${current.color?'· '+escH(tColor(current.color)):''}</div>
           </div>
           <button class="btn btn-outline btn-sm" onclick="S.${role}=null;render()">✕ Ändern</button>
         </div>`
@@ -5564,13 +5576,13 @@ function renderScanEditPanel(k, p){
     </div>`;
 
   const genderWarn = p._genderMismatch
-    ? `<div style="margin-bottom:8px;font-size:11px;color:#e0a050;font-weight:600">⚠️ Geschlecht passt nicht zur erwarteten Position "${escH(PED_LABEL[k]||'')}" — bitte im Originalbild prüfen, evtl. mit Nachbar-Position vertauscht.</div>`
+    ? `<div style="margin-bottom:8px;font-size:12px;color:#e0a050;font-weight:600">⚠️ Geschlecht passt nicht zur erwarteten Position "${escH(PED_LABEL[k]||'')}" — bitte im Originalbild prüfen, evtl. mit Nachbar-Position vertauscht.</div>`
     : '';
   const plausibilityError = p._plausibilityError
-    ? `<div style="margin-bottom:8px;font-size:11px;color:#e07070;font-weight:600">🚫 Datenfehler: ${escH(p._plausibilityError)} Wird beim Speichern übersprungen, bis korrigiert.</div>`
+    ? `<div style="margin-bottom:8px;font-size:12px;color:#e07070;font-weight:600">🚫 Datenfehler: ${escH(p._plausibilityError)} Wird beim Speichern übersprungen, bis korrigiert.</div>`
     : '';
   const plausibilityWarn = (!p._plausibilityError && p._plausibilityWarn)
-    ? `<div style="margin-bottom:8px;font-size:11px;color:#e0a050;font-weight:600">⚠️ ${escH(p._plausibilityWarn)}</div>`
+    ? `<div style="margin-bottom:8px;font-size:12px;color:#e0a050;font-weight:600">⚠️ ${escH(p._plausibilityWarn)}</div>`
     : '';
 
   const actSel = m
@@ -5588,16 +5600,16 @@ function renderScanEditPanel(k, p){
   return `${genderWarn}${plausibilityError}${plausibilityWarn}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px">
       <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:11px;color:var(--text3)">Status:</span>
-        ${m?`<span style="font-size:11px;color:var(--green)">✅ bereits in DB</span>`:`<span style="font-size:11px;color:#7ab3e0">🆕 neu</span>`}
+        <span style="font-size:12px;color:var(--text3)">Status:</span>
+        ${m?`<span style="font-size:12px;color:var(--green)">✅ bereits in DB</span>`:`<span style="font-size:12px;color:#7ab3e0">🆕 neu</span>`}
         ${actSel}
       </div>
-      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);cursor:pointer">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">
         <input type="checkbox" ${SCAN.instock[k]?'checked':''} onchange="SCAN.instock['${k}']=this.checked;render()">
         Als Bestandstaube erfassen
       </label>
     </div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Korrigiere hier die von der KI erkannten Felder dieser einen Taube — die Änderung gilt nur lokal, bis du auf "Ausführen" klickst. Ohne den Haken "Bestandstaube" wird diese Position nur als Ahnen-Datensatz gespeichert.</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Korrigiere hier die von der KI erkannten Felder dieser einen Taube — die Änderung gilt nur lokal, bis du auf "Ausführen" klickst. Ohne den Haken "Bestandstaube" wird diese Position nur als Ahnen-Datensatz gespeichert.</div>
     <div class="scan-result-grid">
       ${txt('Ringnummer','ringnumber')}
       ${txt('Name','name')}
@@ -5654,7 +5666,7 @@ function renderScanPositionSwap(k){
     }).join('');
     subtreeBlock = `
       <div style="margin-top:10px">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">
           Falls die KI eine <b>ganze Ahnenlinie</b> (diese Taube + ${descCount} dahinterliegende Vorfahren)
           der falschen Seite zugeordnet hat: hier den Ziel-Zweig wählen — der komplette Zweig wird 1:1 mit
           dem Ziel-Zweig getauscht.
@@ -5668,8 +5680,8 @@ function renderScanPositionSwap(k){
 
   return `
     <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)">
-      <label style="font-size:10px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">Position korrigieren</label>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Falls diese Taube der falschen Stammbaum-Position zugeordnet wurde: richtige Position wählen — beide Einträge werden komplett getauscht.</div>
+      <label style="font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">Position korrigieren</label>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Falls diese Taube der falschen Stammbaum-Position zugeordnet wurde: richtige Position wählen — beide Einträge werden komplett getauscht.</div>
       <select onchange="if(this.value){swapScanPositions('${k}',this.value)}" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:8px 10px;font-size:12px;cursor:pointer">
         <option value="">↔ Mit anderer Position tauschen…</option>
         ${options}
@@ -5687,8 +5699,8 @@ function renderScanResult(){
       <div class="card-title serif" style="font-size:18px;margin-bottom:12px">📷 Scan-Ergebnis</div>
       <div class="scan-error">⚠️ Keine Ringnummern erkannt — bitte Scan wiederholen oder Bild verbessern.</div>
       <div style="margin-top:12px;background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px">
-        <div style="font-size:10px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">KI-Rohantwort</div>
-        <pre style="font-size:11px;color:var(--text2);white-space:pre-wrap;overflow-x:auto;max-height:300px">${escH(raw)}</pre>
+        <div style="font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">KI-Rohantwort</div>
+        <pre style="font-size:12px;color:var(--text2);white-space:pre-wrap;overflow-x:auto;max-height:300px">${escH(raw)}</pre>
       </div>
       <div class="form-actions" style="margin-top:12px">
         <button class="btn btn-outline" onclick="scanReset();render()">🔄 Neuer Scan</button>
@@ -5707,13 +5719,13 @@ function renderScanResult(){
   const warnBlock = warnList.length ? `<div style="margin-bottom:12px;background:rgba(224,160,80,.1);border:1px solid rgba(224,160,80,.4);border-radius:var(--radius-sm);padding:10px 14px">
       <div style="font-size:12px;font-weight:700;color:#e0a050;margin-bottom:4px">⚠️ Bitte prüfen (${warnList.length})</div>
       <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--text2);line-height:1.5">${warnList.map(w=>`<li>${escH(w)}</li>`).join('')}</ul>
-      <div style="font-size:11px;color:var(--text3);margin-top:6px">Nummern: 0 Proband · 1 Vater · 2 Mutter · 3–6 Großeltern · 7–14 Urgroßeltern · 15–30 Ururgroßeltern (ungerade = Vogel, gerade = Weibchen). Falsch zugeordnete Kästchen unten anklicken und mit der richtigen Nummer tauschen.</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:6px">Nummern: 0 Proband · 1 Vater · 2 Mutter · 3–6 Großeltern · 7–14 Urgroßeltern · 15–30 Ururgroßeltern (ungerade = Vogel, gerade = Weibchen). Falsch zugeordnete Kästchen unten anklicken und mit der richtigen Nummer tauschen.</div>
     </div>` : '';
   const rawDebugBlock = SCAN.rawResponse ? `
     <details style="margin-bottom:14px">
-      <summary style="cursor:pointer;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px">🔧 KI-Rohantwort (Debug)</summary>
+      <summary style="cursor:pointer;font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px">🔧 KI-Rohantwort (Debug)</summary>
       <div style="margin-top:8px;background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px">
-        <pre style="font-size:11px;color:var(--text2);white-space:pre-wrap;overflow-x:auto;max-height:400px">${escH(JSON.stringify(SCAN.rawResponse, null, 2))}</pre>
+        <pre style="font-size:12px;color:var(--text2);white-space:pre-wrap;overflow-x:auto;max-height:400px">${escH(JSON.stringify(SCAN.rawResponse, null, 2))}</pre>
       </div>
     </details>` : '';
 
@@ -5721,7 +5733,7 @@ function renderScanResult(){
   function scanNode(k){
     const p = SCAN.pigeons[k];
     if(!p || !p.ringnumber){
-      return `<div class="ped-box empty scan-dd" data-skey="${k}" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:11px">—<br>Nr. ${pedSlot(k)} leer</div></div>`;
+      return `<div class="ped-box empty scan-dd" data-skey="${k}" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:12px">—<br>Nr. ${pedSlot(k)} leer</div></div>`;
     }
     const m   = SCAN.matches[k];
     const act = SCAN.actions[k] ?? (m?'update':'new');
@@ -5739,17 +5751,17 @@ function renderScanResult(){
     const instockOn = !!SCAN.instock[k];
     return `<div class="${boxCls} scan-dd" data-skey="${k}" style="width:100%;box-sizing:border-box" onclick="toggleScanEdit('${k}')">
       <div style="display:flex;align-items:center;gap:4px;margin-bottom:1px">
-        <span style="font-size:11px;font-weight:700;flex-shrink:0;color:${sx==='M'?'var(--blue)':sx==='F'?'var(--purple)':'var(--text3)'}">${sx==='M'?'♂':sx==='F'?'♀':'?'}</span>
+        <span style="font-size:12px;font-weight:700;flex-shrink:0;color:${sx==='M'?'var(--blue)':sx==='F'?'var(--purple)':'var(--text3)'}">${sx==='M'?'♂':sx==='F'?'♀':'?'}</span>
         <span style="flex:1"></span>
-        <span title="${m?'In Datenbank':'Neu'}" style="font-size:11px;flex-shrink:0">${statusIcon}</span>
-        <span title="Position Nr. ${pedSlot(k)}" style="font-size:9px;font-weight:700;flex-shrink:0;color:#1a1200;background:var(--gold,#c9a227);border-radius:8px;padding:0 5px">${pedSlot(k)}</span>
+        <span title="${m?'In Datenbank':'Neu'}" style="font-size:12px;flex-shrink:0">${statusIcon}</span>
+        <span title="Position Nr. ${pedSlot(k)}" style="font-size:12px;font-weight:700;flex-shrink:0;color:#1a1200;background:var(--gold,#c9a227);border-radius:8px;padding:0 5px">${pedSlot(k)}</span>
       </div>
-      <div class="ped-ring" style="font-size:10px;white-space:normal;word-break:break-all;line-height:1.25">${escH(p.ringnumber)}</div>
+      <div class="ped-ring" style="font-size:12px;white-space:normal;word-break:break-all;line-height:1.25">${escH(p.ringnumber)}</div>
       ${p.name?`<div class="ped-name" style="font-size:${k==='proband'?'13px':'11px'}">${escH(p.name)}</div>`:''}
-      <div style="font-size:9px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[p.date_year,tColor(p.color),p.strain].filter(Boolean).join(' · ')}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[p.date_year,tColor(p.color),p.strain].filter(Boolean).join(' · ')}</div>
       <div style="margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
-        <span style="font-size:9px;padding:0 5px;border-radius:8px;background:${act==='skip'?'var(--bg4)':'rgba(201,162,39,.15)'};color:${act==='skip'?'var(--text3)':'var(--green)'};border:1px solid ${act==='skip'?'var(--border)':'rgba(201,162,39,.3)'}">${act==='skip'?'übersprungen':act==='update'?'ergänzen':'neu'}</span>
-        ${instockOn?`<span style="font-size:9px;padding:0 5px;border-radius:8px;background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.3)">Bestand</span>`:''}
+        <span style="font-size:12px;padding:0 5px;border-radius:8px;background:${act==='skip'?'var(--bg4)':'rgba(201,162,39,.15)'};color:${act==='skip'?'var(--text3)':'var(--green)'};border:1px solid ${act==='skip'?'var(--border)':'rgba(201,162,39,.3)'}">${act==='skip'?'übersprungen':act==='update'?'ergänzen':'neu'}</span>
+        ${instockOn?`<span style="font-size:12px;padding:0 5px;border-radius:8px;background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.3)">Bestand</span>`:''}
       </div>
     </div>`;
   }
@@ -5827,7 +5839,7 @@ function renderScanResult(){
     </div>
   </div>`;
 
-  const legend = `<div style="display:flex;gap:12px;margin:10px 0 14px;flex-wrap:wrap;font-size:11px;color:var(--text3)">
+  const legend = `<div style="display:flex;gap:12px;margin:10px 0 14px;flex-wrap:wrap;font-size:12px;color:var(--text3)">
     <span>✅ in DB</span><span>🆕 neu</span><span>⚠️ Warnung</span><span>🚫 Datenfehler (wird übersprungen)</span>
     <span style="margin-left:auto">Klick = bearbeiten · Ziehen (am Handy: gedrückt halten) = Platz tauschen</span>
     <label style="display:flex;align-items:center;gap:5px;color:var(--text2);cursor:pointer"><input type="checkbox" ${SCAN_BRANCH?'checked':''} onchange="SCAN_BRANCH=this.checked"> ganzen Zweig mitziehen</label>
@@ -6584,7 +6596,7 @@ function renderPigeonView(p){
   const parentCell = (label, par, txt) => `<div class="form-field"><label>${label}</label>
       <div class="pf-v ${par||txt?'':'empty'}">${par
         ? `<a onclick="selectPigeon('${par.pigeonid}')">${escH(ring(par))}</a>${par.name?`<span style="color:var(--text2);overflow:hidden;text-overflow:ellipsis">${escH(par.name)}</span>`:''}`
-        : txt ? `<span style="font-family:monospace">${escH(txt)}</span><span style="color:var(--text3);font-size:11px">${t('pf_not_in_db')}</span>` : '—'}</div></div>`;
+        : txt ? `<span style="font-family:monospace">${escH(txt)}</span><span style="color:var(--text3);font-size:12px">${t('pf_not_in_db')}</span>` : '—'}</div></div>`;
   const typeOpts = [['', t('type_unset')], ['Reisetaube','✈ '+t('type_racing')], ['Zuchttaube','🥚 '+t('type_breeding')],
                     ['Heimtaube','🏠 '+t('type_home')], ['Verkauf','💰 '+t('type_sale')]]
     .map(([v,l])=>`<option value="${v}" ${(p.pigeontype||'')===v?'selected':''}>${l}</option>`).join('');
@@ -6696,10 +6708,10 @@ function neuRingChanged(val){
   });
   if(parsed){
     if(prev) prev.innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;background:var(--bg3);border-radius:var(--radius-sm);padding:10px 14px">
-      <div><span style="color:var(--text3);font-size:11px;display:block;margin-bottom:2px">Erkannt</span><strong>${escH(parsed.ringnumber)}</strong></div>
-      <div><span style="color:var(--text3);font-size:11px;display:block;margin-bottom:2px">Land</span>${escH(parsed.countrycode||'—')}</div>
-      ${parsed.associationno?`<div><span style="color:var(--text3);font-size:11px;display:block;margin-bottom:2px">Vereinsnr.</span>${escH(parsed.associationno)}</div>`:''}
-      <div><span style="color:var(--text3);font-size:11px;display:block;margin-bottom:2px">Jahrgang</span><strong style="color:var(--green)">${parsed.date_year||'—'}</strong></div>
+      <div><span style="color:var(--text3);font-size:12px;display:block;margin-bottom:2px">Erkannt</span><strong>${escH(parsed.ringnumber)}</strong></div>
+      <div><span style="color:var(--text3);font-size:12px;display:block;margin-bottom:2px">Land</span>${escH(parsed.countrycode||'—')}</div>
+      ${parsed.associationno?`<div><span style="color:var(--text3);font-size:12px;display:block;margin-bottom:2px">Vereinsnr.</span>${escH(parsed.associationno)}</div>`:''}
+      <div><span style="color:var(--text3);font-size:12px;display:block;margin-bottom:2px">Jahrgang</span><strong style="color:var(--green)">${parsed.date_year||'—'}</strong></div>
     </div>`;
   } else {
     if(prev) prev.innerHTML=`<div style="color:var(--text3);font-size:12px;padding:8px 14px;background:var(--bg3);border-radius:var(--radius-sm)">Format nicht eindeutig erkannt — Jahrgang bitte manuell prüfen.</div>`;
@@ -7272,7 +7284,7 @@ function renderImpMap(){
       ${IMP.raw.length} Zeilen erkannt · ${IMP.headers.length} Spalten · Bitte Zuordnung prüfen:
     </p>
     <div class="imp-col-map">${colSelects}</div>
-    <div style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Vorschau (erste 3 Zeilen)</div>
+    <div style="font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Vorschau (erste 3 Zeilen)</div>
     <div class="imp-table-wrap" style="max-height:160px;margin-bottom:14px">
       <table class="imp-table">
         <thead><tr>${IMP.headers.map(h=>`<th>${escH(h)}</th>`).join('')}</tr></thead>
@@ -7457,7 +7469,7 @@ function renderImpPreview(){
 
     const actSel = r._status==='err' ? '—' :
       `<select onchange="IMP.rows[${i}]._action=this.value"
-         style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:3px 7px;font-size:11px;cursor:pointer">
+         style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:3px 7px;font-size:12px;cursor:pointer">
          ${r._status==='new'
            ? `<option value="import" ${r._action==='import'?'selected':''}>✅ Importieren</option>
               <option value="skip"   ${r._action==='skip'  ?'selected':''}>⏭ Überspringen</option>`
@@ -7468,13 +7480,13 @@ function renderImpPreview(){
        </select>`;
 
     return `<tr>
-      <td style="font-family:monospace;font-size:11px;color:var(--green)">${escH(r.row?.ringnumber||'—')}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--green)">${escH(r.row?.ringnumber||'—')}</td>
       <td>${escH(r.row?.name||'—')}</td>
       <td>${escH(r.row?.date_year||'—')}</td>
       <td>${escH(r.row?.color||'—')}</td>
       <td>${r.row?.gender==='M'?'♂':r.row?.gender==='F'?'♀':'—'}</td>
       <td>${escH(r.row?.strain||'—')}</td>
-      <td>${badge}${r._status==='err'&&r._msg?`<div style="margin-top:3px;font-size:10.5px;color:#e07070">${escH(r._msg)}</div>`:''}</td>
+      <td>${badge}${r._status==='err'&&r._msg?`<div style="margin-top:3px;font-size:12px;color:#e07070">${escH(r._msg)}</div>`:''}</td>
       <td>${actSel}</td>
     </tr>`;
   }).join('');
@@ -7933,7 +7945,7 @@ function pedPrintOpen(pid){
   o.id = 'pp-overlay';
   o.style.cssText = 'position:fixed;inset:0;z-index:700;background:var(--bg);display:flex;flex-direction:column';
   const seg = (name, items) => `<div class="pf-seg" id="pp-seg-${name}">${items.map(([v,l])=>`<button type="button" data-v="${v}" onclick="pedPrintSet('${name}','${v}')">${l}</button>`).join('')}</div>`;
-  const grp = (label, inner) => `<div style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--text3)">${label} ${inner}</div>`;
+  const grp = (label, inner) => `<div style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--text3)">${label} ${inner}</div>`;
   o.innerHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg2)">
       <div class="serif pp-title" style="font-size:16px">🖨 Stammbaum</div>
@@ -7954,13 +7966,13 @@ function pedPrintOpen(pid){
       <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="ped-print-photo" checked onchange="pedPrintPreview()"> ${t('with_photo')}</label>
     </div>
     <div id="pp-items" style="display:${window.innerWidth<700?'none':'flex'};flex-wrap:wrap;gap:6px 8px;align-items:center;padding:6px 14px;border-bottom:1px solid var(--border)">
-      <span style="font-size:11px;color:var(--text3);margin-right:2px">Mit andrucken · Punkt = Farbe:</span>
+      <span style="font-size:12px;color:var(--text3);margin-right:2px">Mit andrucken · Punkt = Farbe:</span>
       ${[['name','id="pp-it-name"','Name'],['color','id="pp-it-color"','Farbe'],['breeder','id="pp-it-breeder"','Züchter'],['line','id="pp-it-line"','Linie'],['travel','id="ped-print-travel"',t('with_travel')],['info','id="pp-it-info"','Info']].map(([k,idAttr,lab])=>`
       <span class="pp-chip${PP.items[k].on?' on':''}" id="pp-chip-${k}">
         <label><input type="checkbox" ${idAttr} ${PP.items[k].on?'checked':''} onchange="pedPrintItem('${k}',this.checked)"> ${lab}</label><button type="button" class="pp-dot" id="pp-dot-${k}" title="Farbe wählen" onclick="pedPrintPop('${k}',event)"></button>
       </span>`).join('')}
     </div>
-    <div id="pp-status" style="font-size:11px;color:var(--text3);padding:2px 14px;min-height:16px"></div>
+    <div id="pp-status" style="font-size:12px;color:var(--text3);padding:2px 14px;min-height:16px"></div>
     <iframe id="pp-frame" style="flex:1;width:100%;min-width:0;max-width:100vw;border:0;background:#cfcfcf"></iframe>`;
   document.body.appendChild(o);
   pedPrintSwatches();
@@ -8460,7 +8472,7 @@ function showScoreSettingsModal(){
     return '<div style="margin-bottom:16px">'
       +'<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>'+label+'</span><span id="'+id+'-val" style="font-weight:700;color:var(--green)">'+val+suffix+'</span></div>'
       +'<input type="range" id="'+id+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" style="width:100%" oninput="document.getElementById(\''+id+'-val\').textContent=this.value+\''+suffix+'\'">'
-      +(hint?'<div style="font-size:11px;color:var(--text3);margin-top:3px">'+hint+'</div>':'')
+      +(hint?'<div style="font-size:12px;color:var(--text3);margin-top:3px">'+hint+'</div>':'')
       +'</div>';
   }
   panel.innerHTML =
@@ -8579,7 +8591,7 @@ function renderVererberTable(results, expandKey){
     +(expanded ? '▴ Weniger anzeigen' : '▾ Alle '+results.length+' anzeigen')
     +'</button></div>';
   return (expandKey && results.length>VERERBER_OVERVIEW_LIMIT && !expanded
-      ? '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Top '+VERERBER_OVERVIEW_LIMIT+' von '+results.length+', sortiert nach Score.</div>' : '')
+      ? '<div style="font-size:12px;color:var(--text3);margin-bottom:4px">Top '+VERERBER_OVERVIEW_LIMIT+' von '+results.length+', sortiert nach Score.</div>' : '')
     +'<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
     +'<thead><tr><th>#</th><th>Ring</th><th>Name</th><th>Score</th><th>Erfolgsquote</th><th>Preisquote</th><th>Top (&gt;90 AS)</th><th>Nachk. geflogen</th><th>Elite-Nachk.</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table></div>'+toggle;
@@ -8625,7 +8637,7 @@ function renderVererberRanking(){
 
   return '<div class="card">'
     +'<div class="card-title" style="display:flex;align-items:center;gap:8px">🧬 Vererbungsstärke nach Flügen (reine Nachkommen-Wertung) <span onclick="showScoreSettingsModal()" title="Score-Einstellungen" style="cursor:pointer;color:var(--text3);font-size:14px;font-weight:400">⚙️</span></div>'
-    +'<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Diese Liste bewertet reine Vererbung (nur Nachkommen). Der Erfolgs-Score einer einzelnen Taube (Details/Stammbaum, Paarungscheck) mischt zusätzlich die Eigenleistung mit ein.</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:6px">Diese Liste bewertet reine Vererbung (nur Nachkommen). Der Erfolgs-Score einer einzelnen Taube (Details/Stammbaum, Paarungscheck) mischt zusätzlich die Eigenleistung mit ein.</div>'
     +'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Bewertet Tauben, deren Nachkommen (Kinder + Enkel) geflogen sind — mind. '+VERERBER_MIN_ERFOLGREICHE+' davon müssen "erfolgreich" (Preisquote ≥'+VERERBER_ERFOLG_MIN_PREISQUOTE+'%, davon mind. '+VERERBER_ERFOLG_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten, mind. '+SCORE_CFG.minFluegePreisquote+' Flüge) und noch im Bestand sein. Wichtigster Faktor ist die Erfolgsquote (Anteil der geflogenen Nachkommen, die "erfolgreich" sind) — wenige erfolgreiche Nachkommen unter vielen geflogenen drücken den Score deutlich. Hinzu kommen der einstellbare Beständigkeits-/Schnelligkeits-Teilscore der erfolgreichen Nachkommen, ein kleiner Bonus für den Anteil überhaupt geflogener Nachkommen sowie ein Bonus für Nachkommen im eigenen Bestand ohne Status mit mind. '+VERERBER_ELITE_MIN_PREISE+' Preisen, mind. '+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote und mind. '+VERERBER_ELITE_MIN_TOPAS+' Preisen über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten. Höherer Score = stärkere Vererbung. Auf den Score klicken zeigt die Details.</div>'
     +'<div style="font-size:12px;font-weight:600;color:var(--text2);margin:14px 0 6px">Bestandstauben</div>'
     +renderVererberTable(bestand,'expandBestand')
@@ -8756,8 +8768,8 @@ function renderErfolgsScoreListe(){
     +'<input type="checkbox" '+(ESLIST.onlyElite?'checked':'')+' onchange="toggleESListElite()"> ⭐ Nur Elite</label>'
     +'<button class="btn btn-outline btn-sm" onclick="exportErfolgsScoreCSV()">⬇️ CSV</button>'
     +'</div></div>'
-    +'<div style="font-size:11px;color:var(--text3);margin:6px 0 10px">Jede Bestandstaube mit individuellem Erfolgs-Score (Eigenleistung + Vererbung, einstellbar über ⚙) und eigenen Flugkennzahlen. Spalten anklicken zum Sortieren, Zeile anklicken öffnet die Taube. ⭐ Elite = eigene Preise/Preisquote/Top-AS erfüllen die Elite-Kriterien (mind. '+VERERBER_ELITE_MIN_PREISE+' Preise, ≥'+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote, mind. '+VERERBER_ELITE_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten, ohne Status).</div>'
-    +(list.length>ESLIST_OVERVIEW_LIMIT && !ESLIST.expanded ? '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Top '+ESLIST_OVERVIEW_LIMIT+' von '+list.length+' (aktuelle Sortierung). Komplette Liste über "Alle anzeigen" oder CSV-Export.</div>' : '')
+    +'<div style="font-size:12px;color:var(--text3);margin:6px 0 10px">Jede Bestandstaube mit individuellem Erfolgs-Score (Eigenleistung + Vererbung, einstellbar über ⚙) und eigenen Flugkennzahlen. Spalten anklicken zum Sortieren, Zeile anklicken öffnet die Taube. ⭐ Elite = eigene Preise/Preisquote/Top-AS erfüllen die Elite-Kriterien (mind. '+VERERBER_ELITE_MIN_PREISE+' Preise, ≥'+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote, mind. '+VERERBER_ELITE_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten, ohne Status).</div>'
+    +(list.length>ESLIST_OVERVIEW_LIMIT && !ESLIST.expanded ? '<div style="font-size:12px;color:var(--text3);margin-bottom:4px">Top '+ESLIST_OVERVIEW_LIMIT+' von '+list.length+' (aktuelle Sortierung). Komplette Liste über "Alle anzeigen" oder CSV-Export.</div>' : '')
     +(list.length?'<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
       +'<thead><tr>'+th('Ring','ring')+th('Name','name')+th('Jg.','jahrgang')+th('Score','score')+th('Eigen','own')+th('Vererbung','ver')+th('Erfolgsq.','erfolgsquote')+th('Flüge','gesetzt')+th('Preisq.','preisquote')+th('Top&gt;90','topas90')+th('Top&gt;80','topas80')+'<th>⭐</th></tr></thead>'
       +'<tbody>'+rows+'</tbody></table></div>'
@@ -9036,9 +9048,9 @@ function _pp_parentLine(p, er){
     : 'Nachk.: keine ausreichende Datenbasis';
   return `<div style="cursor:pointer" onclick="event.stopPropagation();showVererbungDetail('${p.pigeonid}')">
     <span style="font-weight:700;color:${c};font-size:15px">${er.score}</span>
-    <span style="font-size:11px;color:var(--text3)"> · ${rg}</span>
-    <div style="font-size:10px;color:var(--text3);margin-top:1px">${ownPart}</div>
-    <div style="font-size:10px;color:var(--text3)">${verPart}</div>
+    <span style="font-size:12px;color:var(--text3)"> · ${rg}</span>
+    <div style="font-size:12px;color:var(--text3);margin-top:1px">${ownPart}</div>
+    <div style="font-size:12px;color:var(--text3)">${verPart}</div>
   </div>`;
 }
 
@@ -9050,12 +9062,12 @@ function renderPaarungsprognoseCard(father, mother){
   const pp = computePaarungsprognose(father, mother);
   const combinedHtml = pp.combined!=null
     ? `<div style="font-size:26px;font-weight:700;color:${pp.combined>=60?'var(--green)':pp.combined>=35?'var(--orange)':'#e07070'}">${pp.combined}</div>
-       <div style="font-size:11px;color:var(--text3)">Ø Erfolgs-Score der Eltern${pp.note}</div>`
+       <div style="font-size:12px;color:var(--text3)">Ø Erfolgs-Score der Eltern${pp.note}</div>`
     : `<div style="font-size:13px;color:var(--text3)">${pp.stillLoading?'Daten werden geladen…':'Noch keine ausreichende Datenbasis bei den Eltern'}</div>`;
   const saveBtn = (father && mother) ? `<button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="savePairingToList('${father.pigeonid}','${mother.pigeonid}')">💾 Paarung speichern</button>` : '';
   return `<div class="card" style="margin-bottom:14px">
     <div class="card-title" style="display:flex;align-items:center;gap:8px">🏆 Erfolgs-Prognose <span onclick="showScoreSettingsModal()" title="Score-Einstellungen" style="cursor:pointer;color:var(--text3);font-size:14px;font-weight:400">⚙️</span></div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Prognose für die Nachzucht dieses Probanden, aus zwei Faktoren je Elternteil: Beständigkeit (Preisquote) und Geschwindigkeit (Anteil Preise über 90 AS-Punkten) — jeweils sowohl aus der eigenen Flugleistung als auch aus der der eigenen Nachkommen (Kinder + Enkel).</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Prognose für die Nachzucht dieses Probanden, aus zwei Faktoren je Elternteil: Beständigkeit (Preisquote) und Geschwindigkeit (Anteil Preise über 90 AS-Punkten) — jeweils sowohl aus der eigenen Flugleistung als auch aus der der eigenen Nachkommen (Kinder + Enkel).</div>
     <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
       <div style="min-width:150px">${combinedHtml}</div>
       <div style="display:flex;gap:24px;flex-wrap:wrap">
@@ -9151,7 +9163,7 @@ function renderMatingsList(){
         <button class="btn btn-outline btn-sm" onclick="exportMatingsCSV()">⬇️ CSV</button>
       </div>
     </div>
-    <div style="font-size:11px;color:var(--text3);margin:6px 0 10px">Zeile anklicken lädt die Paarung in den Rechner oben. Score-Spalten = Erfolgs-Score (Beständigkeit/Preisquote + Geschwindigkeit/Top-AS-Quote, jeweils aus Eigenleistung und Nachkommen).</div>
+    <div style="font-size:12px;color:var(--text3);margin:6px 0 10px">Zeile anklicken lädt die Paarung in den Rechner oben. Score-Spalten = Erfolgs-Score (Beständigkeit/Preisquote + Geschwindigkeit/Top-AS-Quote, jeweils aus Eigenleistung und Nachkommen).</div>
     <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr><th>Vater</th><th>Mutter</th><th>Inzucht</th><th>Score V</th><th>Score M</th><th>Score Ø</th><th>Datum</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
@@ -9343,7 +9355,7 @@ function renderPairingRecommendations(){
     +'<div class="card-title" style="margin-bottom:0;display:flex;align-items:center;gap:8px">🏆 Top-Paarungsempfehlungen <span onclick="showScoreSettingsModal()" title="Score-Einstellungen" style="cursor:pointer;color:var(--text3);font-size:14px;font-weight:400">⚙️</span></div>'
     +'<button class="btn btn-outline btn-sm" onclick="S.pairRecOpen=false;render()">✕ Einklappen</button>'
     +'</div>'
-    +'<div style="font-size:11px;color:var(--text3);margin:6px 0 10px">Alle '+PAIR_REC.results.length+' möglichen Paare aus '+cand.males.length+' Zucht'+(S.pairRecIncludeReise?'-/Reise':'')+'täubern × '+cand.females.length+' Zucht'+(S.pairRecIncludeReise?'-/Reise':'')+'täubinnen im Bestand, sortiert nach Erfolgs-Score (Ø aus Beständigkeit/Preisquote und Geschwindigkeit/Top-AS-Quote — jeweils aus Eigenleistung und Nachkommen beider Eltern). Für die eigene Preisquote zählen nur Tauben mit mind. '+SCORE_CFG.minFluegePreisquote+' geflogenen Wettflügen, und es werden nur Paare gelistet, bei denen beide Elternteile eine eigene Datenbasis (Flüge oder bewertete Nachkommen) haben. Zu eng verwandte Paare werden nach der eingestellten Inzuchtgrenze automatisch ausgeblendet'+(excluded?' ('+excluded+' Paare aktuell gefiltert)':'')+'.</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin:6px 0 10px">Alle '+PAIR_REC.results.length+' möglichen Paare aus '+cand.males.length+' Zucht'+(S.pairRecIncludeReise?'-/Reise':'')+'täubern × '+cand.females.length+' Zucht'+(S.pairRecIncludeReise?'-/Reise':'')+'täubinnen im Bestand, sortiert nach Erfolgs-Score (Ø aus Beständigkeit/Preisquote und Geschwindigkeit/Top-AS-Quote — jeweils aus Eigenleistung und Nachkommen beider Eltern). Für die eigene Preisquote zählen nur Tauben mit mind. '+SCORE_CFG.minFluegePreisquote+' geflogenen Wettflügen, und es werden nur Paare gelistet, bei denen beide Elternteile eine eigene Datenbasis (Flüge oder bewertete Nachkommen) haben. Zu eng verwandte Paare werden nach der eingestellten Inzuchtgrenze automatisch ausgeblendet'+(excluded?' ('+excluded+' Paare aktuell gefiltert)':'')+'.</div>'
     +'<div class="qe-quickbar" style="margin-bottom:10px">'
     +'<div class="qe-group"><span class="qe-group-label">Anzahl</span><select onchange="S.pairRecTopN=parseInt(this.value);render()">'
     +[10,15,25,50,100].map(function(n){ return '<option value="'+n+'"'+(S.pairRecTopN===n?' selected':'')+'>Top '+n+'</option>'; }).join('')
@@ -9413,7 +9425,7 @@ function renderVererbungDetailBody(pigeonid){
   var combinedLine = er.score!=null
     ? '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:10px;font-size:13px;color:var(--text2)">'
       +'<strong style="font-size:16px;color:'+(er.score>=60?'var(--green)':er.score>=35?'var(--orange)':'#e07070')+'">'+er.score+' / 100</strong> Erfolgs-Score = '+SCORE_CFG.eigenAnteil+'% × Eigenleistung ('+(er.own.score!=null?er.own.score:'—')+') + '+(100-SCORE_CFG.eigenAnteil)+'% × Vererbung ('+(r.score!=null?r.score:'—')+')'
-      +(er.note?'<div style="color:var(--text3);font-size:11px;margin-top:4px">'+er.note+'</div>':'')
+      +(er.note?'<div style="color:var(--text3);font-size:12px;margin-top:4px">'+er.note+'</div>':'')
       +'</div>'
     : '';
   var verScoreLine = r.score!=null
@@ -9516,12 +9528,12 @@ function renderVererbungCard(pigeonid, erArg){
     +`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;cursor:pointer" onclick="toggleVererbungDetail('${pigeonid}')" title="Details zur Berechnung anzeigen">
       <div style="text-align:center">
         <div style="font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:${col}">${er.score}</div>
-        <div style="font-size:10px;color:var(--text3)">Erfolgs-Score / 100</div>
+        <div style="font-size:12px;color:var(--text3)">Erfolgs-Score / 100</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--text2)">
         <div><span style="color:var(--text3)">Eigenleistung (${SCORE_CFG.eigenAnteil}%):</span> <strong>${ownBadge}</strong></div>
         <div><span style="color:var(--text3)">Vererbung (${100-SCORE_CFG.eigenAnteil}%):</span> <strong>${verBadge}</strong></div>
-        ${er.note?`<div style="color:var(--text3);font-size:11px">${er.note}</div>`:''}
+        ${er.note?`<div style="color:var(--text3);font-size:12px">${er.note}</div>`:''}
       </div>
       <div style="margin-left:auto;color:var(--text3);font-size:12px">${expanded?'▴':'▾'}</div>
     </div>`
@@ -9543,7 +9555,7 @@ function renderPigeonTripsSection(p){
   const manualSeasonsHtml = manualSeasons.length ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
       ${manualSeasons.map(s=>`
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg3);border:1px dashed var(--border);border-radius:var(--radius-sm);padding:9px 14px;font-size:13px">
-          <span style="font-weight:600">${escH(String(s.vintage))} <span style="font-weight:400;color:var(--text3);font-size:11px">(manuell)</span></span>
+          <span style="font-weight:600">${escH(String(s.vintage))} <span style="font-weight:400;color:var(--text3);font-size:12px">(manuell)</span></span>
           <span style="color:var(--text2)">${s.gesetzt??0}/${s.preise??0} Preise</span>
           <span style="color:var(--text3)">Σ AS ${s.as_sum!=null?Number(s.as_sum).toFixed(2):'—'}</span>
           <span style="color:var(--text3)">Σ ${s.km_sum!=null?Number(s.km_sum).toFixed(0)+' km':'—'}</span>
@@ -9583,13 +9595,13 @@ function renderPigeonTripsSection(p){
       </div>
       <div class="table-wrap"><table style="width:100%;border-collapse:collapse">
         <thead><tr>
-          <th style="font-size:11px">Datum</th><th style="font-size:11px">Ort</th>
-          <th style="font-size:11px;text-align:center">Pr.RV</th><th style="font-size:11px;text-align:center">Pr.RegGr</th>
-          <th style="font-size:11px;text-align:center">Pr.Reg</th><th style="font-size:11px;text-align:center">Manuell</th><th style="font-size:11px;text-align:center">AS</th>
+          <th style="font-size:12px">Datum</th><th style="font-size:12px">Ort</th>
+          <th style="font-size:12px;text-align:center">Pr.RV</th><th style="font-size:12px;text-align:center">Pr.RegGr</th>
+          <th style="font-size:12px;text-align:center">Pr.Reg</th><th style="font-size:12px;text-align:center">Manuell</th><th style="font-size:12px;text-align:center">AS</th>
         </tr></thead>
         <tbody>${trRows}</tbody>
       </table></div>
-      ${anyCalcRV?'<div style="font-size:11px;color:var(--text3);margin-top:8px">* RV-Platz selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (unter 200 gesetzte Tauben).</div>':''}`;
+      ${anyCalcRV?'<div style="font-size:12px;color:var(--text3);margin-top:8px">* RV-Platz selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (unter 200 gesetzte Tauben).</div>':''}`;
   }
 
   if(cached.length===0 && !manualSeasons.length){
@@ -9617,9 +9629,9 @@ function renderPigeonTripsSection(p){
     <div class="section-label" style="margin-top:14px">Top10-Platzierungen</div>
     <div class="table-wrap"><table style="width:100%;border-collapse:collapse">
       <thead><tr>
-        <th style="font-size:11px">Platz</th><th style="font-size:11px">Kategorie</th>
-        <th style="font-size:11px">Datum</th><th style="font-size:11px">Ort</th>
-        <th style="font-size:11px;text-align:center">Tauben</th><th style="font-size:11px;text-align:center">Entfernung</th>
+        <th style="font-size:12px">Platz</th><th style="font-size:12px">Kategorie</th>
+        <th style="font-size:12px">Datum</th><th style="font-size:12px">Ort</th>
+        <th style="font-size:12px;text-align:center">Tauben</th><th style="font-size:12px;text-align:center">Entfernung</th>
       </tr></thead>
       <tbody>${top10.map(t=>`<tr>
         <td style="font-weight:600;color:var(--green);font-size:12px">${t.platz}</td>
@@ -9630,7 +9642,7 @@ function renderPigeonTripsSection(p){
         <td style="font-size:12px;text-align:center">${t.distance!=null?t.distance.toFixed(1)+' km':'—'}</td>
       </tr>`).join('')}</tbody>
     </table></div>
-    ${top10.some(t=>t.kategorie.endsWith(' *'))?'<div style="font-size:11px;color:var(--text3);margin-top:8px">* RV-Platz selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (unter 200 gesetzte Tauben).</div>':''}`:''}`;
+    ${top10.some(t=>t.kategorie.endsWith(' *'))?'<div style="font-size:12px;color:var(--text3);margin-top:8px">* RV-Platz selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (unter 200 gesetzte Tauben).</div>':''}`:''}`;
 }
 
 // ── Manuelle Reiseleistungs-Erfassung (Jahresleistung + Einzelflug) ──────
@@ -10623,7 +10635,7 @@ function renderColumbaImport(){
       <button class="btn" ${CI.importing||CI.done?'disabled':''} onclick="runColumbaImport()">${CI.importing?'⏳ Läuft…':CI.done?'✅ Import abgeschlossen':'▶ Import starten'}</button>
       <button class="btn btn-outline" ${CI.importing?'disabled':''} onclick="CI.res=null;CI.data=null;CI.log=[];CI.done=null;render()">Verwerfen</button>
     </div>
-    <div style="font-size:11px;color:var(--text3);margin-top:8px">Tipp: vorher oben eine Datensicherung erstellen.</div>
+    <div style="font-size:12px;color:var(--text3);margin-top:8px">Tipp: vorher oben eine Datensicherung erstellen.</div>
   </div></div>`;
   return h;
 }
@@ -10739,7 +10751,7 @@ function renderBackup(){
         <div style="font-size:13px;color:#e07070;margin-bottom:10px">Server-Backups nicht verfügbar: ${escH(BK.serverListError)}</div>
         <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;font-size:12px;color:var(--text3)">
           <strong style="color:var(--text2)">Einmalige Einrichtung nötig:</strong> Im Supabase-Dashboard unter <em>Storage</em> einen privaten Bucket namens <strong>backups</strong> anlegen (oder per SQL-Editor):
-          <pre style="background:var(--bg2);padding:8px 10px;border-radius:6px;margin-top:8px;overflow-x:auto;font-size:11px">insert into storage.buckets (id, name, public) values ('backups','backups', false);
+          <pre style="background:var(--bg2);padding:8px 10px;border-radius:6px;margin-top:8px;overflow-x:auto;font-size:12px">insert into storage.buckets (id, name, public) values ('backups','backups', false);
 
 create policy "backups_rw" on storage.objects
   for all using (bucket_id = 'backups') with check (bucket_id = 'backups');</pre>
@@ -11042,13 +11054,13 @@ function renderContest(){
        +'<td>'+sel(id,'who',c.who,[['alt','Alttauben + Jährige'],['alt2','nur Alttauben'],['jaehrig','nur Jährige'],['jung','Jungtauben'],['all','alle']])+'</td>'
        +'<td>'+(c.type==='team'?num(id,'teamSize',c.teamSize,60):(c.type==='breederAS'?'<input style="'+inp+';width:230px" value="'+escH(ctShowGroups(c.groups))+'" title="Gruppe:Tauben:Flüge je Taube, z. B. alt2:2:8, jaehrig:2:6, jung:2:3 (Gruppen: alt2 = Alttauben, jaehrig, jung, alt = Alt+Jährige, all)" onchange="ctSetCat(\''+id+'\',\'groups\',this.value)">':'—'))+'</td>'
        +'<td style="text-align:center">'+(c.type==='team'?'<input type="checkbox" '+(c.vOnly?'checked':'')+' onchange="ctSetCat(\''+id+'\',\'vOnly\','+'this.checked)">':'—')+'</td>'
-       +'<td>'+(c.type==='breederAS'&&c.groups&&c.groups.length?'<span style="font-size:11px;color:var(--text3)">je Gruppe</span>':num(id,'nFlights',c.nFlights,60)+(c.type==='breederAS'||c.scoring==='as'?'<div style="font-size:10px;color:var(--text3)">0 = alle</div>':''))+'</td>'
+       +'<td>'+(c.type==='breederAS'&&c.groups&&c.groups.length?'<span style="font-size:12px;color:var(--text3)">je Gruppe</span>':num(id,'nFlights',c.nFlights,60)+(c.type==='breederAS'||c.scoring==='as'?'<div style="font-size:12px;color:var(--text3)">0 = alle</div>':''))+'</td>'
        +'<td>'+num(id,'minKm',c.minKm,70)+'</td><td>'+num(id,'minKmJung',c.minKmJung,70,'wie Alt')+'</td>'
        +'<td style="text-align:center"><input type="checkbox" '+(c.weekend?'checked':'')+' onchange="ctSetCat(\''+id+'\',\'weekend\',this.checked)"></td>'
        +'<td style="white-space:nowrap">'+dm(id,'from',c.from)+' – '+dm(id,'to',c.to)+'</td><td style="white-space:nowrap">'+dm(id,'fromJung',c.fromJung)+' – '+dm(id,'toJung',c.toJung)+'</td>'
        +'<td><input style="'+inp+';width:150px" placeholder="z. B. 300,400,400,500" value="'+escH((c.slots||[]).join(','))+'" onchange="ctSetCat(\''+id+'\',\'slots\',this.value)"></td>'
        +'<td><button class="btn btn-outline btn-sm" onclick="ctDelCat(\''+id+'\')" title="Wertung entfernen">✕</button></td></tr>'; }).join('')
-   +'</tbody></table></div><div style="font-size:11px;color:var(--text3);margin-top:6px">„Team je Flug“: je Flug zählen die besten N eigenen Tauben, gewertet werden die besten Flüge. „Einzeltaube“: je Taube zählen ihre Flüge. „Züchter-Team nach AS“: die besten N Tauben des Züchters (Preise, dann AS-Summe). „Summe / Champion“: Teilwertungen addiert; bei AS-Wertungen je Teilwertung die beste Taube (jede Taube nur einmal). km-Bedingungen: jeder Eintrag verlangt einen eigenen Flug mit mehr als dieser Entfernung (300,400,400,500 = 1 Flug &gt;300, 2 Flüge &gt;400, 1 Flug &gt;500). Jährige = Jahrgang Vorjahr, Alttauben = älter. Zeiträume gelten jedes Jahr gleich (Tag.Monat.).</div></div>';
+   +'</tbody></table></div><div style="font-size:12px;color:var(--text3);margin-top:6px">„Team je Flug“: je Flug zählen die besten N eigenen Tauben, gewertet werden die besten Flüge. „Einzeltaube“: je Taube zählen ihre Flüge. „Züchter-Team nach AS“: die besten N Tauben des Züchters (Preise, dann AS-Summe). „Summe / Champion“: Teilwertungen addiert; bei AS-Wertungen je Teilwertung die beste Taube (jede Taube nur einmal). km-Bedingungen: jeder Eintrag verlangt einen eigenen Flug mit mehr als dieser Entfernung (300,400,400,500 = 1 Flug &gt;300, 2 Flüge &gt;400, 1 Flug &gt;500). Jährige = Jahrgang Vorjahr, Alttauben = älter. Zeiträume gelten jedes Jahr gleich (Tag.Monat.).</div></div>';
   if(CT.loading) return h+'<div class="card" style="margin-top:14px;color:var(--text3)">⏳ Lade Flugergebnisse…</div></div>';
   if(CT.error) return h+'<div class="card" style="margin-top:14px;color:#e07070">'+escH(CT.error)+'</div></div>';
   if(!CT.rows) return h+'</div>';
@@ -11057,7 +11069,7 @@ function renderContest(){
   // Reiseplan
   h+='<div class="card" style="margin-top:14px"><div class="card-title">Reiseplan '+cfg.year+' ('+R.tripInfo.length+' Flüge, '+R.entryCount+' wertbare Einzelergebnisse)</div><div class="table-wrap"><table><thead><tr><th>Gewertet</th><th>Nr.</th><th>Datum</th><th>Tag</th><th>Auflassort</th><th style="text-align:right">km</th><th style="text-align:right">RV</th><th style="text-align:right">RegGr</th><th style="text-align:right">Reg</th><th style="text-align:right">eigene Ergebnisse</th><th style="text-align:right">bester Koeff.</th></tr></thead><tbody>'
    +R.tripInfo.map(i=>{ const t=i.trip; const d=ctDow(t.tripdate); return '<tr style="'+(i.included?'':'opacity:.5')+'"><td><input type="checkbox" '+(i.included?'checked':'')+' onchange="ctToggleTrip(\''+t.tripid+'\',this.checked)"></td><td>'+t.number+'</td><td>'+shortTripDate(t.tripdate)+'</td><td>'+(d==null?'':['So','Mo','Di','Mi','Do','Fr','Sa'][d])+'</td><td>'+escH(t.location||'')+'</td><td style="text-align:right">'+(t.averagedistance3!=null?Math.round(t.averagedistance3):'—')+'</td><td style="text-align:right">'+(t.pigeonsset_rv||t.pigeonsset_rv_calc||'—')+'</td><td style="text-align:right">'+(t.pigeonsset_reggr||'—')+'</td><td style="text-align:right">'+(t.pigeonsset_reg||'—')+'</td><td style="text-align:right">'+i.n+'</td><td style="text-align:right">'+ctF(i.best,1)+'</td></tr>'; }).join('')
-   +'</tbody></table></div><div style="font-size:11px;color:var(--text3);margin-top:6px">Nur Flüge mit Häkchen werden gewertet (zugelassener Reiseplan). Es zählen nur Listen mit mindestens '+cfg.minList+' gesetzten Tauben.</div></div>';
+   +'</tbody></table></div><div style="font-size:12px;color:var(--text3);margin-top:6px">Nur Flüge mit Häkchen werden gewertet (zugelassener Reiseplan). Es zählen nur Listen mit mindestens '+cfg.minList+' gesetzten Tauben.</div></div>';
   const dgx=R.diag;
   h+='<details class="card" style="margin-top:14px"><summary style="cursor:pointer;font-size:13px;color:var(--text3)">Diagnose: Herkunft der Einzelergebnisse</summary><div style="font-size:13px;margin-top:8px;line-height:1.6">Ergebnisse im Wertungsjahr: <strong>'+dgx.rows+'</strong> · Taube nicht in der Taubenliste: '+dgx.noPigeon+' · anderer Züchter: '+dgx.otherBreeder+' · keine Liste mit ≥ '+cfg.minList+' Tauben: '+dgx.noList+'<br>Wertbar nach Taubengruppe (Jahrgang laut Taube bzw. Ringnummer): Alttauben '+dgx.grp.alt+' · Jährige (Jg. '+(cfg.year-1)+') '+dgx.grp.jaehrig+' · Jungtauben (Jg. '+cfg.year+') '+dgx.grp.jung+' · Jahrgang unbekannt/andere '+dgx.grp.unbekannt+'</div></details>';
   // Ergebnisse
@@ -11225,7 +11237,7 @@ function renderTripsList(){
     const isSplitSeason = g.jungtier.length>0 && g.alttier.length>0;
     const subBlock = (label, trips) => trips.length ? `
         <div style="margin:${label?'10px 0 6px':'0'}">
-          ${label?`<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px">${label} <span style="font-size:11px;font-weight:400;color:var(--text3)">(${trips.length})</span></div>`:''}
+          ${label?`<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px">${label} <span style="font-size:12px;font-weight:400;color:var(--text3)">(${trips.length})</span></div>`:''}
           ${buildTripTable(trips)}
         </div>` : '';
     const body = isSplitSeason
@@ -11234,16 +11246,16 @@ function renderTripsList(){
     return `
     <div style="margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;user-select:none" onclick="toggleTripSeason('${yr}')">
-        <span style="font-size:11px;color:var(--text3);transition:transform .15s;transform:rotate(${seasonCollapsed?'-90':'0'}deg);display:inline-block">▾</span>
-        <span style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${t('season')} ${yr}</span>
-        <span style="font-size:11px;color:var(--text3)">(${totalCount})</span>
+        <span style="font-size:12px;color:var(--text3);transition:transform .15s;transform:rotate(${seasonCollapsed?'-90':'0'}deg);display:inline-block">▾</span>
+        <span style="font-size:12px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${t('season')} ${yr}</span>
+        <span style="font-size:12px;color:var(--text3)">(${totalCount})</span>
       </div>
       ${seasonCollapsed?'':body}
     </div>`;
   }).join('');
 
   return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" title="Koeffizienten-Auswertung für Wettbewerbe wie den Vanrobaeys Supercup (frei konfigurierbar)." onclick="openContest()">🏆 Wettbewerbe</button><button class="btn btn-outline" title="Findet Reisen, die versehentlich mehrfach angelegt wurden (gleicher Jahrgang/Ort/Datum) und führt sie zusammen." onclick="showDuplicateTripsModal()">🧹 Duplikate bereinigen</button><button class="btn btn-outline" title="Gleicht Flugergebnisse ohne Taubenzuordnung (z.B. weil die Taube erst nach dem Import angelegt wurde) erneut per Ringnummer mit der Tauben-Datenbank ab." onclick="runBackfillMissingPigeonLinks(event)">🔗 Fehlende Verknüpfungen reparieren</button><button class="btn btn-outline" title="Für alle bereits importierten Flüge ohne eigene RV-Liste (zu wenig Tauben) die RV-Rangliste selbst berechnen und speichern — einmalig nötig für Altbestand, neue Importe machen das automatisch." onclick="runBackfillRVFallbackAll(event)">🧮 RV-Ranglisten nachrechnen</button><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div></div>'
-    +(anyComputedRV?'<div style="font-size:11px;color:var(--text3);margin:-8px 0 12px">* RV-Taubenzahl selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene).</div>':'')
+    +(anyComputedRV?'<div style="font-size:12px;color:var(--text3);margin:-8px 0 12px">* RV-Taubenzahl selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene).</div>':'')
     +(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
 }
 function toggleTripSeason(yr){ const k=String(yr); if(RT.collapsedSeasons.has(k)) RT.collapsedSeasons.delete(k); else RT.collapsedSeasons.add(k); render(); }
@@ -11351,7 +11363,7 @@ function renderTripDetail(){
     return '<tr onclick="'+(p?'selectPigeon(\''+p.pigeonid+'\')':'')+'" style="'+(p?'cursor:pointer':'')+'">'
       +'<td style="font-weight:600;color:var(--green);font-size:12px">'+(r.placement||'—')+'</td>'
       +'<td style="font-weight:600;color:var(--text2);font-size:12px">'+(r._breederRank||'—')+'</td>'
-      +'<td style="font-family:monospace;font-size:11px'+(p?';color:var(--green);cursor:pointer':'')+'"'+(p?' onclick="event.stopPropagation();selectPigeon(\''+p.pigeonid+'\')"':'')+'>'+escH(r.ringnumber||'—')+'</td>'
+      +'<td style="font-family:monospace;font-size:12px'+(p?';color:var(--green);cursor:pointer':'')+'"'+(p?' onclick="event.stopPropagation();selectPigeon(\''+p.pigeonid+'\')"':'')+'>'+escH(r.ringnumber||'—')+'</td>'
       +'<td>'+(p?escH(p.name||'—'):'<span style="color:var(--text3)">—</span>')+'</td>'
       +(RT.breederFilter?'':'<td style="color:var(--text2)">'+escH(r.breedername||'—')+'</td>')
       +'<td>'+(r.speed?Number(r.speed).toFixed(3):'—')+'</td>'
@@ -11376,8 +11388,8 @@ function renderTripDetail(){
   const resultsHtml = RT.results.length===0
     ? '<div style="text-align:center;padding:24px;color:var(--text3)">'+t('loading_results')+'</div>'
     : (isSplit
-        ? '<div style="margin-bottom:8px"><div class="serif" style="font-size:15px;margin-bottom:6px">🐣 Jungtiere · Jahrgang '+escH(String(trip.vintage||''))+' <span style="font-size:11px;font-weight:400;color:var(--text3)">('+jungtierRows.length+')</span></div>'+tableHtml(jungtierRows)+'</div>'
-        + '<div><div class="serif" style="font-size:15px;margin:18px 0 6px">🦅 Alttiere <span style="font-size:11px;font-weight:400;color:var(--text3)">('+alttierRows.length+')</span></div>'+tableHtml(alttierRows)+'</div>'
+        ? '<div style="margin-bottom:8px"><div class="serif" style="font-size:15px;margin-bottom:6px">🐣 Jungtiere · Jahrgang '+escH(String(trip.vintage||''))+' <span style="font-size:12px;font-weight:400;color:var(--text3)">('+jungtierRows.length+')</span></div>'+tableHtml(jungtierRows)+'</div>'
+        + '<div><div class="serif" style="font-size:15px;margin:18px 0 6px">🦅 Alttiere <span style="font-size:12px;font-weight:400;color:var(--text3)">('+alttierRows.length+')</span></div>'+tableHtml(alttierRows)+'</div>'
         : tableHtml(sorted));
 
   // Züchter-Chips zum Umschalten des Filters (inkl. "Alle Züchter") — nach
@@ -11441,7 +11453,7 @@ function renderTripDetail(){
     +'</div>'
     +chips
     +rvChips
-    +(rvFallback?'<div style="font-size:11px;color:var(--text3);margin-top:8px">* RV-Rang/AS-Punkte für diesen Flug selbst berechnet, da hierfür keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene) — Rang nach Geschwindigkeit unter allen Tauben dieser RV.</div>':'')
+    +(rvFallback?'<div style="font-size:12px;color:var(--text3);margin-top:8px">* RV-Rang/AS-Punkte für diesen Flug selbst berechnet, da hierfür keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene) — Rang nach Geschwindigkeit unter allen Tauben dieser RV.</div>':'')
     +'</div>'
     +resultsHtml
     +'</div></div>';
@@ -11468,7 +11480,7 @@ function renderTripsUpload(){
     </p>
     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
       <div style="flex:1;min-width:220px">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">RV dieser Dateien (optional) <span title="Nur nötig, wenn du aus mehreren Reisevereinigungen importierst und später danach filtern willst. Vereins-/Züchternummer bleiben davon unabhängig automatisch eindeutig.">ⓘ</span></div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:4px">RV dieser Dateien (optional) <span title="Nur nötig, wenn du aus mehreren Reisevereinigungen importierst und später danach filtern willst. Vereins-/Züchternummer bleiben davon unabhängig automatisch eindeutig.">ⓘ</span></div>
         <select onchange="setImportVerein(this.value)" style="width:100%;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">
           <option value="">— keine RV ausgewählt —</option>
           ${rvOptions}
@@ -12080,7 +12092,7 @@ function renderVereinManagerInto(panel){
     const isStd = stdId===v.id;
     return '<tr>'
     +'<td style="text-align:center;cursor:pointer;font-size:15px" onclick="setStandardRV('+jsAttr(v.id)+')" title="'+(isStd?'Als Standard-RV entfernen':'Als deine Standard-RV markieren')+'">'+(isStd?'⭐':'☆')+'</td>'
-    +'<td>'+escH(v.label)+(v.auto?' <span style="color:var(--text3);font-size:11px">· automatisch erkannt</span>':'')+'</td>'
+    +'<td>'+escH(v.label)+(v.auto?' <span style="color:var(--text3);font-size:12px">· automatisch erkannt</span>':'')+'</td>'
     +'<td style="font-family:monospace;font-size:12px">'+escH(v.code)+'</td>'
     +'<td style="text-align:right;white-space:nowrap">'
       +'<span onclick="editVereinLabel('+jsAttr(v.id)+')" style="cursor:pointer;color:var(--text2);font-size:12px;margin-right:10px">✏️ Umbenennen</span>'
@@ -12095,8 +12107,8 @@ function renderVereinManagerInto(panel){
     +'</div>'
     +'<div style="font-size:12px;color:var(--text3);margin:6px 0 14px">Wird automatisch aus dem Dateinamen erkannt (Format "L" + Regionalverband + RV + Verein, z.B. "L4050515...009" = Reg 405, RV 05). Vereins- und Züchternummer werden dabei automatisch im Hintergrund eindeutig gehalten, ohne dass du einzelne Vereine anlegen musst. Beim Import kannst du das bei Bedarf per Dropdown überschreiben. Die Liste wird serverseitig gespeichert und ist damit auf allen Geräten sichtbar.</div>'
     +(RVEN.length ? '<div class="table-wrap" style="margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th></th><th>Bezeichnung</th><th>RV-Code</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
-      +'<div style="font-size:11px;color:var(--text3);margin:-6px 0 12px">⭐ = deine Standard-RV. Bei Flügen mit gemeinsamem Auflass mehrerer RVs zeigt die Flugliste dann die Taubenzahl dieser RV statt "—".</div>'
-      +'<div style="text-align:right;margin-bottom:16px"><span onclick="resetAllVereine()" style="cursor:pointer;color:#d9534f;font-size:11px">🗑️ Alle RVen zurücksetzen</span></div>'
+      +'<div style="font-size:12px;color:var(--text3);margin:-6px 0 12px">⭐ = deine Standard-RV. Bei Flügen mit gemeinsamem Auflass mehrerer RVs zeigt die Flugliste dann die Taubenzahl dieser RV statt "—".</div>'
+      +'<div style="text-align:right;margin-bottom:16px"><span onclick="resetAllVereine()" style="cursor:pointer;color:#d9534f;font-size:12px">🗑️ Alle RVen zurücksetzen</span></div>'
       : '<div style="color:var(--text3);font-size:13px;margin-bottom:16px">Noch keine RV angelegt — wird beim nächsten Import automatisch erkannt, oder hier manuell.</div>')
     +'<div style="border-top:1px solid var(--border);padding-top:14px">'
       +'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">RV manuell anlegen</div>'
@@ -12425,10 +12437,10 @@ function renderTripsPreview(){
     <td style="text-align:center;color:var(--green)">${item.results.filter(r=>r.found).length}</td>
     <td style="text-align:center;color:${item.results.filter(r=>!r.found).length?'#e07070':'var(--text3)'}">
       ${item.results.filter(r=>!r.found).length||'—'}</td>
-    <td style="text-align:center;font-size:11px">${item._existing
+    <td style="text-align:center;font-size:12px">${item._existing
       ?'<span style="color:var(--amber)" title="Reise mit gleichem Jahrgang/Ort/Datum ist schon in der DB">⚠ vorhanden</span>'
       :'<span style="color:var(--green)">neu</span>'}</td>
-    <td style="font-size:11px">${!item._existing ? '<span style="color:var(--text3)">—</span>'
+    <td style="font-size:12px">${!item._existing ? '<span style="color:var(--text3)">—</span>'
       : item._orphans===undefined ? '<span style="color:var(--text3)">prüfe…</span>'
       : item._orphans.length===0 ? '<span style="color:var(--text3)">—</span>'
       : `<details>
@@ -13086,12 +13098,12 @@ function renderDupeModalBody(){
     return '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">Sucht Reisen mit identischem Jahrgang, Ort und Datum und führt sie auf Wunsch zu einer Reise zusammen — Ergebnisse werden übernommen, keine gehen verloren. Ein versehentlicher doppelter Import derselben Züchter-Datei wird dabei erkannt und nicht dupliziert, sondern entfernt.</div>'
       +'<button class="btn" onclick="scanDuplicateTrips()">🔍 Nach Duplikaten suchen</button>';
   }
-  var logHtml = DUPE.log.length ? '<div style="font-size:11px;color:var(--text3);margin:10px 0;max-height:100px;overflow-y:auto">'+DUPE.log.map(function(l){ return '<div>'+escH(l)+'</div>'; }).join('')+'</div>' : '';
+  var logHtml = DUPE.log.length ? '<div style="font-size:12px;color:var(--text3);margin:10px 0;max-height:100px;overflow-y:auto">'+DUPE.log.map(function(l){ return '<div>'+escH(l)+'</div>'; }).join('')+'</div>' : '';
   var fuzzyHtml = '';
   if(DUPE.fuzzyGroups && DUPE.fuzzyGroups.length){
     var fRows = DUPE.fuzzyGroups.map(function(g,i){
       var detailRows = g.map(function(t,j){
-        return '<div style="font-size:11px;color:'+(j===0?'var(--green)':'var(--text3)')+';margin-top:2px">'
+        return '<div style="font-size:12px;color:'+(j===0?'var(--green)':'var(--text3)')+';margin-top:2px">'
           +(j===0?'✓ Ziel (bleibt bestehen): "':'– wird hineingeführt: "')+escH(t.location||'?')+'" — '
           +(t.pigeonsset||0)+' Tb.'+(t.pigeonsset_rv?', RV-Liste vorhanden':'')+', '+(t._resultCount||0)+' Ergebnis(se) erfasst'
           +'</div>';
@@ -13122,7 +13134,7 @@ function renderDupeModalBody(){
   } else {
     var rRows = DUPE.resultGroups.map(function(g,i){
       var detailRows = g.map(function(t,j){
-        return '<div style="font-size:11px;color:'+(j===0?'var(--green)':'var(--text3)')+';margin-top:2px">'
+        return '<div style="font-size:12px;color:'+(j===0?'var(--green)':'var(--text3)')+';margin-top:2px">'
           +(j===0?'✓ Ziel (bleibt bestehen): ':'– wird hineingeführt: ')
           +escH(t.location||'?')+' · '+escH(t.tripdate||'?')+' — '+(t.pigeonsset||0)+' Tb.'+(t.pigeonsset_rv?', RV-Liste vorhanden':'')
           +'</div>';
@@ -13143,7 +13155,7 @@ function renderDupeModalBody(){
   }
   var rows = DUPE.groups.map(function(g,i){
     var detailRows = g.map(function(t,j){
-      return '<div style="font-size:11px;color:'+(j===0?'var(--green)':'var(--text3)')+';margin-top:2px">'
+      return '<div style="font-size:12px;color:'+(j===0?'var(--green)':'var(--text3)')+';margin-top:2px">'
         +(j===0?'✓ Ziel (bleibt bestehen): ':'– wird hineingeführt: ')
         +(t.pigeonsset||0)+' Tb.'+(t.pigeonsset_rv?', RV-Liste vorhanden':'')+', '+(t._resultCount||0)+' Ergebnis(se) erfasst'
         +'</div>';
@@ -13550,13 +13562,13 @@ function renderZuechter(){
     list = list.filter(b=>code && b.number && String(b.number).indexOf(code)===0);
   }
   const filterBar = RVEN.length ? `<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
-      <span style="font-size:11px;color:var(--text3)">RV:</span>
+      <span style="font-size:12px;color:var(--text3)">RV:</span>
       <span class="tag clickable" style="${!ZT.vereinFilter?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.vereinFilter=null;render()">Alle</span>
       ${RVEN.map(v=>`<span class="tag clickable" style="${ZT.vereinFilter===v.id?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.vereinFilter=${jsAttr(v.id)};render()">${escH(v.label)}</span>`).join('')}
       <span class="tag clickable" style="${ZT.vereinFilter==='__none__'?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.vereinFilter='__none__';render()">Nicht zugeordnet</span>
     </div>` : '';
   const yearBar = availableYears.length>1 ? `<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
-      <span style="font-size:11px;color:var(--text3)">Jahr:</span>
+      <span style="font-size:12px;color:var(--text3)">Jahr:</span>
       <span class="tag clickable" style="${!ZT.yearFilter?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.yearFilter=null;render()">Alle</span>
       ${availableYears.map(y=>`<span class="tag clickable" style="${String(ZT.yearFilter)===String(y)?'border-color:var(--green);color:var(--green)':''}" onclick="ZT.yearFilter=${jsAttr(y)};render()">${escH(String(y))}</span>`).join('')}
     </div>` : '';
@@ -13564,7 +13576,7 @@ function renderZuechter(){
   const rows=list.map(b=>`
     <tr data-key="${escH(b.key)}" onclick="selectZuechter(this.dataset.key)" style="cursor:pointer">
       <td style="font-weight:500">${escH(b.name)}</td>
-      <td style="font-family:monospace;font-size:11px" title="${b.number?escH(zuechterNumberBreakdown(b.number)):''}">${escH(zuechterFullNumber(b.number)||b.number||'—')}</td>
+      <td style="font-family:monospace;font-size:12px" title="${b.number?escH(zuechterNumberBreakdown(b.number)):''}">${escH(zuechterFullNumber(b.number)||b.number||'—')}</td>
       <td style="text-align:center">${b.tripCount}</td>
       <td style="text-align:center">${b.total}</td>
       <td style="text-align:center">${b.pctRV!=null?b.pctRV.toFixed(0)+'%':'—'}</td>
@@ -13828,9 +13840,9 @@ function blColumnPickerMenuHTML(){
         <button type="button" class="btn btn-outline btn-sm" style="padding:2px 8px;line-height:1" title="Nach unten" ${i===arr.length-1?'disabled':''} onclick="moveBLColumn('${c.key}',1)">↓</button>`:''}
     </div>`;
   return `
-    <div style="font-size:11px;color:var(--text3);margin-bottom:6px;line-height:1.4">${t('col_picker_hint')}</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:6px;line-height:1.4">${t('col_picker_hint')}</div>
     ${activeDefs.map((c,i,arr)=>row(c,i,arr,true)).join('')}
-    ${inactiveDefs.length?`<div style="border-top:1px solid var(--border);margin:8px 0 4px;padding-top:6px;font-size:11px;color:var(--text3)">${t('col_picker_more')}</div>`:''}
+    ${inactiveDefs.length?`<div style="border-top:1px solid var(--border);margin:8px 0 4px;padding-top:6px;font-size:12px;color:var(--text3)">${t('col_picker_more')}</div>`:''}
     ${inactiveDefs.map((c,i,arr)=>row(c,i,arr,false)).join('')}
     <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
       <button class="btn btn-outline btn-sm" style="width:100%" onclick="resetBLColumns()">${t('col_picker_resetbtn')}</button>
@@ -13997,17 +14009,17 @@ function renderBestenliste(){
     if(!e.flights.length) return '<div style="padding:10px;color:var(--text3);font-size:12px">'+t('bl_no_flight_data')+'</div>';
     const cells=e.flights.map((f,i)=>{
       return `<div style="text-align:center">
-        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">F${String(f.tripNumber!=null?f.tripNumber:(i+1)).padStart(2,'0')}</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:2px">F${String(f.tripNumber!=null?f.tripNumber:(i+1)).padStart(2,'0')}</div>
         <div style="font-size:12px;font-weight:500">${f.platz!=null?f.platz:'—'}</div>
-        <div style="font-size:11px;color:var(--green)">${f.as!=null?f.as.toFixed(2):'—'}</div>
-        <div style="font-size:10px;color:var(--text3)">${f.speed!=null?f.speed.toFixed(3)+' m/min':'—'}</div>
-        <div style="font-size:10px;color:${f.hasPreis?'var(--text2)':'var(--text3)'}">${f.distance!=null?f.distance.toFixed(1)+' km':'—'}${f.hasPreis&&f.distance!=null?' ✓':''}</div>
+        <div style="font-size:12px;color:var(--green)">${f.as!=null?f.as.toFixed(2):'—'}</div>
+        <div style="font-size:12px;color:var(--text3)">${f.speed!=null?f.speed.toFixed(3)+' m/min':'—'}</div>
+        <div style="font-size:12px;color:${f.hasPreis?'var(--text2)':'var(--text3)'}">${f.distance!=null?f.distance.toFixed(1)+' km':'—'}${f.hasPreis&&f.distance!=null?' ✓':''}</div>
       </div>`;
     }).join('');
     const sumCheck=e.flights.reduce((s,f)=>s+(f.as||0),0);
     return `<div style="padding:10px 4px">
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;background:var(--bg2);border-radius:8px;padding:10px">${cells}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">${t('bl_sum_checked')} <strong style="color:var(--text2)">${sumCheck.toFixed(2)}</strong> ${Math.abs(sumCheck-e.asSum)<0.01?t('bl_sum_match'):t('bl_sum_mismatch')}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:8px">${t('bl_sum_checked')} <strong style="color:var(--text2)">${sumCheck.toFixed(2)}</strong> ${Math.abs(sumCheck-e.asSum)<0.01?t('bl_sum_match'):t('bl_sum_mismatch')}</div>
     </div>`;
   };
 
@@ -14017,7 +14029,7 @@ function renderBestenliste(){
   const activeBLCols = BL.columns.map(k=>BL_COLUMN_BY_KEY[k]).filter(Boolean)
     .filter(c=>c.key!=='breeder' || BL.breeder==='ALL');
   const BL_CELL = {
-    ring:(e)=>`<td style="font-family:monospace;font-size:12px;${e.pigeonid?'cursor:pointer':''}" ${e.pigeonid?`onclick="selectPigeon('${e.pigeonid}')"`:''}>${escH(e.ring||'—')}${!e.inDb?' <span style="color:var(--text3);font-size:10px">(nicht in DB)</span>':''}</td>`,
+    ring:(e)=>`<td style="font-family:monospace;font-size:12px;${e.pigeonid?'cursor:pointer':''}" ${e.pigeonid?`onclick="selectPigeon('${e.pigeonid}')"`:''}>${escH(e.ring||'—')}${!e.inDb?' <span style="color:var(--text3);font-size:12px">(nicht in DB)</span>':''}</td>`,
     name:(e)=>`<td>${escH(e.name||'—')}</td>`,
     jahrgang:(e)=>`<td style="font-size:12px;color:var(--text3)">${e.birthYear||'—'}</td>`,
     breeder:(e)=>`<td style="font-size:12px;color:var(--text3)">${escH(e.breedername||'—')}</td>`,
@@ -14039,7 +14051,7 @@ function renderBestenliste(){
     return `
     <tr>
       <td style="text-align:center;font-weight:600;color:${i<3?'var(--green)':'var(--text3)'}">${i+1}</td>
-      <td style="text-align:center"><button class="btn btn-outline" style="padding:2px 8px;font-size:11px;min-width:0" onclick="event.stopPropagation();toggleBL('${k}')">${open?'−':'+'}</button></td>
+      <td style="text-align:center"><button class="btn btn-outline" style="padding:2px 8px;font-size:12px;min-width:0" onclick="event.stopPropagation();toggleBL('${k}')">${open?'−':'+'}</button></td>
       ${activeBLCols.map(c=>BL_CELL[c.key](e)).join('')}
     </tr>
     ${open?`<tr><td colspan="${2+activeBLCols.length}" style="padding:0">${renderFlights(e)}</td></tr>`:''}`;
@@ -14067,9 +14079,9 @@ function renderBestenliste(){
     return `
     <div style="margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;user-select:none" onclick="toggleBLSeason('${g.year}')">
-        <span style="font-size:11px;color:var(--text3);transition:transform .15s;transform:rotate(${collapsed?'-90':'0'}deg);display:inline-block">▾</span>
-        <span style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${t('season')} ${g.year}</span>
-        <span style="font-size:11px;color:var(--text3)">(${g.rows.length})</span>
+        <span style="font-size:12px;color:var(--text3);transition:transform .15s;transform:rotate(${collapsed?'-90':'0'}deg);display:inline-block">▾</span>
+        <span style="font-size:12px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${t('season')} ${g.year}</span>
+        <span style="font-size:12px;color:var(--text3)">(${g.rows.length})</span>
       </div>
       ${collapsed?'':`<div class="card"><div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr><th>#</th><th></th>${activeBLCols.map(blHeaderCell).join('')}</tr></thead>
@@ -14244,7 +14256,7 @@ function renderStats(){
       <div class="stat-card"><div class="stat-num" style="font-size:24px">${Object.keys(years).length}</div><div class="stat-label">${t('stats_vintages')}</div></div>
     </div>
     <div class="card">
-      <div class="card-title">${t('stats_stock_by_type')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div>
+      <div class="card-title">${t('stats_stock_by_type')} <span style="color:var(--text3);font-weight:400;font-size:12px">${t('stats_click_filter')}</span></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
         <div class="stat-card clickable" onclick="statsFilterTypeInstock('Reisetaube')" title="${t('stats_title_racing')}"><div class="stat-num" style="font-size:22px">${reiseInstock.toLocaleString('de')}</div><div class="stat-label">${t('stats_racing')}</div></div>
         <div class="stat-card clickable" onclick="statsFilterTypeInstock('Zuchttaube')" title="${t('stats_title_breeding')}"><div class="stat-num" style="font-size:22px">${zuchtInstock.toLocaleString('de')}</div><div class="stat-label">${t('stats_breeding')}</div></div>
@@ -14252,20 +14264,20 @@ function renderStats(){
       </div>
     </div>
     <div class="card">
-      <div class="card-title">${t('stats_per_vintage')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div>
+      <div class="card-title">${t('stats_per_vintage')} <span style="color:var(--text3);font-weight:400;font-size:12px">${t('stats_click_filter')}</span></div>
       ${topYears.map(([y,n])=>`<div class="bar-row clickable" onclick="statsFilterYear(${jsAttr(y)})" title="${t('stats_title_vintage')} ${escH(y)} ${t('stats_filter_suffix')}"><span class="bar-label">${escH(y)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/maxY*100)}%"><span>${n}</span></div></div></div>`).join('')}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-      ${topColors.length?`<div class="card"><div class="card-title">${t('stats_colors')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div><div class="tag-list">${topColors.map(([c,n])=>`<div class="tag clickable" onclick="statsFilterColor(${jsAttr(c)})" title="${t('stats_title_color')} ${escH(tColor(c))} ${t('stats_filter_suffix')}">${escH(tColor(c))}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
-      ${topStrains.length?`<div class="card"><div class="card-title">${t('stats_strains')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div><div class="tag-list">${topStrains.map(([s,n])=>`<div class="tag clickable" onclick="statsFilterStrain(${jsAttr(s)})" title="${t('stats_title_strain')} ${escH(s)} ${t('stats_filter_suffix')}">${escH(s)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+      ${topColors.length?`<div class="card"><div class="card-title">${t('stats_colors')} <span style="color:var(--text3);font-weight:400;font-size:12px">${t('stats_click_filter')}</span></div><div class="tag-list">${topColors.map(([c,n])=>`<div class="tag clickable" onclick="statsFilterColor(${jsAttr(c)})" title="${t('stats_title_color')} ${escH(tColor(c))} ${t('stats_filter_suffix')}">${escH(tColor(c))}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+      ${topStrains.length?`<div class="card"><div class="card-title">${t('stats_strains')} <span style="color:var(--text3);font-weight:400;font-size:12px">${t('stats_click_filter')}</span></div><div class="tag-list">${topStrains.map(([s,n])=>`<div class="tag clickable" onclick="statsFilterStrain(${jsAttr(s)})" title="${t('stats_title_strain')} ${escH(s)} ${t('stats_filter_suffix')}">${escH(s)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
-      ${topBreeders.length?`<div class="card"><div class="card-title">${t('stats_breeders')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div><div class="tag-list">${topBreeders.map(([b,n])=>`<div class="tag clickable" onclick="statsFilterBreeder(${jsAttr(b)})" title="${t('stats_title_breeder')} ${escH(b)} ${t('stats_filter_suffix')}">${escH(b)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
-      ${topOwners.length?`<div class="card"><div class="card-title">${t('stats_owners')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div><div class="tag-list">${topOwners.map(([o,n])=>`<div class="tag clickable" onclick="statsFilterOwner(${jsAttr(o)})" title="${t('stats_title_owner')} ${escH(o)} ${t('stats_filter_suffix')}">${escH(o)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
-      ${topStandorte.length?`<div class="card"><div class="card-title">${t('stats_location')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_click_filter')}</span></div><div class="tag-list">${topStandorte.map(([st,n])=>`<div class="tag clickable" onclick="statsFilterStandort(${jsAttr(st)})" title="${t('stats_title_location')} ${escH(st)} ${t('stats_filter_suffix')}">${escH(st)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+      ${topBreeders.length?`<div class="card"><div class="card-title">${t('stats_breeders')} <span style="color:var(--text3);font-weight:400;font-size:12px">${t('stats_click_filter')}</span></div><div class="tag-list">${topBreeders.map(([b,n])=>`<div class="tag clickable" onclick="statsFilterBreeder(${jsAttr(b)})" title="${t('stats_title_breeder')} ${escH(b)} ${t('stats_filter_suffix')}">${escH(b)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+      ${topOwners.length?`<div class="card"><div class="card-title">${t('stats_owners')} <span style="color:var(--text3);font-weight:400;font-size:12px">${t('stats_click_filter')}</span></div><div class="tag-list">${topOwners.map(([o,n])=>`<div class="tag clickable" onclick="statsFilterOwner(${jsAttr(o)})" title="${t('stats_title_owner')} ${escH(o)} ${t('stats_filter_suffix')}">${escH(o)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
+      ${topStandorte.length?`<div class="card"><div class="card-title">${t('stats_location')} <span style="color:var(--text3);font-weight:400;font-size:12px">${t('stats_click_filter')}</span></div><div class="tag-list">${topStandorte.map(([st,n])=>`<div class="tag clickable" onclick="statsFilterStandort(${jsAttr(st)})" title="${t('stats_title_location')} ${escH(st)} ${t('stats_filter_suffix')}">${escH(st)}<strong>${n}</strong></div>`).join('')}</div></div>`:''}
     </div>
     <div class="card">
-      <div class="card-title">${t('stats_top20')} <span style="color:var(--text3);font-weight:400;font-size:11px">${t('stats_top20_sub')}</span></div>
+      <div class="card-title">${t('stats_top20')} <span style="color:var(--text3);font-weight:400;font-size:12px">${t('stats_top20_sub')}</span></div>
       ${topVererber.length?topVererber.map(x=>`<div class="bar-row clickable" onclick="showNachkommen('${x.p.pigeonid}')" title="${t('stats_title_offspring')} ${escH(ring(x.p))}"><span class="bar-label" style="width:auto;min-width:90px;text-align:left;padding-right:8px">${escH(ring(x.p))}${x.p.name?` · ${escH(x.p.name)}`:''}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(x.n/maxV*100)}%"><span>${x.n}</span></div></div></div>`).join(''):`<div style="color:var(--text3);font-size:13px;padding:8px 0">${t('stats_no_top_vererber')}</div>`}
     </div>
     <div style="margin-top:16px">${renderErfolgsScoreListe()}</div>
@@ -14313,7 +14325,7 @@ function bindAC(inpId, dropId, filterSex, onSelect){
       <div class="ac-item" onclick="(${onSelect.toString()})('${p.pigeonid}')">
         <span class="ac-ring">${escH(ring(p))}</span>
         ${p.name?`<span>${escH(p.name)}</span>`:''}
-        <span style="color:var(--text3);font-size:11px;margin-left:auto">${p.date_year||''}</span>
+        <span style="color:var(--text3);font-size:12px;margin-left:auto">${p.date_year||''}</span>
       </div>`).join('')
     : '<div class="ac-item" style="cursor:default;color:var(--text3)">Keine Treffer</div>';
     drop.classList.toggle('open', hits.length>0||true);
@@ -14437,12 +14449,12 @@ function nachPerfSort(a,b){ return nachPerfRank(b)-nachPerfRank(a); }
 function nachPerfHtml(p, compact){
   var d = NACH_PERF[p.pigeonid];
   if(!d) return compact ? '' : '<span style="color:var(--text3)">—</span>';
-  var badge = d.elite ? '<span style="background:rgba(240,196,25,.15);color:#f0c419;border:1px solid rgba(240,196,25,.35);border-radius:20px;padding:1px 8px;font-size:10.5px;font-weight:600;white-space:nowrap">★ Elite</span>'
-    : d.erfolgreich ? '<span style="background:rgba(80,180,110,.16);color:var(--green);border:1px solid rgba(80,180,110,.35);border-radius:20px;padding:1px 8px;font-size:10.5px;font-weight:600;white-space:nowrap">✓ Erfolgreich</span>' : '';
-  if(!d.gesetzt) return compact ? '<div style="font-size:10.5px;color:var(--text3);margin-top:4px">noch nicht geflogen</div>' : '<span style="color:var(--text3)">nicht geflogen</span>';
+  var badge = d.elite ? '<span style="background:rgba(240,196,25,.15);color:#f0c419;border:1px solid rgba(240,196,25,.35);border-radius:20px;padding:1px 8px;font-size:12px;font-weight:600;white-space:nowrap">★ Elite</span>'
+    : d.erfolgreich ? '<span style="background:rgba(80,180,110,.16);color:var(--green);border:1px solid rgba(80,180,110,.35);border-radius:20px;padding:1px 8px;font-size:12px;font-weight:600;white-space:nowrap">✓ Erfolgreich</span>' : '';
+  if(!d.gesetzt) return compact ? '<div style="font-size:12px;color:var(--text3);margin-top:4px">noch nicht geflogen</div>' : '<span style="color:var(--text3)">nicht geflogen</span>';
   var stats = d.preise+'/'+d.gesetzt+' Preise · '+Math.round(d.preisquoteD)+' %'+(d.topAS80?' · '+d.topAS80+'× AS>'+VERERBER_ELITE_AS_SCHWELLE:'');
-  if(compact) return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px">'+badge+'<span style="font-size:10.5px;color:var(--text2)">'+stats+'</span></div>';
-  return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+badge+'<span style="font-size:11.5px;color:var(--text2);white-space:nowrap">'+stats+'</span></div>';
+  if(compact) return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px">'+badge+'<span style="font-size:12px;color:var(--text2)">'+stats+'</span></div>';
+  return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+badge+'<span style="font-size:12px;color:var(--text2);white-space:nowrap">'+stats+'</span></div>';
 }
 
 function birdCard(p){
@@ -14451,18 +14463,18 @@ function birdCard(p){
   return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;cursor:pointer;transition:border-color .15s"'
     +' onmouseover="this.style.borderColor=\'var(--green)\'" onmouseout="this.style.borderColor=\'var(--border)\'"'
     +' onclick="selectPigeon(\''+p.pigeonid+'\')">'
-    +'<div style="font-family:monospace;font-size:11px;color:var(--green);display:flex;align-items:center;gap:5px">'+escH(ring(p))
+    +'<div style="font-family:monospace;font-size:12px;color:var(--green);display:flex;align-items:center;gap:5px">'+escH(ring(p))
     +'<span style="color:'+(sx==='M'?'#7ab3e0':sx==='F'?'#c97fd4':'var(--text3)')+'">'+(sx==='M'?'♂':sx==='F'?'♀':'?')+'</span></div>'
     +(p.name?'<div style="font-size:13px;font-weight:500;color:var(--text);margin-top:2px">'+escH(p.name)+'</div>':'')
-    +'<div style="font-size:11px;color:var(--text3);margin-top:3px">'
+    +'<div style="font-size:12px;color:var(--text3);margin-top:3px">'
     +[p.date_year,tColor(p.color),p.strain].filter(Boolean).map(escH).join(' · ')
     +'</div>'
     +nachPerfHtml(p,true)
-    +(via?'<div style="font-size:10px;color:var(--text3);margin-top:3px">via <span style="font-family:monospace;color:var(--blue)">'+escH(ring(via))+'</span></div>':'')
+    +(via?'<div style="font-size:12px;color:var(--text3);margin-top:3px">via <span style="font-family:monospace;color:var(--blue)">'+escH(ring(via))+'</span></div>':'')
     +'<div style="display:flex;gap:6px;margin-top:7px">'
-    +'<span onclick="event.stopPropagation();showPedigree(\''+p.pigeonid+'\')" style="font-size:11px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px"'
+    +'<span onclick="event.stopPropagation();showPedigree(\''+p.pigeonid+'\')" style="font-size:12px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px"'
     +' onmouseover="this.style.color=\'var(--green)\'" onmouseout="this.style.color=\'var(--text3)\'">🌳 Stamm</span>'
-    +'<span onclick="event.stopPropagation();showNachkommen(\''+p.pigeonid+'\')" style="font-size:11px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px"'
+    +'<span onclick="event.stopPropagation();showNachkommen(\''+p.pigeonid+'\')" style="font-size:12px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px"'
     +' onmouseover="this.style.color=\'var(--green)\'" onmouseout="this.style.color=\'var(--text3)\'">🐣 Kinder</span>'
     +'</div></div>';
 }
@@ -14489,8 +14501,8 @@ function renderGen(arr,gen,emptyMsg,groupKey){
     var collapsed=!S.nachExpanded[key];
     return '<div style="margin-bottom:14px">'
       +'<div onclick="toggleNachExpand(\''+key+'\')" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;user-select:none">'
-      +'<span style="color:var(--text3);font-size:11px;width:12px;display:inline-block">'+(collapsed?'▸':'▾')+'</span>'
-      +'<span style="background:'+g.style.bg+';color:'+g.style.color+';padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500">'+g.style.label+'</span>'
+      +'<span style="color:var(--text3);font-size:12px;width:12px;display:inline-block">'+(collapsed?'▸':'▾')+'</span>'
+      +'<span style="background:'+g.style.bg+';color:'+g.style.color+';padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500">'+g.style.label+'</span>'
       +'<span style="font-size:12px;color:var(--text3)">'+g.birds.length+' Taube'+(g.birds.length!==1?'n':'')+'</span>'
       +'</div>'
       +(collapsed?'':'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px">'
@@ -14531,10 +14543,10 @@ function renderGenTable(birds, genKey, rootId, emptyMsg){
       +'<td>'+(tColor(p.color)?escH(tColor(p.color)):'<span style="color:var(--text3)">—</span>')+'</td>'
       +'<td>'+partnerHtml+'</td>'
       +'<td>'+nachPerfHtml(p,false)+'</td>'
-      +'<td><span style="background:'+st.bg+';color:'+st.color+';padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap">'+st.label+'</span></td>'
+      +'<td><span style="background:'+st.bg+';color:'+st.color+';padding:2px 8px;border-radius:20px;font-size:12px;font-weight:500;white-space:nowrap">'+st.label+'</span></td>'
       +'<td style="text-align:right;white-space:nowrap">'
-      +'<span onclick="event.stopPropagation();showPedigree(\''+p.pigeonid+'\')" title="Stammbaum" style="font-size:11px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px" onmouseover="this.style.color=\'var(--green)\'" onmouseout="this.style.color=\'var(--text3)\'">🌳</span> '
-      +'<span onclick="event.stopPropagation();showNachkommen(\''+p.pigeonid+'\')" title="Nachkommen" style="font-size:11px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px" onmouseover="this.style.color=\'var(--green)\'" onmouseout="this.style.color=\'var(--text3)\'">🐣</span>'
+      +'<span onclick="event.stopPropagation();showPedigree(\''+p.pigeonid+'\')" title="Stammbaum" style="font-size:12px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px" onmouseover="this.style.color=\'var(--green)\'" onmouseout="this.style.color=\'var(--text3)\'">🌳</span> '
+      +'<span onclick="event.stopPropagation();showNachkommen(\''+p.pigeonid+'\')" title="Nachkommen" style="font-size:12px;color:var(--text3);cursor:pointer;padding:2px 7px;border:1px solid var(--border);border-radius:4px" onmouseover="this.style.color=\'var(--green)\'" onmouseout="this.style.color=\'var(--text3)\'">🐣</span>'
       +'</td></tr>';
   }).join('');
   return '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
@@ -14616,7 +14628,7 @@ function renderNachkommen(pid){
       : (isActive ? 'Filter "'+k[0]+'" entfernen' : 'Nach "'+k[0]+'" filtern');
     return '<div onclick="'+onclick+'" title="'+tip+'" style="cursor:pointer;background:var(--bg3);border:1px solid '+(isActive?k[2]:'var(--border)')+';border-radius:var(--radius-sm);padding:12px;text-align:center;transition:border-color .15s'+(isActive?';box-shadow:0 0 0 1px '+k[2]+' inset':'')+'">'
       +'<div style="font-family:\'Playfair Display\',serif;font-size:24px;color:'+k[2]+';font-weight:600">'+k[1]+'</div>'
-      +'<div style="font-size:11px;color:'+(isActive?'var(--text)':'var(--text3)')+';margin-top:3px">'+k[0]+'</div></div>';
+      +'<div style="font-size:12px;color:'+(isActive?'var(--text)':'var(--text3)')+';margin-top:3px">'+k[0]+'</div></div>';
   }).join('');
 
   // Priorität beim Filtern: zuerst Bestandsstatus (Im Bestand/Verstorben/Verkauft),
@@ -14654,7 +14666,7 @@ function renderNachkommen(pid){
     var body = genCollapsed ? '' : (isFiltering ? renderGenTable(birds,g[3],pid,emptyMsg) : renderGen(birds,g[2],emptyMsg,genKey));
     return '<div class="card" style="margin-bottom:12px">'
       +'<div class="card-title" onclick="toggleNachExpand(\''+genKey+'\')" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">'
-      +'<span style="color:var(--text3);font-size:11px">'+(genCollapsed?'▸':'▾')+'</span>'
+      +'<span style="color:var(--text3);font-size:12px">'+(genCollapsed?'▸':'▾')+'</span>'
       +g[0]+' <span style="color:var(--text3);font-weight:400">('+birds.length+(filterLabel?' von '+g[1].length:'')+')</span></div>'
       +body+'</div>';
   }).join('');
@@ -14846,7 +14858,7 @@ async function openAuctionExport(id){
     if(d.inc[k]==null) d.inc[k]=(lab==='Vater'||lab==='Mutter'); }
   AUC={p,anc,d};
   const inp=(k,lab,rows,max)=>`<div class="form-field" style="margin-bottom:8px"><label>${lab}${max?` <span id="auc_cnt_${k}" style="color:var(--text3)">${String(d[k]||'').length}/${max}</span>`:''}</label>${rows?`<textarea id="auc_${k}" rows="${rows}" style="width:100%">${e(d[k])}</textarea>`:`<input id="auc_${k}" value="${e(d[k])}" ${max?`maxlength="${max}" oninput="document.getElementById('auc_cnt_${k}').textContent=this.value.length+'/${max}'"`:''}>`}</div>`;
-  const photoRow=(q,k)=>`<input id="auc_ph_${k}" placeholder="Foto-URL (leer = Foto aus Verwaltung wird hochgeladen)" value="${e(d.photos[k]||'')}" style="width:100%;margin-top:4px"><div style="font-size:11px;color:var(--text3)">${q.photo?'📷 Foto in der Verwaltung vorhanden':'Kein Foto hinterlegt'}</div>`;
+  const photoRow=(q,k)=>`<input id="auc_ph_${k}" placeholder="Foto-URL (leer = Foto aus Verwaltung wird hochgeladen)" value="${e(d.photos[k]||'')}" style="width:100%;margin-top:4px"><div style="font-size:12px;color:var(--text3)">${q.photo?'📷 Foto in der Verwaltung vorhanden':'Kein Foto hinterlegt'}</div>`;
   const wrap=document.createElement('div'); wrap.id='auc-modal';
   wrap.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;background:rgba(0,0,0,.65);display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto';
   wrap.addEventListener('mousedown',ev=>{ if(ev.target===wrap) wrap.remove(); });
@@ -14858,7 +14870,7 @@ async function openAuctionExport(id){
     <div class="section-label">Verkaufstaube – Foto</div><div style="margin-bottom:10px">${photoRow(p,p.pigeonid)}</div>
     <div class="section-label">Stammbaum (4 Generationen, Familienansicht)</div>
     <div style="margin-bottom:10px"><label><input type="checkbox" id="auc_ped" ${d.ped?'checked':''}> als Bild einfügen</label> &nbsp; <label><input type="checkbox" id="auc_pedPhoto" ${d.pedPhoto?'checked':''}> mit Fotos</label> &nbsp; <label><input type="checkbox" id="auc_pedTravel" ${d.pedTravel?'checked':''}> mit Reisedaten aus den Flügen</label>
-      <input id="auc_pedUrl" placeholder="Bild-URL (leer = wird automatisch erzeugt und hochgeladen)" value="${e(d.pedUrl||'')}" style="width:100%;margin-top:4px"><div style="font-size:11px;color:var(--text3)">Bei jedem „HTML erzeugen“ wird geprüft, ob sich der Stammbaum geändert hat (Fotos, Namen, Eltern) – dann wird das Bild automatisch neu erzeugt. Eine selbst eingetragene URL bleibt unverändert.</div></div>
+      <input id="auc_pedUrl" placeholder="Bild-URL (leer = wird automatisch erzeugt und hochgeladen)" value="${e(d.pedUrl||'')}" style="width:100%;margin-top:4px"><div style="font-size:12px;color:var(--text3)">Bei jedem „HTML erzeugen“ wird geprüft, ob sich der Stammbaum geändert hat (Fotos, Namen, Eltern) – dann wird das Bild automatisch neu erzeugt. Eine selbst eingetragene URL bleibt unverändert.</div></div>
     <div class="section-label">Abstammung</div>
     ${anc.map(([lab,q])=>{const k=q.pigeonid;return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px"><label style="font-weight:600"><input type="checkbox" id="auc_inc_${k}" ${d.inc[k]?'checked':''}> ${e(lab)}: ${e(aucRing(q))}${q.name?' „'+e(q.name)+'“':''}</label><textarea id="auc_desc_${k}" rows="3" style="width:100%;margin-top:6px">${e(d.desc[k])}</textarea>${photoRow(q,k)}</div>`;}).join('')||'<div style="font-size:12px;color:var(--text3)">Keine Eltern in der Verwaltung verknüpft.</div>'}
     ${inp('video','Video-Link (YouTube o. ä.)')}${inp('extra','Weiterer Text (optional)',2)}
@@ -14868,7 +14880,7 @@ async function openAuctionExport(id){
     <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" onclick="aucGenerate()">HTML erzeugen</button></div>
     <div id="auc_result" style="display:none;margin-top:14px"><div class="section-label">Vorschau</div><iframe id="auc_prev" style="width:100%;height:340px;background:#fff;border:1px solid var(--border);border-radius:8px"></iframe>
       <div class="section-label" style="margin-top:10px">Titel / Untertitel für die Auktionsseite</div><div style="display:flex;gap:6px;margin-bottom:4px"><input id="auc_o_t" readonly style="flex:1"><button class="btn btn-outline btn-sm" onclick="aucCopyId('auc_o_t')">📋</button></div><div style="display:flex;gap:6px"><input id="auc_o_s" readonly style="flex:1"><button class="btn btn-outline btn-sm" onclick="aucCopyId('auc_o_s')">📋</button></div>
-      <div class="section-label" style="margin-top:10px">Quellcode – in CKEditor auf „Quelltext" klicken und dort einfügen</div><textarea id="auc_out" rows="8" readonly style="width:100%;font-family:monospace;font-size:11px"></textarea>
+      <div class="section-label" style="margin-top:10px">Quellcode – in CKEditor auf „Quelltext" klicken und dort einfügen</div><textarea id="auc_out" rows="8" readonly style="width:100%;font-family:monospace;font-size:12px"></textarea>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn btn-outline" onclick="aucDownload()">⬇ .html</button><button class="btn" onclick="aucCopy()">📋 Quellcode kopieren</button></div></div></div>`;
   document.body.appendChild(wrap);
 }
