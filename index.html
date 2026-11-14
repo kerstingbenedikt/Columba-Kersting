@@ -3404,6 +3404,20 @@ async function startEdit(id){
 // speichert es als Data-URL in der Spalte "photo" der Tabelle "pigeons".
 // Hinweis: Dafür muss in Supabase eine Text-Spalte "photo" auf der Tabelle
 // "pigeons" existieren (z.B. type "text").
+function scanShrinkDataUrl(dataUrl, maxDim, quality){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onerror = ()=>reject(new Error('Bild konnte nicht geladen werden'));
+    img.onload = ()=>{
+      let w=img.width, h=img.height; const m=Math.max(w,h);
+      if(m>maxDim){ w=Math.round(w*maxDim/m); h=Math.round(h*maxDim/m); }
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,w,h); x.drawImage(img,0,0,w,h);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.src = dataUrl;
+  });
+}
 function compressImageFile(file, maxDim, quality){
   return new Promise((resolve, reject)=>{
     const reader = new FileReader();
@@ -5812,6 +5826,7 @@ function renderScanResult(){
       <span>✅ in DB</span><span>🆕 neu</span><span>⚠️ Warnung</span><span>🚫 Datenfehler (wird übersprungen)</span>
       <span style="margin-left:auto">Klick = auswählen und rechts bearbeiten · Ziehen (am Handy: gedrückt halten) = Platz tauschen</span>
       <label style="display:flex;align-items:center;gap:5px;color:var(--text2);cursor:pointer"><input type="checkbox" ${SCAN_BRANCH?'checked':''} onchange="SCAN_BRANCH=this.checked"> ganzen Zweig mitziehen</label>
+      ${SCAN.imagePreview?`<label style="display:flex;align-items:center;gap:5px;color:var(--text2);cursor:pointer" title="Das gescannte Bild wird beim Speichern unter „Weitere Bilder" des Probanden abgelegt."><input type="checkbox" ${SCAN.keepImage!==false?'checked':''} onchange="SCAN.keepImage=this.checked"> Scan-Bild beim Probanden ablegen</label>`:''}
     </div>
     ${warnBlock}
     ${rawDebugBlock}
@@ -6026,6 +6041,17 @@ function splitRingSex(r){
   const m = String(r).trim().match(/^(.*\d)\s*[-\/]?\s*([VWvw])\.?$/);
   return m ? {ring:m[1].trim(), sex: m[2].toUpperCase()==='V'?'M':'F'} : {ring:String(r).trim(), sex:null};
 }
+// Gefiederfarbe: steht im Stammbaum meist ohne Beschriftung als einzelnes Wort ("blau", "geh.", "fahl-scheck").
+// Liefert die KI keine Farbe, wird ein Textabschnitt übernommen, der NUR aus Farbwörtern besteht.
+const SCAN_COLOR_RE = /^(?:(?:hell|dunkel|dkl|licht|donker)[\s.\-]*)?(?:blau|blauw|blue|bl|rot|rood|red|fahl|vaal|mealy|gehämmert|gehaemmert|geh|gehamerd|geschelpt|kras|check|checker|chequer|scheck|schecke|bont|pied|schimmel|grizzle|weiß|weiss|wit|white|schwarz|zwart|black|dunkel|donker|dark|gelb|silber|braun|schalie|schallie|weißschlag|weissschlag|witpen|wp|band|gebändert)(?:[\s.\-\/]+(?:blau|blauw|blue|bl|rot|rood|red|fahl|vaal|gehämmert|gehaemmert|geh|gehamerd|geschelpt|kras|check|checker|scheck|schecke|bont|pied|schimmel|grizzle|weiß|weiss|wit|white|schwarz|zwart|dunkel|donker|dark|gelb|silber|braun|schalie|weißschlag|weissschlag|witpen|wp|band|gebändert))*\.?$/i;
+function scanGuessColor(p){
+  if(!p || p.color) return;
+  const parts = String(p.info||'').split(/\s+\/\s+|[\n;,]+/).map(x=>x.trim()).filter(Boolean);
+  const idx = parts.findIndex(x=>x.length<=28 && SCAN_COLOR_RE.test(x));
+  if(idx>=0){ p.color = parts[idx].replace(/\.$/,''); return; }
+  const nm = String(p.name||'').trim();
+  if(nm && nm.length<=28 && SCAN_COLOR_RE.test(nm)){ p.color = nm.replace(/\.$/,''); p.name = null; }
+}
 function normalizePigeonData(d){
   const rs = splitRingSex(d.ringnumber||d.ring||null);
   const fs = splitRingSex(d.ringnumberfather||d.father_ring||d.father?.ringnumber||null);
@@ -6106,6 +6132,7 @@ async function runScanAI(){
       const py=Number((SCAN.pigeons[k]||{}).date_year), cy=Number((SCAN.pigeons[ck]||{}).date_year);
       return !(py&&cy) || py>cy;
     });
+    PED_KEYS.forEach(k => scanGuessColor(SCAN.pigeons[k]));
     stopScanProgress('Abgleich mit Datenbank…');
     fixGenderSlotMismatches();
     checkScanPlausibility();
@@ -6212,9 +6239,24 @@ async function executeScanSave(){
     } catch(e){ console.warn(`Fehler bei ${p.ringnumber}:`, e.message); saveErrors.push(`${p.ringnumber}: ${e.message}`); }
   }
 
-  setS('Lade Datenbank neu…');
   const probandRing = SCAN.pigeons['proband']?.ringnumber;
   const probandId = probandRing ? uuidMap[normRing(probandRing)] : null;
+  // Gescanntes Bild als „Weiteres Bild" beim Probanden ablegen, damit es nutzbar bleibt
+  let imgNote = null;
+  if(SCAN.keepImage!==false && SCAN.imagePreview){
+    if(!probandId) imgNote = 'Das gescannte Bild wurde nicht abgelegt, weil der Proband nicht gespeichert wurde.';
+    else {
+      try{
+        setS('Lege gescanntes Bild beim Probanden ab…');
+        const data = await scanShrinkDataUrl(SCAN.imagePreview, 2000, .85);
+        let sort = 0;
+        try{ const ex = await apiGet('/pigeon_photos?pigeonid=eq.'+encodeURIComponent(probandId)+'&select=sort_order&order=sort_order.desc&limit=1'); sort = (ex&&ex[0]&&Number(ex[0].sort_order))||0; }catch(e){}
+        await apiPost('pigeon_photos', { id:crypto.randomUUID(), pigeonid:probandId, kind:'other', data, caption:'Gescannter Stammbaum ('+new Date().toLocaleDateString('de-DE')+')', sort_order:sort+1 });
+        if(typeof PHOTO_CACHE!=='undefined') PHOTO_CACHE.delete(probandId);
+      }catch(e){ imgNote = 'Das gescannte Bild konnte nicht abgelegt werden: '+e.message; }
+    }
+  }
+  setS('Lade Datenbank neu…');
   await loadData();
   scanReset();
   // Proband sicher in den Speicher holen (neu angelegte Tauben können außerhalb der ersten Ladeseiten liegen)
@@ -6225,6 +6267,7 @@ async function executeScanSave(){
       if(rows && rows[0]){ if(!LOADED_PIGEON_IDS.has(rows[0].pigeonid)){ LOADED_PIGEON_IDS.add(rows[0].pigeonid); S.pigeons.push(rows[0]); } found = rows[0]; invalidatePedigreeCache(); }
     }catch(e){ console.warn('Proband nachladen fehlgeschlagen', e); }
   }
+  if(imgNote) alert('⚠️ '+imgNote);
   if(saveErrors.length){
     alert('⚠️ '+saveErrors.length+' Taube(n) konnten nicht gespeichert werden:\n\n'+saveErrors.slice(0,8).join('\n')+(saveErrors.length>8?'\n…':''));
   }
