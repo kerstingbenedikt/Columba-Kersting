@@ -257,7 +257,18 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .ped-box.root{border-color:var(--green2);background:color-mix(in srgb,var(--green) 8%,var(--bg3))}
 .scan-node-err{border-color:#8a3a3a!important;background:rgba(192,80,77,.12)!important}
 .scan-node-warn{border-color:#a3792f!important;background:rgba(212,168,67,.1)!important}
-.scan-node-active{outline:2px solid var(--green);outline-offset:1px}
+.scan-node-active{outline:2px solid var(--green);outline-offset:-1px;box-shadow:0 0 0 3px rgba(201,162,39,.25)}
+.scan-split{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(400px,1fr);gap:14px;height:calc(100vh / var(--zoom,1) - 245px);min-height:560px}
+.scan-pane{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg2);min-height:0;overflow:auto}
+#scan-tree.scan-pane{padding:8px}
+.scan-side{display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0}
+.scan-editpane{flex:0 1 auto;max-height:62%;padding:12px}
+.scan-listpane{flex:1 1 0}
+.scan-listpane th{z-index:1}
+.scan-listpane td,.scan-listpane th{padding:6px 9px}
+.scan-row-sel td{background:rgba(201,162,39,.18)!important;color:var(--text)!important}
+.scan-editpane .form-field input,.scan-editpane .form-field select{padding:6px 8px;height:auto;width:100%;min-width:0}
+@media (max-width:1099px){.scan-split{display:block;height:auto;min-height:0}#scan-tree.scan-pane{max-height:75vh}.scan-side{margin-top:12px}.scan-editpane{max-height:none}.scan-listpane{max-height:55vh}}
 .scan-dd{cursor:grab;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .scan-drop-target{outline:2px dashed var(--gold,#c9a227)!important;outline-offset:2px;background:rgba(201,162,39,.18)!important}
 .ped-ring{font-family:monospace;font-size:12px;color:var(--green);font-weight:600}
@@ -478,6 +489,87 @@ main.main-wide{max-width:1840px}
   header h1{font-size:15px}
   .db-status{display:none}
 }
+/* (Scan-, Import-, Mehrfachauswahl- und Flug-Stile: lagen zuvor versehentlich in der PDF-Druckvorlage und wirkten in der App nicht) */
+/* ── SCAN-MODUL ───────────────────────────────────────────────── */
+.scan-drop-zone{border:2px dashed var(--border2);border-radius:var(--radius);padding:40px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--bg3);position:relative;overflow:hidden}
+.scan-drop-zone:hover,.scan-drop-zone.drag-over{border-color:var(--green);background:var(--bg4)}
+.scan-drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.scan-drop-icon{font-size:44px;margin-bottom:12px}
+.scan-drop-text{font-size:15px;color:var(--text2);margin-bottom:4px;font-weight:500}
+.scan-drop-sub{font-size:12px;color:var(--text3)}
+.scan-preview{max-width:100%;max-height:300px;border-radius:var(--radius-sm);border:1px solid var(--border);margin:12px auto;display:block}
+.scan-result-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.scan-field{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px}
+.scan-field label{font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px}
+.scan-field input,.scan-field select{width:100%;background:transparent;border:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;padding:0}
+.scan-field input::placeholder{color:var(--text3)}
+.scan-field select option{background:var(--bg3)}
+.scan-match-box{border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.scan-match-found{background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.3)}
+.scan-match-new{background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25)}
+.scan-match-icon{font-size:26px;flex-shrink:0}
+.scan-match-text strong{color:var(--text);display:block;font-size:14px;margin-bottom:2px}
+.scan-match-text span{color:var(--text3);font-size:12px}
+.scan-steps{background:var(--bg3);border-radius:var(--radius-sm);padding:14px 16px;margin-top:14px}
+.scan-step{display:flex;align-items:center;gap:10px;padding:6px 0;color:var(--text3);font-size:13px}
+.scan-step.active{color:var(--text)}
+.scan-step.done{color:var(--green)}
+.scan-step-dot{width:22px;height:22px;border-radius:50%;background:var(--bg4);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;transition:all .2s}
+.scan-step.active .scan-step-dot{border-color:var(--green);background:var(--green3);color:#fff}
+.scan-step.done .scan-step-dot{background:var(--green);color:#fff;border-color:var(--green)}
+.scan-thinking{display:flex;align-items:center;gap:12px;padding:18px 16px;color:var(--text2);font-size:13px;background:var(--bg3);border-radius:var(--radius-sm);margin:12px 0}
+.scan-dots span{display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;animation:sdot .9s infinite;margin:0 2px}
+.scan-dots span:nth-child(2){animation-delay:.2s}
+.scan-dots span:nth-child(3){animation-delay:.4s}
+@keyframes sdot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-7px)}}
+/* Fortschrittsbalken während der Verarbeitung */
+.scan-progress-wrap{height:6px;background:var(--bg4);border-radius:3px;overflow:hidden;margin:8px 0 4px}
+.scan-progress-fill{height:100%;background:var(--green);border-radius:3px;width:6%;transition:width .7s ease}
+.diff-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+.diff-table th{color:var(--text3);font-weight:500;text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+.diff-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text2)}
+.diff-table tr:last-child td{border-bottom:none}
+.diff-table tr:hover td{background:var(--bg3)}
+.diff-new{color:var(--green);font-weight:500}
+.diff-old{color:var(--text3);text-decoration:line-through;margin-right:6px;font-size:12px}
+.scan-error{background:rgba(192,80,77,.12);border:1px solid rgba(192,80,77,.3);color:#e07070;border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;margin:12px 0}
+
+
+/* ── IMPORT-MODUL ─────────────────────────────────────────────── */
+.imp-drop{border:2px dashed var(--border2);border-radius:var(--radius);padding:36px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--bg3);position:relative;overflow:hidden}
+.imp-drop:hover,.imp-drop.drag-over{border-color:var(--green);background:var(--bg4)}
+.imp-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.imp-table-wrap{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--border);max-height:340px;overflow-y:auto}
+.imp-table{width:100%;border-collapse:collapse;font-size:12px}
+.imp-table th{background:var(--bg3);color:var(--text3);font-weight:500;padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:2}
+.imp-table td{padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle;white-space:nowrap}
+.imp-table tr:last-child td{border-bottom:none}
+.imp-badge-new{background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25);border-radius:20px;padding:1px 8px;font-size:12px;white-space:nowrap}
+.imp-badge-dup{background:rgba(212,168,67,.12);color:var(--amber);border:1px solid rgba(212,168,67,.3);border-radius:20px;padding:1px 8px;font-size:12px;white-space:nowrap}
+.imp-badge-err{background:rgba(192,80,77,.12);color:#e07070;border:1px solid rgba(192,80,77,.3);border-radius:20px;padding:1px 8px;font-size:12px;white-space:nowrap}
+.imp-badge-ok{background:rgba(201,162,39,.15);color:var(--green);border:1px solid rgba(201,162,39,.3);border-radius:20px;padding:1px 8px;font-size:12px;white-space:nowrap}
+.imp-progress{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin:8px 0}
+.imp-progress-bar{height:100%;background:var(--green);border-radius:3px;transition:width .3s}
+.imp-col-map{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:14px}
+.imp-col-map label{font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
+.imp-col-map select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 8px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer}
+.imp-col-map select:focus{border-color:var(--green)}
+
+/* ── MASSENBEARBEITUNG ────────────────────────────────────────── */
+.bulk-bar{background:var(--bg3);border:1px solid var(--green2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px}
+.bulk-bar-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
+.bulk-bar-row select,.bulk-bar-row input[type=text]{background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 9px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none}
+.bulk-bar-row select:focus,.bulk-bar-row input[type=text]:focus{border-color:var(--green)}
+th.bulk-th,td.bulk-td{width:30px;padding-left:10px!important;padding-right:0!important}
+tr.bulk-row-selected td{background:color-mix(in srgb,var(--green) 10%,var(--bg3))}
+
+
+
+/* ── REISEN ─────────────────────────────────── */
+.trip-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.trip-card:hover{border-color:var(--green)}
+.imp-progress{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin:10px 0}
+.imp-progress-bar{height:100%;background:var(--green);border-radius:3px;transition:width .2s}
 </style>
 <script>
 /* Schriftgröße (App-weit): wird vor dem Rendern angewendet */
@@ -488,7 +580,7 @@ function thApply(v){ var l=(v==='light')||(v==='auto'&&window.matchMedia&&matchM
 function thSet(v){ try{ localStorage.setItem('pigman_theme',v); }catch(e){} thApply(v); }
 thApply(thGet());
 try{ if(window.matchMedia) matchMedia('(prefers-color-scheme: light)').addEventListener('change',function(){ if(thGet()==='auto') thApply('auto'); }); }catch(e){}
-function fsApply(v){ document.documentElement.style.zoom=(v/100); }
+function fsApply(v){ document.documentElement.style.zoom=(v/100); document.documentElement.style.setProperty('--zoom',String(v/100)); }
 function fsSet(v){ v=parseInt(v,10)||100; try{ localStorage.setItem('pigman_fs',String(v)); }catch(e){} fsApply(v); }
 fsApply(fsGet());
 </script>
@@ -510,7 +602,7 @@ fsApply(fsGet());
 
 <nav id="nav">
   <button data-group="tauben" class="active" onclick="showTab('tauben')"><span class="pg-ico-wrap"><svg class="pg-ico" viewBox="0 0 32 32" width="18" height="18" aria-hidden="true"><g fill="currentColor"><circle cx="23" cy="9" r="4.6"/><path d="M26.5 8.2l4.2 1.3-4.2 1.9z"/><path d="M20 11c-5 .5-9 3.500-11 8L2 24.500l8-.8c3 2.800 8 3.500 11.500 1 3-2.200 4-6 2.800-9.500z"/><path d="M13 25l-2 5 4-3z"/><path d="M17 26.500l-.5 4.500 3-3.500z"/></g><circle cx="24.200" cy="8.200" r="1" fill="#0f1a2e"/><path d="M9 20.500c4-2.500 8-2 11 1" fill="none" stroke="#0f1a2e" stroke-width="1.200" stroke-linecap="round" opacity=".6"/></svg></span> <span id="navPigeonsLabel">Tauben</span></button>
-  <button data-group="add" onclick="showTab('neu')">＋ <span id="navAddLabel">Hinzufügen</span></button>
+  <button data-group="add" onclick="showTab('import')">⇄ <span id="navAddLabel">Daten</span></button>
   <button data-group="reisen" onclick="showTab('reisen')">🏁 <span id="navRacingLabel">Reisen</span></button>
 </nav>
 
@@ -530,7 +622,7 @@ const SUPA_KEY      = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 let LANG = localStorage.getItem('lang') || 'de';
 const I18N = {
   de: {
-    nav_pigeons:'Tauben', nav_add:'Hinzufügen', nav_racing:'Flüge',
+    nav_pigeons:'Tauben', nav_add:'Daten', nav_racing:'Flüge',
     sub_racing:'Flüge', sub_best:'Bestenliste', sub_breeders:'Züchter',
     trip_word:'Flug', trips_word:'Flüge', all_trips:'Alle Flüge',
     all_breeders:'Alle Züchter', breeders_word:'Züchter',
@@ -657,7 +749,7 @@ const I18N = {
     col_prizes:'Preise', col_sum_as:'Σ AS',
   },
   en: {
-    nav_pigeons:'Pigeons', nav_add:'Add', nav_racing:'Racing',
+    nav_pigeons:'Pigeons', nav_add:'Data', nav_racing:'Racing',
     sub_racing:'Racing', sub_best:'Leaderboard', sub_breeders:'Breeders',
     trip_word:'Race', trips_word:'Races', all_trips:'All Races',
     all_breeders:'All Breeders', breeders_word:'Breeders',
@@ -924,6 +1016,11 @@ function showProfile(){
    +'<div class="form-field" style="margin-bottom:6px"><label>Automatisch abmelden</label><select id="idle-sel" onchange="idleSet(this.value)">'
    +IDLE_OPTIONS.map(o=>'<option value="'+o[0]+'"'+(o[0]===cur?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></div>'
    +'<div style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.5">Gilt nur für dieses Gerät und zählt ab der letzten Aktivität. Zusätzlich begrenzt der Server die maximale Sitzungsdauer; ist sie abgelaufen, ist eine neue Anmeldung nötig.</div>'
+   +(function(){ const tp=wtTplGet(); return '<div class="form-field" style="margin-bottom:6px"><label>Absender für Columba-Transferdateien (WinTra)</label>'
+      +'<div style="font-size:13px;color:var(--text2);margin-bottom:6px">'+(tp?'Vorlage gespeichert'+(tp.name?': <strong>'+escH(tp.name)+'</strong>':''):'Keine Vorlage gespeichert')+'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn btn-outline btn-sm" style="cursor:pointer;text-transform:none;letter-spacing:0;color:var(--text2)">Aus eigener WinTra-Datei übernehmen<input type="file" accept=".wintra,.WinTra,.zip" style="display:none" onchange="wtTplFromFile(this.files[0])"></label>'
+      +(tp?'<button class="btn btn-outline btn-sm" onclick="wtTplClear();showProfile()">Vorlage löschen</button>':'')+'</div></div>'
+      +'<div style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.5">Anschrift, Erfolge und Logo aus einer mit Columba erzeugten Transferdatei. Sie werden in jede exportierte Datei übernommen. Gilt nur für dieses Gerät.</div>'; })()
    +'<details style="margin-bottom:18px" id="pw-details"><summary style="cursor:pointer;font-size:13px;color:var(--text2)">Passwort ändern</summary>'
    +'<div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">'
    +'<input type="password" id="pw-old" placeholder="Aktuelles Passwort" autocomplete="current-password">'
@@ -2355,87 +2452,6 @@ async function exportPDF(){
   .footer{margin-top:3mm;font-size:7pt;color:#aaa;text-align:right}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 
-/* ── SCAN-MODUL ───────────────────────────────────────────────── */
-.scan-drop-zone{border:2px dashed var(--border2);border-radius:var(--radius);padding:40px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--bg3);position:relative;overflow:hidden}
-.scan-drop-zone:hover,.scan-drop-zone.drag-over{border-color:var(--green);background:var(--bg4)}
-.scan-drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.scan-drop-icon{font-size:44px;margin-bottom:12px}
-.scan-drop-text{font-size:15px;color:var(--text2);margin-bottom:4px;font-weight:500}
-.scan-drop-sub{font-size:12px;color:var(--text3)}
-.scan-preview{max-width:100%;max-height:300px;border-radius:var(--radius-sm);border:1px solid var(--border);margin:12px auto;display:block}
-.scan-result-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-.scan-field{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px}
-.scan-field label{font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px}
-.scan-field input,.scan-field select{width:100%;background:transparent;border:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;padding:0}
-.scan-field input::placeholder{color:var(--text3)}
-.scan-field select option{background:var(--bg3)}
-.scan-match-box{border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.scan-match-found{background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.3)}
-.scan-match-new{background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25)}
-.scan-match-icon{font-size:26px;flex-shrink:0}
-.scan-match-text strong{color:var(--text);display:block;font-size:14px;margin-bottom:2px}
-.scan-match-text span{color:var(--text3);font-size:12px}
-.scan-steps{background:var(--bg3);border-radius:var(--radius-sm);padding:14px 16px;margin-top:14px}
-.scan-step{display:flex;align-items:center;gap:10px;padding:6px 0;color:var(--text3);font-size:13px}
-.scan-step.active{color:var(--text)}
-.scan-step.done{color:var(--green)}
-.scan-step-dot{width:22px;height:22px;border-radius:50%;background:var(--bg4);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;transition:all .2s}
-.scan-step.active .scan-step-dot{border-color:var(--green);background:var(--green3);color:#fff}
-.scan-step.done .scan-step-dot{background:var(--green);color:#fff;border-color:var(--green)}
-.scan-thinking{display:flex;align-items:center;gap:12px;padding:18px 16px;color:var(--text2);font-size:13px;background:var(--bg3);border-radius:var(--radius-sm);margin:12px 0}
-.scan-dots span{display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;animation:sdot .9s infinite;margin:0 2px}
-.scan-dots span:nth-child(2){animation-delay:.2s}
-.scan-dots span:nth-child(3){animation-delay:.4s}
-@keyframes sdot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-7px)}}
-/* Fortschrittsbalken während der Verarbeitung */
-.scan-progress-wrap{height:6px;background:var(--bg4);border-radius:3px;overflow:hidden;margin:8px 0 4px}
-.scan-progress-fill{height:100%;background:var(--green);border-radius:3px;width:6%;transition:width .7s ease}
-.diff-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
-.diff-table th{color:var(--text3);font-weight:500;text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);font-size:12px;text-transform:uppercase;letter-spacing:.03em}
-.diff-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text2)}
-.diff-table tr:last-child td{border-bottom:none}
-.diff-table tr:hover td{background:var(--bg3)}
-.diff-new{color:var(--green);font-weight:500}
-.diff-old{color:var(--text3);text-decoration:line-through;margin-right:6px;font-size:12px}
-.scan-error{background:rgba(192,80,77,.12);border:1px solid rgba(192,80,77,.3);color:#e07070;border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;margin:12px 0}
-
-
-/* ── IMPORT-MODUL ─────────────────────────────────────────────── */
-.imp-drop{border:2px dashed var(--border2);border-radius:var(--radius);padding:36px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--bg3);position:relative;overflow:hidden}
-.imp-drop:hover,.imp-drop.drag-over{border-color:var(--green);background:var(--bg4)}
-.imp-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.imp-table-wrap{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--border);max-height:340px;overflow-y:auto}
-.imp-table{width:100%;border-collapse:collapse;font-size:12px}
-.imp-table th{background:var(--bg3);color:var(--text3);font-weight:500;padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:2}
-.imp-table td{padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle;white-space:nowrap}
-.imp-table tr:last-child td{border-bottom:none}
-.imp-badge-new{background:rgba(74,144,217,.12);color:#7ab3e0;border:1px solid rgba(74,144,217,.25);border-radius:20px;padding:1px 8px;font-size:12px;white-space:nowrap}
-.imp-badge-dup{background:rgba(212,168,67,.12);color:var(--amber);border:1px solid rgba(212,168,67,.3);border-radius:20px;padding:1px 8px;font-size:12px;white-space:nowrap}
-.imp-badge-err{background:rgba(192,80,77,.12);color:#e07070;border:1px solid rgba(192,80,77,.3);border-radius:20px;padding:1px 8px;font-size:12px;white-space:nowrap}
-.imp-badge-ok{background:rgba(201,162,39,.15);color:var(--green);border:1px solid rgba(201,162,39,.3);border-radius:20px;padding:1px 8px;font-size:12px;white-space:nowrap}
-.imp-progress{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin:8px 0}
-.imp-progress-bar{height:100%;background:var(--green);border-radius:3px;transition:width .3s}
-.imp-col-map{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:14px}
-.imp-col-map label{font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
-.imp-col-map select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 8px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer}
-.imp-col-map select:focus{border-color:var(--green)}
-
-/* ── MASSENBEARBEITUNG ────────────────────────────────────────── */
-.bulk-bar{background:var(--bg3);border:1px solid var(--green2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px}
-.bulk-bar-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
-.bulk-bar-row select,.bulk-bar-row input[type=text]{background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 9px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none}
-.bulk-bar-row select:focus,.bulk-bar-row input[type=text]:focus{border-color:var(--green)}
-th.bulk-th,td.bulk-td{width:30px;padding-left:10px!important;padding-right:0!important}
-tr.bulk-row-selected td{background:color-mix(in srgb,var(--green) 10%,var(--bg3))}
-
-
-
-/* ── REISEN ─────────────────────────────────── */
-.trip-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
-.trip-card:hover{border-color:var(--green)}
-.imp-progress{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin:10px 0}
-.imp-progress-bar{height:100%;background:var(--green);border-radius:3px;transition:width .2s}
-
 </style></head><body>
 <h1>PIGMAN · Tauben-Liste</h1>
 <div class="meta">${today} &nbsp;·&nbsp; ${rows.length} Tauben${filterInfo?' &nbsp;·&nbsp; Filter: '+filterInfo:''}</div>
@@ -2745,8 +2761,9 @@ function sortBy(col){ S.sortCol===col ? S.sortDir*=-1 : (S.sortCol=col,S.sortDir
 // 'reisen'  = alles rund um Flüge & Auswertungen (Reisen, Bestenliste, Züchter)
 const TAB_GROUP = {
   tauben:'tauben', stammbaum:'tauben', paarung:'tauben', nachkommen:'tauben',
-  neu:'add', scan:'add', import:'add', backup:'add',
-  reisen:'reisen', bestenliste:'reisen', zuechter:'reisen'
+  neu:'tauben', scan:'tauben',
+  import:'add', export:'add', backup:'add', wartung:'add',
+  reisen:'reisen', bestenliste:'reisen', zuechter:'reisen', contest:'reisen'
 };
 function setActiveNav(tab){
   const grp = TAB_GROUP[tab] || tab;
@@ -2768,7 +2785,7 @@ const NAV_BACK_LABELS = {
   bestenliste: ()=>'← '+t('sub_best'),
   reisen:      ()=>'← '+t('sub_racing'),
   zuechter:    ()=>'← '+t('sub_breeders'),
-  neu:'← Manuell', scan:'← Scan', import:'← Import', backup:'← Backup'
+  contest:'← Wettbewerbe', import:'← Import', export:'← Export', backup:'← Sicherung', wartung:'← Wartung'
 };
 function backLabel(){
   const top = S.navStack[S.navStack.length-1];
@@ -2828,7 +2845,7 @@ function renderTaubenSubnav(active, p){
 function renderReisenSubnav(active){
   const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="showTab('${key}')">${icon} ${label}</button>`;
   return `<div class="subnav">
-    ${btn('reisen',t('sub_racing'),'🏁')}${btn('bestenliste',t('sub_best'),'🏆')}${btn('zuechter',t('sub_breeders'),'🧑‍🌾')}
+    ${btn('reisen',t('sub_racing'),'🏁')}${btn('bestenliste',t('sub_best'),'🏆')}<button class="subnav-btn ${active==='contest'?'active':''}" onclick="openContest()">🥇 Wettbewerbe</button>${btn('zuechter',t('sub_breeders'),'🧑‍🌾')}
   </div>`;
 }
 // Subnav: Tauben-Übersicht (Liste / Statistik)
@@ -2836,14 +2853,22 @@ function renderTaubenOverviewNav(active){
   const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="S.taubenView='${key}';render();window.scrollTo(0,0)">${icon} ${label}</button>`;
   return `<div class="subnav">
     ${btn('liste',t('sub_liste'),'📋')}${btn('statistik',t('sub_statistik'),'📊')}
+    <button class="subnav-btn" onclick="showTab('neu')" title="Taube manuell anlegen">+ Neue Taube</button><button class="subnav-btn" onclick="showTab('scan')" title="Taube aus einem Stammbaum-Foto anlegen">📷 Scan</button>
     <button class="subnav-btn split-toggle" onclick="toggleSplitMode()" title="Liste und Detail nebeneinander bzw. Liste in voller Breite">${splitOn()?t('split_on'):t('split_off')}</button>
   </div>`;
 }
-// Subnav: Wege, eine neue Taube anzulegen (manuell, per Scan, per Datei-Import)
+// Subnav: Bereich „Daten" — Import, Export, Sicherung und Wartung an einer Stelle
 function renderAddSubnav(active){
   const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="showTab('${key}')">${icon} ${label}</button>`;
   return `<div class="subnav">
-    ${btn('neu','Manuell','✏️')}${btn('scan','Scan','📷')}${btn('import','Import','📥')}${btn('backup','Backup','📦')}
+    ${btn('import','Import','📥')}${btn('export','Export','📤')}${btn('backup','Sicherung','📦')}${btn('wartung','Wartung','🛠')}
+  </div>`;
+}
+// Subnav: neue Taube anlegen (aus der Taubenliste heraus erreichbar)
+function renderNewSubnav(active){
+  const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="showTab('${key}')">${icon} ${label}</button>`;
+  return `<div class="subnav"><button class="subnav-btn" onclick="showTab('tauben')">${t('back_overview')}</button>
+    ${btn('neu','Manuell anlegen','✏️')}${btn('scan','Stammbaum scannen','📷')}
   </div>`;
 }
 
@@ -2995,10 +3020,13 @@ function render(){
   else if(S.tab==='stammbaum')  m.innerHTML=S.selectedPed ? renderTaubenSubnav('stammbaum',findById(S.selectedPed))+renderPedigree(S.selectedPed) : (setTimeout(()=>showTab('tauben'),0),'');
   else if(S.tab==='nachkommen') m.innerHTML=S.selectedNach ? renderTaubenSubnav('nachkommen',findById(S.selectedNach))+renderNachkommen(S.selectedNach) : renderTaubenSubnav('nachkommen',null)+renderNachSearch();
   else if(S.tab==='paarung')    m.innerHTML=renderTaubenSubnav('paarung', S.paarungM||S.paarungF||null) + renderPaarung();
-  else if(S.tab==='neu')        m.innerHTML=renderAddSubnav('neu')+renderNeu();
-  else if(S.tab==='scan')       m.innerHTML=renderAddSubnav('scan')+renderScan();
-  else if(S.tab==='import')     m.innerHTML=renderAddSubnav('import')+renderImport();
+  else if(S.tab==='neu')        m.innerHTML=renderNewSubnav('neu')+renderNeu();
+  else if(S.tab==='scan')       m.innerHTML=renderNewSubnav('scan')+renderScan();
+  else if(S.tab==='import')     m.innerHTML=renderAddSubnav('import')+renderDataImport();
+  else if(S.tab==='export')     m.innerHTML=renderAddSubnav('export')+renderDataExport();
   else if(S.tab==='backup')     m.innerHTML=renderAddSubnav('backup')+renderBackup();
+  else if(S.tab==='wartung')    m.innerHTML=renderAddSubnav('wartung')+renderWartung();
+  else if(S.tab==='contest')    m.innerHTML=renderReisenSubnav('contest')+renderContest();
   else if(S.tab==='reisen')     m.innerHTML=renderReisenSubnav('reisen')+renderReisen();
   else if(S.tab==='zuechter')   m.innerHTML=renderReisenSubnav('zuechter')+renderZuechter();
   else if(S.tab==='bestenliste') m.innerHTML=renderReisenSubnav('bestenliste')+renderBestenliste();
@@ -3190,9 +3218,6 @@ function renderList(){
           <div class="toolbar" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
             ${renderColumnPicker()}
             <button class="btn ${S.bulkMode?'':'btn-outline'} btn-sm" onclick="toggleBulkMode()">${S.bulkMode?t('bulk_stop'):t('bulk_start')}</button>
-            <button class="btn btn-outline btn-sm" onclick="cleanupRingnumbers()" title="Ringnummern aller Tauben einheitlich formatieren und Duplikate zusammenführen">${t('cleanup_btn')}</button>
-            <button class="btn btn-outline btn-sm" onclick="showLineDeriveModal()" title="Linien aus den Stammbäumen ableiten und vorschlagen">🧬 Linien ableiten</button>
-            <button class="btn btn-outline btn-sm" onclick="showPedigreeProblemsModal()" title="Findet Tauben, die als eigener Vater/eigene Mutter oder in ihrer eigenen Ahnenlinie verknüpft sind, und erlaubt das direkte Entfernen dieser Verknüpfung">🧬 Stammbaum prüfen</button>
             <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">${t('export_csv')}</button>
             <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">${t('export_pdf')}</button>
           </div>
@@ -5492,12 +5517,18 @@ function normRing(s){
   // "—" oder das Unicode-Minuszeichen "−" statt eines normalen Bindestrichs —
   // ohne das würde z.B. "DE–06559–24–4241" als EIN nicht-numerisches Segment
   // durchfallen und nie mit "DE-06559-24-4241" übereinstimmen.
-  return s.split(/[\s\-\u2010-\u2015\u2212\.\/]+/).filter(Boolean).map(function(seg){
+  const parts = s.split(/[\s\-\u2010-\u2015\u2212\.\/]+/).filter(Boolean);
+  const numCount = parts.filter(function(x){ return /^\d+$/.test(x); }).length;
+  let numIdx = -1;
+  return parts.map(function(seg){
     if(!/^\d+$/.test(seg)) return seg.toLowerCase();
+    numIdx++;
     let n = seg.replace(/^0+(?=\d)/,'');
     // Jahrgang marginal abweichend: 4-stellig (19xx/20xx) auf 2-stellig normalisieren,
     // damit z.B. "2015" und "15" beim Abgleich als gleich gelten (Bestandsabgleich beim Scan).
-    if(/^(19|20)\d{2}$/.test(n)) n = n.slice(-2);
+    // Nicht für die Vereinsnummer (erster von mindestens drei Zahlenblöcken, z.B. DE-01971-26-57)
+    // und nicht für Blöcke mit führender Null — sonst würde Verein 1971 zu "71".
+    if(seg.length===4 && /^(19|20)\d{2}$/.test(n) && !(numCount>=3 && numIdx===0)) n = n.slice(-2);
     return n;
   }).join('');
 }
@@ -5570,7 +5601,7 @@ function scanImgZoom(z){ const i=document.getElementById('scan-img'); if(i) i.st
   document.addEventListener('touchcancel',()=>finish(false));
 })();
 
-function toggleScanEdit(k){ if(Date.now()-SCAN_NOCLICK<500) return; SCAN.expandedKey = (SCAN.expandedKey===k) ? null : k; render(); }
+function toggleScanEdit(k){ if(Date.now()-SCAN_NOCLICK<500) return; scanSelect(k); }
 
 function updateScanField(k, field, value){
   if(!SCAN.pigeons[k]) return;
@@ -5600,13 +5631,13 @@ function renderScanEditPanel(k, p){
     <div class="form-field">
       <label>${escH(label)}</label>
       <input type="${type}" value="${escH(p[field]!=null?p[field]:'')}"
-        oninput="updateScanField('${k}','${field}',this.value)">
+        oninput="updateScanField('${k}','${field}',this.value);scanPatch()">
     </div>`;
   const sel = (label, field, opts) => `
     <div class="form-field">
       <label>${escH(label)}</label>
       <input value="${escH(p[field]!=null?p[field]:'')}" list="scanedit-${k}-${field}" autocomplete="off"
-        oninput="updateScanField('${k}','${field}',this.value)">
+        oninput="updateScanField('${k}','${field}',this.value);scanPatch()">
       <datalist id="scanedit-${k}-${field}">${opts.map(o=>`<option value="${escH(o)}">`).join('')}</datalist>
     </div>`;
 
@@ -5621,12 +5652,12 @@ function renderScanEditPanel(k, p){
     : '';
 
   const actSel = m
-    ? `<select onchange="SCAN.actions['${k}']=this.value;render()"
+    ? `<select onchange="SCAN.actions['${k}']=this.value;scanRefresh()"
          style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 9px;font-size:12px;cursor:pointer">
          <option value="update" ${act==='update'?'selected':''}>📋 Ergänzen</option>
          <option value="skip"   ${act==='skip'  ?'selected':''}>⏭ Überspringen</option>
        </select>`
-    : `<select onchange="SCAN.actions['${k}']=this.value;render()"
+    : `<select onchange="SCAN.actions['${k}']=this.value;scanRefresh()"
          style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 9px;font-size:12px;cursor:pointer">
          <option value="new"  ${act==='new' ?'selected':''}>＋ Neu anlegen</option>
          <option value="skip" ${act==='skip'?'selected':''}>⏭ Überspringen</option>
@@ -5640,18 +5671,17 @@ function renderScanEditPanel(k, p){
         ${actSel}
       </div>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">
-        <input type="checkbox" ${SCAN.instock[k]?'checked':''} onchange="SCAN.instock['${k}']=this.checked;render()">
+        <input type="checkbox" ${SCAN.instock[k]?'checked':''} onchange="SCAN.instock['${k}']=this.checked;scanPatch()">
         Als Bestandstaube erfassen
       </label>
     </div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Korrigiere hier die von der KI erkannten Felder dieser einen Taube — die Änderung gilt nur lokal, bis du auf "Ausführen" klickst. Ohne den Haken "Bestandstaube" wird diese Position nur als Ahnen-Datensatz gespeichert.</div>
-    <div class="scan-result-grid">
+    <div class="scan-result-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:0" title="Änderungen gelten erst nach „Ausführen". Ohne den Haken „Bestandstaube" wird die Position nur als Ahnen-Datensatz gespeichert.">
       ${txt('Ringnummer','ringnumber')}
       ${txt('Name','name')}
       ${txt('Jahrgang','date_year','number')}
       <div class="form-field">
         <label>Geschlecht</label>
-        <select onchange="updateScanField('${k}','gender',this.value)">
+        <select onchange="updateScanField('${k}','gender',this.value);scanPatch()">
           <option value="" ${!p.gender?'selected':''}>—</option>
           <option value="M" ${p.gender==='M'?'selected':''}>♂ Männlich</option>
           <option value="F" ${p.gender==='F'?'selected':''}>♀ Weiblich</option>
@@ -5666,10 +5696,9 @@ function renderScanEditPanel(k, p){
     </div>
     <div class="form-field" style="margin-top:8px">
       <label>Info</label>
-      <textarea rows="3" style="width:100%;resize:vertical" oninput="updateScanField('${k}','info',this.value)">${escH(p.info||'')}</textarea>
+      <textarea rows="2" style="width:100%;resize:vertical" oninput="updateScanField('${k}','info',this.value)">${escH(p.info||'')}</textarea>
     </div>
-    ${renderScanPositionSwap(k)}
-    <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="toggleScanEdit('${k}')">✓ Fertig</button>`;
+    <details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--text3)">Position korrigieren (mit anderer Position oder ganzem Zweig tauschen)</summary>${renderScanPositionSwap(k)}</details>`;
 }
 
 // Auswahl, mit welcher anderen Stammbaum-Position diese Taube vertauscht werden
@@ -5742,160 +5771,32 @@ function renderScanResult(){
       </div>
     </div>`;
   }
+  if(!SCAN.expandedKey || !SCAN.pigeons[SCAN.expandedKey]?.ringnumber) SCAN.expandedKey = scanListKeys()[0] || null;
 
-  const inDb   = keys.filter(k=> SCAN.matches[k]).length;
-  const isNew  = keys.filter(k=>!SCAN.matches[k]).length;
-  const toSave = keys.filter(k=>(SCAN.actions[k]??'x')!=='skip').length;
-
-  // Debug: KI-Rohantwort einsehbar machen, auch wenn Daten erkannt wurden (nicht nur
-  // im Fehlerfall) — nötig, um Positions-/Zuordnungsfehler von der eigentlichen
-  // KI-Antwort zu unterscheiden statt nur das gerenderte Ergebnis zu sehen.
   const warnList = [...(SCAN.serverWarnings||[])];
-  const warnBlock = warnList.length ? `<div style="margin-bottom:12px;background:rgba(224,160,80,.1);border:1px solid rgba(224,160,80,.4);border-radius:var(--radius-sm);padding:10px 14px">
-      <div style="font-size:12px;font-weight:700;color:#e0a050;margin-bottom:4px">⚠️ Bitte prüfen (${warnList.length})</div>
-      <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--text2);line-height:1.5">${warnList.map(w=>`<li>${escH(w)}</li>`).join('')}</ul>
-      <div style="font-size:12px;color:var(--text3);margin-top:6px">Nummern: 0 Proband · 1 Vater · 2 Mutter · 3–6 Großeltern · 7–14 Urgroßeltern · 15–30 Ururgroßeltern (ungerade = Vogel, gerade = Weibchen). Falsch zugeordnete Kästchen unten anklicken und mit der richtigen Nummer tauschen.</div>
-    </div>` : '';
+  const warnBlock = warnList.length ? `<details style="margin-bottom:8px;background:rgba(224,160,80,.1);border:1px solid rgba(224,160,80,.4);border-radius:var(--radius-sm);padding:8px 14px">
+      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#e0a050">⚠️ Bitte prüfen (${warnList.length} Hinweise der Erkennung)</summary>
+      <ul style="margin:6px 0 0;padding-left:18px;font-size:12px;color:var(--text2);line-height:1.5">${warnList.map(w=>`<li>${escH(w)}</li>`).join('')}</ul>
+      <div style="font-size:12px;color:var(--text3);margin-top:6px">Nummern: 0 Proband · 1 Vater · 2 Mutter · 3–6 Großeltern · 7–14 Urgroßeltern · 15–30 Ururgroßeltern (ungerade = Vogel, gerade = Weibchen).</div>
+    </details>` : '';
   const rawDebugBlock = SCAN.rawResponse ? `
-    <details style="margin-bottom:14px">
+    <details style="margin-bottom:8px">
       <summary style="cursor:pointer;font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px">🔧 KI-Rohantwort (Debug)</summary>
       <div style="margin-top:8px;background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px">
         <pre style="font-size:12px;color:var(--text2);white-space:pre-wrap;overflow-x:auto;max-height:400px">${escH(JSON.stringify(SCAN.rawResponse, null, 2))}</pre>
       </div>
     </details>` : '';
 
-  // Stammbaum-Box je Scan-Position: klickbar → öffnet das Bearbeiten-Panel für genau diese Taube.
-  function scanNode(k){
-    const p = SCAN.pigeons[k];
-    if(!p || !p.ringnumber){
-      return `<div class="ped-box empty scan-dd" data-skey="${k}" style="display:flex;align-items:center;justify-content:center;min-height:52px"><div style="text-align:center;opacity:.4;font-size:12px">—<br>Nr. ${pedSlot(k)} leer</div></div>`;
-    }
-    const m   = SCAN.matches[k];
-    const act = SCAN.actions[k] ?? (m?'update':'new');
-    const sx  = p.gender==='M'?'♂':p.gender==='F'?'♀':'?';
-    const hasError = !!p._plausibilityError;
-    const hasWarn  = !hasError && (p._genderMismatch || p._plausibilityWarn);
-    const boxCls = [
-      'ped-box',
-      sx==='M'?'male':sx==='F'?'female':'',
-      k==='proband'?'root':'',
-      hasError?'scan-node-err':(hasWarn?'scan-node-warn':''),
-      SCAN.expandedKey===k?'scan-node-active':''
-    ].filter(Boolean).join(' ');
-    const statusIcon = hasError ? '🚫' : hasWarn ? '⚠️' : (m ? '✅' : '🆕');
-    const instockOn = !!SCAN.instock[k];
-    return `<div class="${boxCls} scan-dd" data-skey="${k}" style="width:100%;box-sizing:border-box" onclick="toggleScanEdit('${k}')">
-      <div style="display:flex;align-items:center;gap:4px;margin-bottom:1px">
-        <span style="font-size:12px;font-weight:700;flex-shrink:0;color:${sx==='M'?'var(--blue)':sx==='F'?'var(--purple)':'var(--text3)'}">${sx==='M'?'♂':sx==='F'?'♀':'?'}</span>
-        <span style="flex:1"></span>
-        <span title="${m?'In Datenbank':'Neu'}" style="font-size:12px;flex-shrink:0">${statusIcon}</span>
-        <span title="Position Nr. ${pedSlot(k)}" style="font-size:12px;font-weight:700;flex-shrink:0;color:#1a1200;background:var(--gold,#c9a227);border-radius:8px;padding:0 5px">${pedSlot(k)}</span>
+  return `<div class="card" id="scan-card" style="scroll-margin-top:74px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div class="card-title serif" style="font-size:18px;margin:0">📷 Scan-Ergebnis</div>
+        <span id="scan-counts">${scanCountsHtml()}</span>
       </div>
-      <div class="ped-ring" style="font-size:12px;white-space:normal;word-break:break-all;line-height:1.25">${escH(p.ringnumber)}</div>
-      ${p.name?`<div class="ped-name" style="font-size:${k==='proband'?'13px':'11px'}">${escH(p.name)}</div>`:''}
-      <div style="font-size:12px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[p.date_year,tColor(p.color),p.strain].filter(Boolean).join(' · ')}</div>
-      <div style="margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
-        <span style="font-size:12px;padding:0 5px;border-radius:8px;background:${act==='skip'?'var(--bg4)':'rgba(201,162,39,.15)'};color:${act==='skip'?'var(--text3)':'var(--green)'};border:1px solid ${act==='skip'?'var(--border)':'rgba(201,162,39,.3)'}">${act==='skip'?'übersprungen':act==='update'?'ergänzen':'neu'}</span>
-        ${instockOn?`<span style="font-size:12px;padding:0 5px;border-radius:8px;background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.3)">Bestand</span>`:''}
-      </div>
-    </div>`;
-  }
-
-  function scanConnector(rowStart, rowEnd, gridCol){
-    return `<div style="grid-column:${gridCol};grid-row:${rowStart}/${rowEnd};position:relative">
-      <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
-        <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border)" stroke-width="1.5"/>
-        <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
-        <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border)" stroke-width="1.5"/>
-      </svg>
-    </div>`;
-  }
-
-  const treeHtml = `<div class="ped-wrap">
-    <div style="display:grid;grid-template-columns:160px 28px 160px 28px 160px 28px 160px 28px 160px;grid-template-rows:28px repeat(16,62px);min-width:1128px;align-items:stretch">
-      <div class="ped-col-hdr" style="grid-column:1">Proband</div>
-      <div style="grid-column:2"></div>
-      <div class="ped-col-hdr" style="grid-column:3">Eltern</div>
-      <div style="grid-column:4"></div>
-      <div class="ped-col-hdr" style="grid-column:5">Großeltern</div>
-      <div style="grid-column:6"></div>
-      <div class="ped-col-hdr" style="grid-column:7">Urgroßeltern</div>
-      <div style="grid-column:8"></div>
-      <div class="ped-col-hdr" style="grid-column:9">Ururgroßeltern</div>
-
-      <div style="grid-column:1;grid-row:2/18;display:flex;align-items:center;justify-content:center;padding:4px">${scanNode('proband')}</div>
-
-      ${scanConnector(2,10,2)}
-      ${scanConnector(10,18,2)}
-
-      <div style="grid-column:3;grid-row:2/10;display:flex;align-items:center;padding:4px 0">${scanNode('father')}</div>
-      <div style="grid-column:3;grid-row:10/18;display:flex;align-items:center;padding:4px 0">${scanNode('mother')}</div>
-
-      ${scanConnector(2,6,4)}${scanConnector(6,10,4)}${scanConnector(10,14,4)}${scanConnector(14,18,4)}
-
-      <div style="grid-column:5;grid-row:2/6;display:flex;align-items:center;padding:4px 0">${scanNode('ff')}</div>
-      <div style="grid-column:5;grid-row:6/10;display:flex;align-items:center;padding:4px 0">${scanNode('fm')}</div>
-      <div style="grid-column:5;grid-row:10/14;display:flex;align-items:center;padding:4px 0">${scanNode('mf')}</div>
-      <div style="grid-column:5;grid-row:14/18;display:flex;align-items:center;padding:4px 0">${scanNode('mm')}</div>
-
-      ${scanConnector(2,4,6)}${scanConnector(4,6,6)}${scanConnector(6,8,6)}${scanConnector(8,10,6)}
-      ${scanConnector(10,12,6)}${scanConnector(12,14,6)}${scanConnector(14,16,6)}${scanConnector(16,18,6)}
-
-      <div style="grid-column:7;grid-row:2/4;display:flex;align-items:center;padding:4px 0">${scanNode('fff')}</div>
-      <div style="grid-column:7;grid-row:4/6;display:flex;align-items:center;padding:4px 0">${scanNode('ffm')}</div>
-      <div style="grid-column:7;grid-row:6/8;display:flex;align-items:center;padding:4px 0">${scanNode('fmf')}</div>
-      <div style="grid-column:7;grid-row:8/10;display:flex;align-items:center;padding:4px 0">${scanNode('fmm')}</div>
-      <div style="grid-column:7;grid-row:10/12;display:flex;align-items:center;padding:4px 0">${scanNode('mff')}</div>
-      <div style="grid-column:7;grid-row:12/14;display:flex;align-items:center;padding:4px 0">${scanNode('mfm')}</div>
-      <div style="grid-column:7;grid-row:14/16;display:flex;align-items:center;padding:4px 0">${scanNode('mmf')}</div>
-      <div style="grid-column:7;grid-row:16/18;display:flex;align-items:center;padding:4px 0">${scanNode('mmm')}</div>
-
-      ${scanConnector(2,3,8)}${scanConnector(3,4,8)}${scanConnector(4,5,8)}${scanConnector(5,6,8)}
-      ${scanConnector(6,7,8)}${scanConnector(7,8,8)}${scanConnector(8,9,8)}${scanConnector(9,10,8)}
-      ${scanConnector(10,11,8)}${scanConnector(11,12,8)}${scanConnector(12,13,8)}${scanConnector(13,14,8)}
-      ${scanConnector(14,15,8)}${scanConnector(15,16,8)}${scanConnector(16,17,8)}${scanConnector(17,18,8)}
-
-      <div style="grid-column:9;grid-row:2/3;display:flex;align-items:center;padding:4px 0">${scanNode('ffff')}</div>
-      <div style="grid-column:9;grid-row:3/4;display:flex;align-items:center;padding:4px 0">${scanNode('fffm')}</div>
-      <div style="grid-column:9;grid-row:4/5;display:flex;align-items:center;padding:4px 0">${scanNode('ffmf')}</div>
-      <div style="grid-column:9;grid-row:5/6;display:flex;align-items:center;padding:4px 0">${scanNode('ffmm')}</div>
-      <div style="grid-column:9;grid-row:6/7;display:flex;align-items:center;padding:4px 0">${scanNode('fmff')}</div>
-      <div style="grid-column:9;grid-row:7/8;display:flex;align-items:center;padding:4px 0">${scanNode('fmfm')}</div>
-      <div style="grid-column:9;grid-row:8/9;display:flex;align-items:center;padding:4px 0">${scanNode('fmmf')}</div>
-      <div style="grid-column:9;grid-row:9/10;display:flex;align-items:center;padding:4px 0">${scanNode('fmmm')}</div>
-      <div style="grid-column:9;grid-row:10/11;display:flex;align-items:center;padding:4px 0">${scanNode('mfff')}</div>
-      <div style="grid-column:9;grid-row:11/12;display:flex;align-items:center;padding:4px 0">${scanNode('mffm')}</div>
-      <div style="grid-column:9;grid-row:12/13;display:flex;align-items:center;padding:4px 0">${scanNode('mfmf')}</div>
-      <div style="grid-column:9;grid-row:13/14;display:flex;align-items:center;padding:4px 0">${scanNode('mfmm')}</div>
-      <div style="grid-column:9;grid-row:14/15;display:flex;align-items:center;padding:4px 0">${scanNode('mmff')}</div>
-      <div style="grid-column:9;grid-row:15/16;display:flex;align-items:center;padding:4px 0">${scanNode('mmfm')}</div>
-      <div style="grid-column:9;grid-row:16/17;display:flex;align-items:center;padding:4px 0">${scanNode('mmmf')}</div>
-      <div style="grid-column:9;grid-row:17/18;display:flex;align-items:center;padding:4px 0">${scanNode('mmmm')}</div>
-    </div>
-  </div>`;
-
-  const legend = `<div style="display:flex;gap:12px;margin:10px 0 14px;flex-wrap:wrap;font-size:12px;color:var(--text3)">
-    <span>✅ in DB</span><span>🆕 neu</span><span>⚠️ Warnung</span><span>🚫 Datenfehler (wird übersprungen)</span>
-    <span style="margin-left:auto">Klick = bearbeiten · Ziehen (am Handy: gedrückt halten) = Platz tauschen</span>
-    <label style="display:flex;align-items:center;gap:5px;color:var(--text2);cursor:pointer"><input type="checkbox" ${SCAN_BRANCH?'checked':''} onchange="SCAN_BRANCH=this.checked"> ganzen Zweig mitziehen</label>
-  </div>`;
-
-  const editHtml = SCAN.expandedKey && SCAN.pigeons[SCAN.expandedKey]
-    ? `<div class="card" style="background:var(--bg3);margin-top:4px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div style="font-size:13px;font-weight:600">✏️ ${escH(PED_LABEL[SCAN.expandedKey]||'')}</div>
-          <button class="btn btn-outline btn-sm" onclick="toggleScanEdit('${SCAN.expandedKey}')">✕ Schließen</button>
-        </div>
-        ${renderScanEditPanel(SCAN.expandedKey, SCAN.pigeons[SCAN.expandedKey])}
-      </div>`
-    : '';
-
-  return `<div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
-      <div class="card-title serif" style="font-size:18px;margin:0">📷 Scan-Ergebnis</div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${SCAN.imagePreview?`<button class="btn btn-outline btn-sm" onclick="const b=document.getElementById('scan-imgbox');b.style.display=b.style.display==='none'?'block':'none'">🖼 Bild</button>`:''}
         <button class="btn btn-outline btn-sm" onclick="scanReset();render()">🔄 Neuer Scan</button>
+        <span id="scan-savebtn">${scanSaveBtnHtml()}</span>
       </div>
     </div>
     ${SCAN.imagePreview?`<div id="scan-imgbox" style="display:none;margin:10px 0">
@@ -5907,30 +5808,141 @@ function renderScanResult(){
       <div style="overflow:auto;max-height:70vh;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;-webkit-overflow-scrolling:touch">
         <img id="scan-img" src="${SCAN.imagePreview}" style="width:100%;max-width:none;display:block" alt="Scan">
       </div></div>`:''}
-    <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap">
-      <div style="background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.3);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
-        <strong style="color:var(--green)">${inDb}</strong> <span style="color:var(--text2)">in DB</span>
-      </div>
-      <div style="background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
-        <strong style="color:#7ab3e0">${isNew}</strong> <span style="color:var(--text2)">neu</span>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;font-size:12px">
-        <strong style="color:var(--text)">${keys.length}</strong> <span style="color:var(--text2)">Tauben erkannt</span>
-      </div>
+    <div style="display:flex;gap:12px;margin:0 0 8px;flex-wrap:wrap;font-size:12px;color:var(--text3);align-items:center">
+      <span>✅ in DB</span><span>🆕 neu</span><span>⚠️ Warnung</span><span>🚫 Datenfehler (wird übersprungen)</span>
+      <span style="margin-left:auto">Klick = auswählen und rechts bearbeiten · Ziehen (am Handy: gedrückt halten) = Platz tauschen</span>
+      <label style="display:flex;align-items:center;gap:5px;color:var(--text2);cursor:pointer"><input type="checkbox" ${SCAN_BRANCH?'checked':''} onchange="SCAN_BRANCH=this.checked"> ganzen Zweig mitziehen</label>
     </div>
-    ${legend}
     ${warnBlock}
     ${rawDebugBlock}
-    ${treeHtml}
-    ${editHtml}
-    <div class="form-actions" style="margin-top:14px">
-      <button class="btn btn-outline" onclick="scanReset();render()">Abbrechen</button>
-      <button class="btn" onclick="executeScanSave()" ${toSave===0?'disabled':''}>
-        ✅ Ausführen (${toSave} Tauben)
-      </button>
+    <div class="scan-split">
+      <div id="scan-tree" class="ped-wrap scan-pane">${scanTreeHtml()}</div>
+      <div class="scan-side">
+        <div id="scan-edit" class="scan-pane scan-editpane">${scanEditHtml()}</div>
+        <div id="scan-list" class="scan-pane scan-listpane">${scanListHtml()}</div>
+      </div>
     </div>
   </div>`;
 }
+// ── Scan-Ergebnis: geteilte Ansicht (links Stammbaum, rechts Bearbeiten + nummerierte Liste) ──
+function scanListKeys(){ return PED_KEYS_DISPLAY_ORDER.filter(k=>SCAN.pigeons[k]?.ringnumber); }
+function scanCountsHtml(){
+  const keys=scanListKeys(); const inDb=keys.filter(k=>SCAN.matches[k]).length;
+  const chip=(n,l,c)=>`<span style="font-size:12px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 9px;background:var(--bg3)"><strong style="color:${c}">${n}</strong> <span style="color:var(--text2)">${l}</span></span>`;
+  return chip(keys.length,'erkannt','var(--text)')+' '+chip(inDb,'in DB','var(--green)')+' '+chip(keys.length-inDb,'neu','#7ab3e0');
+}
+function scanSaveBtnHtml(){
+  const n=scanListKeys().filter(k=>(SCAN.actions[k]??'x')!=='skip').length;
+  return `<button class="btn btn-sm" onclick="executeScanSave()" ${n===0?'disabled':''}>✅ Ausführen (${n} Tauben)</button>`;
+}
+function scanStatusOf(k){
+  const p=SCAN.pigeons[k]||{}; const m=SCAN.matches[k];
+  const err=!!p._plausibilityError, warn=!err&&(p._genderMismatch||p._plausibilityWarn);
+  const act=SCAN.actions[k] ?? (m?'update':'new');
+  return {err, warn, m, act, icon: err?'🚫':warn?'⚠️':(m?'✅':'🆕'), actTxt: act==='skip'?'übersprungen':act==='update'?'ergänzen':'neu'};
+}
+// Stammbaum-Box je Scan-Position. Die 5. Generation ist bewusst zweizeilig, damit nichts überlappt.
+function scanNodeHtml(k){
+  const p = SCAN.pigeons[k];
+  const gen = k==='proband'?0:(k==='father'||k==='mother')?1:k.length;
+  const nr = pedSlot(k);
+  if(!p || !p.ringnumber){
+    return `<div class="ped-box empty scan-dd" data-skey="${k}" style="width:100%;box-sizing:border-box;padding:2px 6px;text-align:center;font-size:12px;line-height:1.3">Nr. ${nr} leer</div>`;
+  }
+  const st = scanStatusOf(k);
+  const sx = p.gender==='M'?'♂':p.gender==='F'?'♀':'?';
+  const sxCol = sx==='♂'?'var(--blue)':sx==='♀'?'var(--purple)':'var(--text3)';
+  const boxCls = ['ped-box', sx==='♂'?'male':sx==='♀'?'female':'', k==='proband'?'root':'', st.err?'scan-node-err':(st.warn?'scan-node-warn':''), SCAN.expandedKey===k?'scan-node-active':''].filter(Boolean).join(' ');
+  const badge = `<span title="Position Nr. ${nr}" style="font-size:12px;font-weight:700;flex-shrink:0;color:#1a1200;background:var(--gold,#c9a227);border-radius:8px;padding:0 5px;line-height:1.3">${nr}</span>`;
+  const one = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+  const sub = [p.date_year,tColor(p.color),p.strain].filter(Boolean).join(' · ');
+  const tip = escH([p.ringnumber,p.name,sub,st.actTxt].filter(Boolean).join(' · '));
+  if(gen>=4){
+    return `<div class="${boxCls} scan-dd" data-skey="${k}" title="${tip}" style="width:100%;box-sizing:border-box;padding:1px 7px;overflow:hidden;line-height:1.3" onclick="toggleScanEdit('${k}')">
+      <div style="display:flex;align-items:center;gap:5px">${badge}<span class="ped-ring" style="flex:1;min-width:0;${one}">${escH(p.ringnumber)}</span></div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:12px"><span style="font-weight:700;color:${sxCol};flex-shrink:0">${sx}</span><span style="flex:1;min-width:0;color:var(--text);${one}">${escH(p.name||sub||'')}</span><span style="font-size:12px;flex-shrink:0">${st.icon}</span></div>
+    </div>`;
+  }
+  return `<div class="${boxCls} scan-dd" data-skey="${k}" title="${tip}" style="width:100%;box-sizing:border-box;padding:4px 6px;overflow:hidden;line-height:1.3" onclick="toggleScanEdit('${k}')">
+      <div style="display:flex;align-items:center;gap:5px">${badge}<span style="font-size:12px;font-weight:700;color:${sxCol}">${sx}</span><span style="flex:1"></span><span title="${st.m?'In Datenbank':'Neu'}" style="font-size:12px;flex-shrink:0">${st.icon}</span></div>
+      <div class="ped-ring" style="${gen>=3?one:'white-space:normal;word-break:break-all'}">${escH(p.ringnumber)}</div>
+      ${p.name?`<div class="ped-name" style="margin-top:0;font-size:${k==='proband'?'13px':'12px'}">${escH(p.name)}</div>`:''}
+      <div style="font-size:12px;color:var(--text3);${one}">${escH(sub)}</div>
+      ${gen<=2?`<div style="margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+        <span style="font-size:12px;padding:0 5px;border-radius:8px;background:${st.act==='skip'?'var(--bg4)':'rgba(201,162,39,.15)'};color:${st.act==='skip'?'var(--text3)':'var(--green)'};border:1px solid ${st.act==='skip'?'var(--border)':'rgba(201,162,39,.3)'}">${st.actTxt}</span>
+        ${SCAN.instock[k]?`<span style="font-size:12px;padding:0 5px;border-radius:8px;background:rgba(212,168,67,.15);color:var(--amber);border:1px solid rgba(212,168,67,.3)">Bestand</span>`:''}
+      </div>`:''}
+    </div>`;
+}
+function scanTreeHtml(){
+  const con=(a,b,col)=>`<div style="grid-column:${col};grid-row:${a}/${b};position:relative">
+      <svg width="100%" height="100%" style="position:absolute;top:0;left:0;overflow:visible" preserveAspectRatio="none">
+        <line x1="0" y1="25%" x2="100%" y2="25%" stroke="var(--border2)" stroke-width="1.5"/>
+        <line x1="0" y1="75%" x2="100%" y2="75%" stroke="var(--border2)" stroke-width="1.5"/>
+        <line x1="0" y1="25%" x2="0" y2="75%" stroke="var(--border2)" stroke-width="1.5"/>
+      </svg></div>`;
+  const cell=(k,col,a,b)=>`<div style="grid-column:${col};grid-row:${a}/${b};display:flex;align-items:center;padding:1px 0;min-height:0;min-width:0">${scanNodeHtml(k)}</div>`;
+  const gens=[['proband'],['father','mother'],['ff','fm','mf','mm'],['fff','ffm','fmf','fmm','mff','mfm','mmf','mmm'],
+    ['ffff','fffm','ffmf','ffmm','fmff','fmfm','fmmf','fmmm','mfff','mffm','mfmf','mfmm','mmff','mmfm','mmmf','mmmm']];
+  const hdr=['Proband','Eltern','Großeltern','Urgroßeltern','Ururgroßeltern'];
+  let h=`<div style="display:grid;grid-template-columns:repeat(4,minmax(134px,1fr) 14px) minmax(176px,1.3fr);grid-template-rows:22px repeat(16,40px);min-width:768px;align-items:stretch">`;
+  gens.forEach((g,gi)=>{
+    const col=gi*2+1, span=16/g.length;
+    h+=`<div class="ped-col-hdr" style="grid-column:${col};grid-row:1;margin:0;padding:2px 0">${hdr[gi]}</div>`;
+    g.forEach((k,i)=>{ h+=cell(k,col,2+i*span,2+(i+1)*span); });
+    if(gi<4){ const n=g.length, sp=16/n; for(let i=0;i<n;i++) h+=con(2+i*sp,2+(i+1)*sp,col+1); }
+  });
+  return h+'</div>';
+}
+function scanListHtml(){
+  const keys=scanListKeys(); const th=t=>`<th style="position:sticky;top:0">${t}</th>`;
+  return `<table style="width:100%;border-collapse:collapse"><thead><tr>${th('Nr.')}${th('')}${th('Ringnummer')}${th('Name')}${th('Jg.')}${th('')}${th('Farbe')}${th('Position')}</tr></thead><tbody>
+    ${keys.map(k=>{ const p=SCAN.pigeons[k]; const st=scanStatusOf(k); const sx=p.gender==='M'?'♂':p.gender==='F'?'♀':'?';
+      return `<tr data-lkey="${k}" class="${SCAN.expandedKey===k?'scan-row-sel':''}" onclick="scanSelect('${k}')">
+        <td style="font-weight:700;color:var(--green)">${pedSlot(k)}</td>
+        <td style="white-space:nowrap" title="${escH((p._plausibilityError||p._plausibilityWarn||'')+' '+st.actTxt+(SCAN.instock[k]?' · Bestand':''))}">${st.icon}</td>
+        <td style="font-family:monospace;font-size:13px;white-space:nowrap;color:var(--text)">${escH(p.ringnumber)}</td>
+        <td style="max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escH(p.name||'')}">${escH(p.name||'—')}</td><td>${escH(String(p.date_year||'—'))}</td>
+        <td style="font-weight:700;color:${sx==='♂'?'var(--blue)':sx==='♀'?'var(--purple)':'var(--text3)'}">${sx}</td>
+        <td style="white-space:nowrap">${escH(tColor(p.color)||'—')}</td>
+        <td style="white-space:nowrap;font-size:12px;color:var(--text3)">${escH(String(PED_LABEL[k]||k).replace(/^\d+\s*·\s*/,''))}${st.act==='skip'?' · übersprungen':''}</td></tr>`; }).join('')}
+  </tbody></table>`;
+}
+function scanEditHtml(){
+  const k=SCAN.expandedKey; const p=k&&SCAN.pigeons[k];
+  if(!p) return '<div style="color:var(--text3);font-size:13px;padding:8px">Taube im Stammbaum oder in der Liste anklicken, um sie hier zu bearbeiten.</div>';
+  const keys=scanListKeys(); const i=keys.indexOf(k);
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <div style="font-size:14px;font-weight:600;color:var(--text)">✏️ ${escH(PED_LABEL[k]||'')}</div>
+      <div style="display:flex;gap:6px;align-items:center"><span style="font-size:12px;color:var(--text3)">${i+1} / ${keys.length}</span>
+        <button class="btn btn-outline btn-sm" ${i<=0?'disabled':''} onclick="scanNav(-1)" title="vorherige Taube">◀</button>
+        <button class="btn btn-outline btn-sm" ${i>=keys.length-1?'disabled':''} onclick="scanNav(1)" title="nächste Taube">▶</button></div>
+    </div>${renderScanEditPanel(k,p)}`;
+}
+// Stammbaum, Liste und Zähler neu zeichnen, ohne das Bearbeiten-Feld (und damit den Cursor) anzufassen
+function scanPatch(){
+  const t=document.getElementById('scan-tree'), l=document.getElementById('scan-list');
+  if(!t||!l){ render(); return; }
+  const ts=[t.scrollTop,t.scrollLeft], ls=l.scrollTop;
+  t.innerHTML=scanTreeHtml(); l.innerHTML=scanListHtml();
+  t.scrollTop=ts[0]; t.scrollLeft=ts[1]; l.scrollTop=ls;
+  const c=document.getElementById('scan-counts'); if(c) c.innerHTML=scanCountsHtml();
+  const b=document.getElementById('scan-savebtn'); if(b) b.innerHTML=scanSaveBtnHtml();
+}
+function scanRefresh(){ scanPatch(); const e=document.getElementById('scan-edit'); if(e){ e.innerHTML=scanEditHtml(); } }
+function scanSelect(k){
+  if(!SCAN.pigeons[k]?.ringnumber) return;
+  SCAN.expandedKey=k;
+  if(!document.getElementById('scan-tree')){ render(); return; }
+  scanRefresh();
+  const e=document.getElementById('scan-edit'); if(e) e.scrollTop=0;
+  const within=(box,el)=>{ if(!box||!el) return; const b=box.getBoundingClientRect(), r=el.getBoundingClientRect();
+    if(r.top<b.top+30) box.scrollTop-=(b.top+30-r.top); else if(r.bottom>b.bottom) box.scrollTop+=(r.bottom-b.bottom+4);
+    if(r.left<b.left) box.scrollLeft-=(b.left-r.left+4); else if(r.right>b.right) box.scrollLeft+=(r.right-b.right+4); };
+  within(document.getElementById('scan-list'), document.querySelector('#scan-list [data-lkey="'+k+'"]'));
+  within(document.getElementById('scan-tree'), document.querySelector('#scan-tree [data-skey="'+k+'"]'));
+}
+function scanNav(d){ const keys=scanListKeys(); const i=keys.indexOf(SCAN.expandedKey); const n=keys[Math.max(0,Math.min(keys.length-1,(i<0?0:i)+d))]; if(n) scanSelect(n); }
 
 // ── PDF: Seite 1 als Bild + Text aus der Textebene (pdf.js, bei Bedarf nachgeladen) ──
 function loadPdfJs(){
@@ -6021,7 +6033,9 @@ function normalizePigeonData(d){
   return {
     ringnumber:       rs.ring,
     name:             d.name||null,
-    date_year:        d.date_year||d.year||d.vintage||d.jahrgang||null,
+    // Der Jahrgang steht in der Ringnummer (DE-Verein-JJ-Nr) und hat Vorrang vor dem, was die KI gelesen hat —
+    // sonst wird z. B. die Vereinsnummer 01971 als Jahrgang 1971 gedeutet.
+    date_year:        ((parseRingComponents(rs.ring)||{}).date_year) || d.date_year||d.year||d.vintage||d.jahrgang||null,
     gender:           rs.sex || normalizeScanGender(d.gender||d.sex||d.geschlecht||null),
     color:            d.color||d.colour||d.farbe||null,
     race:             d.race||d.rasse||null,
@@ -6084,6 +6098,14 @@ async function runScanAI(){
         SCAN.pigeons['mother'] = normalizePigeonData({ringnumber:d.ringnumbermother||d.mother_ring});
     }
 
+    // Jahrgangs-Hinweise der Erkennung beruhen auf dem von der KI gelesenen Jahrgang. Nach der Korrektur
+    // über die Ringnummer nur behalten, was weiterhin zutrifft.
+    SCAN.serverWarnings = SCAN.serverWarnings.filter(w=>{
+      const m=String(w).match(/\(([a-z]+)\): Jahrgang \d+ ist jünger als das Kind/); if(!m) return true;
+      const k=m[1], ck=Object.keys(PARENT_MAP).find(c=>PARENT_MAP[c].f===k||PARENT_MAP[c].m===k);
+      const py=Number((SCAN.pigeons[k]||{}).date_year), cy=Number((SCAN.pigeons[ck]||{}).date_year);
+      return !(py&&cy) || py>cy;
+    });
     stopScanProgress('Abgleich mit Datenbank…');
     fixGenderSlotMismatches();
     checkScanPlausibility();
@@ -6109,6 +6131,7 @@ async function runScanAI(){
 
     SCAN.step = 'result';
     render();
+    setTimeout(()=>{ const c=document.getElementById('scan-card'); if(c) c.scrollIntoView({block:'start'}); },60);
   } catch(err){
     stopScanProgress();
     SCAN.rawResponse = {error:err.message};
@@ -7630,6 +7653,7 @@ async function runImport(){
 
   setS('Lade Datenbank neu…');
   await loadData();
+  autoRelink(); // Flugergebnisse neu angelegter Tauben im Hintergrund verknüpfen
   IMP.step = 'done';
   render();
 }
@@ -9664,6 +9688,7 @@ function renderPigeonTripsSection(p){
           <span style="color:var(--amber);min-width:70px;text-align:right">${y.top10Str?'Top10: '+escH(y.top10Str):''}</span>
         </div>`).join('')}
     </div>
+    ${ctPigeonBlock(p)}
 
     ${top10.length?`
     <div class="section-label" style="margin-top:14px">Top10-Platzierungen</div>
@@ -10617,7 +10642,7 @@ function renderColumbaImport(){
   let h=`<div class="card" style="margin-top:16px">
     <div class="card-title serif" style="font-size:18px">🕊️ Import aus Columba XT</div>`;
   if(!R){
-    h+=`<p style="color:var(--text3);font-size:13px;margin:10px 0 14px">Lade die <strong>Columba-Datensicherung (.zip)</strong> direkt hoch — sie wird im Browser entpackt und gelesen, es ist kein Zwischenschritt nötig. Es wird zuerst nur <strong>verglichen</strong> — angezeigt wird, was neu angelegt, ergänzt oder abweichend wäre. Geschrieben wird erst nach deiner Freigabe. Ebenso lassen sich <strong>Columba-Transferdateien (.WinTra)</strong> mit einzelnen Tauben samt Abstammung einlesen; der Export in dieses Format steht im Stammbaum jeder Taube unter „📤 Columba (WinTra)“.</p>
+    h+=`<p style="color:var(--text3);font-size:13px;margin:10px 0 14px">Lade die <strong>Columba-Datensicherung (.zip)</strong> direkt hoch — sie wird im Browser entpackt und gelesen, es ist kein Zwischenschritt nötig. Es wird zuerst nur <strong>verglichen</strong> — angezeigt wird, was neu angelegt, ergänzt oder abweichend wäre. Geschrieben wird erst nach deiner Freigabe. Ebenso lassen sich <strong>Columba-Transferdateien (.WinTra)</strong> mit einzelnen Tauben samt Abstammung einlesen; der Export in dieses Format steht unter Daten → Export und im Stammbaum jeder Taube.</p>
       <div class="imp-drop" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')"
         ondrop="event.preventDefault();this.classList.remove('drag-over');handleCiFile(event.dataTransfer.files[0])">
         <input type="file" accept=".zip,.sdf,.json,.wintra,.WinTra" onchange="handleCiFile(this.files[0])">
@@ -10642,7 +10667,7 @@ function renderColumbaImport(){
     const tpl=wtTplGet(); const u=WTm.user||{}; const who=[u.first,u.name].filter(Boolean).join(' ')+(u.city?', '+u.city:'');
     h+=`<div style="background:var(--bg3);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;margin-bottom:14px">
       <strong>Transferdatei (WinTra)</strong>${WTm.root?' · Stammbaum von <strong>'+escH(WTm.root)+'</strong>':''}${who?' · Absender: '+escH(who):' · ohne Absenderdaten'}<br>
-      <span style="color:var(--text3);font-size:12px">Absender-Vorlage für den eigenen Export: ${tpl?'gespeichert'+(tpl.name?' ('+escH(tpl.name)+')':''):'keine — exportierte Dateien enthalten dann keine Anschrift und kein Logo'}.</span>
+      <span style="color:var(--text3);font-size:12px">Absender-Vorlage für den eigenen Export: ${tpl?'gespeichert'+(tpl.name?' ('+escH(tpl.name)+')':''):'keine — exportierte Dateien enthalten dann keine Anschrift und kein Logo'}. Die Vorlage lässt sich auch im Profil festlegen.</span>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
         ${WT.userXml?`<button class="btn btn-outline btn-sm" onclick="wtTplSave()">Absenderdaten dieser Datei als meine Export-Vorlage speichern</button>`:''}
         ${tpl?`<button class="btn btn-outline btn-sm" onclick="wtTplClear()">Vorlage löschen</button>`:''}
@@ -10740,6 +10765,7 @@ async function runColumbaImport(){
     log(errors.length?'⚠ Fertig mit '+errors.length+' Fehler(n).':'✅ Import abgeschlossen. Lade Daten neu…');
     errors.slice(0,8).forEach(e=>log('❌ '+e));
     await loadData();
+    if(news.length){ log('Verknüpfe vorhandene Flugergebnisse mit den neuen Tauben…'); const ar=await autoRelink(); if(ar&&ar.linked) log('🔗 '+ar.linked.toLocaleString('de')+' Flugergebnisse nachträglich verknüpft.'); }
     CI.done={errors:errors.length};
   }catch(e){ log('❌ Abbruch: '+e.message); }
   CI.importing=false; render();
@@ -10900,19 +10926,287 @@ async function wtZip(files){
   const eo=new DataView(new ArrayBuffer(22)); eo.setUint32(0,0x06054b50,true); eo.setUint16(8,files.length,true); eo.setUint16(10,files.length,true); eo.setUint32(12,cenSize,true); eo.setUint32(16,off,true);
   return new Blob([...parts,...cen,new Uint8Array(eo.buffer)],{type:'application/octet-stream'});
 }
+async function wtBuildBlob(pid, asZip){
+  const B=wtBuildFiles(pid);
+  let repx=null;
+  if(asZip){ /* ZIP-Variante: nur die XML-Dateien (Tauben, master_v8.xml, userInfo.xml) */ }
+  else if(B.tpl&&B.tpl.repx) repx=wtB64ToBytes(B.tpl.repx);
+  else { try{ repx=await wtPipe(wtB64ToBytes(WT_REPX_B64),new DecompressionStream('deflate-raw')); }catch(e){} }
+  if(repx) B.files.push({name:'report.repx', data:repx});
+  const blob=await wtZip(B.files);
+  return {blob, name:(String(B.root.ringnumber||'Transfer').replace(/[^A-Za-z0-9_.-]+/g,'-'))+(asZip?'.WinTra.zip':'.WinTra')};
+}
 async function wtExport(pid, asZip){
+  try{ const r=await wtBuildBlob(pid,asZip); dlBlob(r.blob,r.name); }
+  catch(e){ alert('Der WinTra-Export ist fehlgeschlagen: '+e.message); }
+}
+
+// ══ Bereich „Daten": Import · Export · Wartung ═══════════════════════
+function dlBlob(blob, name){ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(()=>URL.revokeObjectURL(url),5000); }
+function dlCsv(rows, name){ const csv=rows.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(';')).join('\r\n'); dlBlob(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}), name); }
+function startTripsImport(){
+  S.tab='reisen'; S.selected=null; setActiveNav('reisen');
+  RT.step='import'; RT.imp={step:'upload',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};
+  render(); window.scrollTo(0,0);
+}
+function dataCtImport(f){ if(!f) return; if(!CT.ready) ctLoadCfg(); Promise.resolve(ctImport(f)).then(()=>openContest()); }
+function dataCtExport(){ if(!CT.ready) ctLoadCfg(); ctExport(); }
+// Nach Tauben-Importen: Flugergebnisse, deren Taube erst jetzt angelegt wurde, automatisch verknüpfen
+async function autoRelink(){ try{ const r=await backfillMissingPigeonLinks(); if(r&&r.linked) clearPTCache(); return r; }catch(e){ return null; } }
+
+// ── Import ──
+function renderDataImport(){
+  const k=S.impKind||'tauben';
+  const chip=(key,label)=>`<button class="subnav-btn ${k===key?'active':''}" onclick="S.impKind='${key}';render()">${label}</button>`;
+  let body='';
+  if(k==='tauben') body=renderImport();
+  else if(k==='columba') body=renderColumbaImport();
+  else if(k==='fluege') body=`<div class="card"><div class="card-title serif" style="font-size:18px">🏁 Flugdaten importieren</div>
+      <p style="color:var(--text3);font-size:13px;margin:10px 0 14px">Liest Preislisten und Leistungsdaten ein und legt Flüge und Einzelergebnisse an. Der Import läuft im Bereich „Flüge", damit du das Ergebnis dort direkt siehst. RV-Ranglisten für Flüge ohne eigene RV-Liste werden danach automatisch berechnet.</p>
+      <button class="btn" onclick="startTripsImport()">📥 Flugdaten-Import öffnen</button></div>`;
+  else body=`<div class="card"><div class="card-title serif" style="font-size:18px">⚙️ Einstellungen importieren</div>
+      <p style="color:var(--text3);font-size:13px;margin:10px 0 14px">Wettbewerbs-Konfigurationen (Datei <strong>wettbewerbe.json</strong> aus dem Export) werden zu den vorhandenen Wettbewerben hinzugefügt. Die Einstellungen liegen in diesem Browser; so überträgst du sie auf ein anderes Gerät.</p>
+      <label class="btn" style="cursor:pointer">⬆ Datei wählen<input type="file" accept=".json" style="display:none" onchange="dataCtImport(this.files[0])"></label></div>`;
+  return `<div><div class="serif" style="font-size:20px;margin-bottom:10px">📥 Import</div>
+    <div class="subnav" style="margin-bottom:14px">${chip('tauben','🕊️ Tauben-Datei (Excel/CSV)')}${chip('columba','🕊️ Columba-Sicherung / WinTra')}${chip('fluege','🏁 Flugdaten')}${chip('settings','⚙️ Einstellungen')}</div>
+    ${body}</div>`;
+}
+
+// ── Export ──
+let EX={picks:[], busy:null, msg:null, year:null};
+function exSearch(v){
+  const el=document.getElementById('ex-results'); if(!el) return;
+  const q=String(v||'').trim().toLowerCase();
+  if(q.length<2){ el.innerHTML=''; return; }
+  const qn=normRing(q);
+  const hits=S.pigeons.filter(p=>!p._virtual && (((p.ringnumber||'').toLowerCase().includes(q)) || (qn && normRing(p.ringnumber||'').includes(qn)) || (p.name||'').toLowerCase().includes(q))).slice(0,12);
+  el.innerHTML=hits.length?hits.map(p=>`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span><span class="ring">${escH(p.ringnumber||'?')}</span> ${escH(p.name||'')} <span style="color:var(--text3)">${p.date_year?'· Jg. '+escH(String(p.date_year)):''}</span></span>
+      <button class="btn btn-outline btn-sm" onclick="exPick('${p.pigeonid}')">＋ auswählen</button></div>`).join(''):'<div style="color:var(--text3);padding:6px 0">Keine Taube gefunden.</div>';
+}
+function exPick(id){ if(!EX.picks.includes(id)) EX.picks.push(id); EX.msg=null; render(); }
+function exUnpick(id){ EX.picks=EX.picks.filter(x=>x!==id); render(); }
+function exPickBulk(){ S.bulkSelected.forEach(id=>{ if(!EX.picks.includes(id)) EX.picks.push(id); }); render(); }
+async function exWinTra(asZip){
+  if(!EX.picks.length||EX.busy) return;
+  EX.busy='wintra'; EX.msg=null; render();
   try{
-    const B=wtBuildFiles(pid);
-    let repx=null;
-    if(asZip){ /* ZIP-Variante: nur die XML-Dateien (Tauben, master_v8.xml, userInfo.xml) */ }
-    else if(B.tpl&&B.tpl.repx) repx=wtB64ToBytes(B.tpl.repx);
-    else { try{ repx=await wtPipe(wtB64ToBytes(WT_REPX_B64),new DecompressionStream('deflate-raw')); }catch(e){} }
-    if(repx) B.files.push({name:'report.repx', data:repx});
-    const blob=await wtZip(B.files);
-    const fn=(String(B.root.ringnumber||'Transfer').replace(/[^A-Za-z0-9_.-]+/g,'-'))+(asZip?'.WinTra.zip':'.WinTra');
-    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=fn;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(()=>URL.revokeObjectURL(url),4000);
-  }catch(e){ alert('Der WinTra-Export ist fehlgeschlagen: '+e.message); }
+    if(EX.picks.length===1){ const r=await wtBuildBlob(EX.picks[0],asZip); dlBlob(r.blob,r.name); }
+    else {
+      const files=[]; const seen=new Set();
+      for(const id of EX.picks){ const r=await wtBuildBlob(id,asZip); let n=r.name; let i=2; while(seen.has(n)) n=r.name.replace(/(\.WinTra)/,'_'+(i++)+'$1'); seen.add(n); files.push({name:n, data:new Uint8Array(await r.blob.arrayBuffer())}); }
+      dlBlob(await wtZip(files),'WinTra-Export_'+EX.picks.length+'_Tauben.zip');
+    }
+    EX.msg=EX.picks.length===1?'Transferdatei erstellt.':EX.picks.length+' Transferdateien in einem ZIP-Archiv erstellt (je Taube eine Datei mit allen Vorfahren).';
+  }catch(e){ EX.msg='Fehler: '+e.message; }
+  EX.busy=null; render();
+}
+function exYear(){ const ys=[...new Set(RT.trips.map(t=>t.vintage).filter(Boolean))].sort((a,b)=>b-a); if(!EX.year||!ys.includes(EX.year)) EX.year=ys[0]||null; return ys; }
+async function exFlightsCsv(){
+  if(EX.busy||!EX.year) return; EX.busy='fl'; EX.msg=null; render();
+  try{
+    const trips=RT.trips.filter(t=>String(t.vintage)===String(EX.year)); const tb={}; trips.forEach(t=>tb[t.tripid]=t);
+    const ids=trips.map(t=>t.tripid); const rows=[];
+    for(let i=0;i<ids.length;i+=60){ (await apiGetAll('/pigeontrips?tripid=in.('+ids.slice(i,i+60).join(',')+')&select=*')).forEach(r=>rows.push(r)); }
+    rows.sort((a,b)=>String(tb[a.tripid].tripdate).localeCompare(String(tb[b.tripdate]?b.tripdate:tb[b.tripid].tripdate))||((a.placement||1e9)-(b.placement||1e9)));
+    const pn={}; S.pigeons.forEach(p=>pn[p.pigeonid]=p);
+    const out=[['Datum','Flug','Ort','km','Platz','Ringnummer','Name','Züchter','Züchternr.','m/min','Preis RV','Preis FG','Preis RegGr','Preis Reg','AS RV','AS RegGr','AS Reg','Koeffizient','Koeff.-Liste','V','J','M']];
+    const de=x=>x==null||x===''?'':String(Number(x)).replace('.',',');
+    rows.forEach(r=>{ const t=tb[r.tripid]; const c=bestCoef(r,t); const p=pn[r.pigeonid];
+      out.push([t.tripdate||'',t.number||'',t.location||'',de(t.averagedistance3),r.placement||'',r.ringnumber||(p&&p.ringnumber)||'',p?(p.name||''):'',r.breedername||'',r.breedernumber||'',de(r.speed),rvField(r,'prize_rv')??'',r.prize_fg??'',r.prize_reggr??'',r.prize_reg??'',de(rvField(r,'as_rv')),de(r.as_nat),de(r.as_reg),c?c.coef.toFixed(2).replace('.',','):'',c?c.list:'',r.v_flag?'V':'',r.j_flag?'J':'',r.m_flag?'M':'']); });
+    dlCsv(out,'flugergebnisse-'+EX.year+'.csv'); EX.msg=(out.length-1).toLocaleString('de')+' Flugergebnisse der Saison '+EX.year+' exportiert.';
+  }catch(e){ EX.msg='Fehler: '+e.message; }
+  EX.busy=null; render();
+}
+async function exBestCsv(){
+  if(EX.busy||!EX.year) return; EX.busy='bl'; EX.msg=null; render();
+  try{
+    if(!ZT.loaded) await loadZuechterData();
+    const data=bestenliste(BL.breeder,BL.rv);
+    const cats=[['gesamt','Alle Tauben'],['tauber','Vögel'],['taubinnen','Weibchen'],['tauberJg','Jährige Vögel'],['taubinnenJg','Jährige Weibchen'],['jungtiere','Jungtiere']];
+    const out=[['Kategorie','Rang','Ringnummer','Name','Jahrgang','Züchter','Preise','Summe AS','Summe km','Bester Koeffizient']];
+    cats.forEach(([k,l])=>{ const g=(data[k]||[]).find(x=>String(x.year)===String(EX.year)); if(!g) return;
+      g.rows.forEach((e,i)=>out.push([l,i+1,e.ring||'',e.name||'',e.birthYear||'',e.breedername||'',e.prizes,e.asSum.toFixed(2).replace('.',','),e.kmSum?e.kmSum.toFixed(1).replace('.',','):'',e.koef?e.koef.coef.toFixed(2).replace('.',','):''])); });
+    dlCsv(out,'bestenliste-'+EX.year+'.csv'); EX.msg='Bestenliste '+EX.year+' exportiert ('+(out.length-1).toLocaleString('de')+' Zeilen, Züchter-/RV-Filter wie in der Bestenliste eingestellt).';
+  }catch(e){ EX.msg='Fehler: '+e.message; }
+  EX.busy=null; render();
+}
+async function exContestCsv(){
+  if(EX.busy) return; EX.busy='ct'; EX.msg=null; render();
+  try{
+    await ctEnsure(); const cfg=ctCfg(); const R=ctCompute();
+    const de=(x,d)=>x==null||isNaN(x)?'':Number(x).toFixed(d==null?2:d).replace('.',',');
+    const fl=f=>(f.trip.tripdate||'')+' '+(f.trip.location||'')+(f.list?' ('+f.list+' '+f.platz+'/'+f.gesetzt+')':'');
+    const out=[['Wertung','Rang','Taube / Flug','Name','Vollständig','Wert','Preise','AS-Punkte','Gewertete Flüge']];
+    cfg.cats.filter(c=>c.enabled).forEach(c=>{ const r=R.cats[c.id]; if(!r) return;
+      if(r.type==='team'){ r.sel.picks.forEach((f,i)=>out.push([c.name,i+1,(f.trip.tripdate||'')+' '+(f.trip.location||''),'',r.sel.complete?'ja':'nein',de(f.score),'','',f.members.map(m=>(m.pigeon.ringnumber||'')+' '+de(m.coef)).join(' | ')])); out.push([c.name,'Summe','','',r.sel.complete?'ja':'nein',de(r.sel.total),'','','']); }
+      else if(r.type==='pigeon'){ ctSortedList(r).forEach((x,i)=>out.push([c.name,i+1,x.pigeon.ringnumber||'',x.pigeon.name||'',x.sel.complete?'ja':'nein',de(x.sel.total),'','',x.sel.picks.map(fl).join(' | ')])); }
+      else if(r.type==='pigeonAS'){ r.list.forEach((x,i)=>out.push([c.name,i+1,x.pigeon.ringnumber||'',x.pigeon.name||'',x.complete?'ja':'nein','',x.prizes,de(x.as),x.picks.map(fl).join(' | ')])); }
+      else if(r.type==='breederAS'){ r.team.forEach((x,i)=>out.push([c.name,i+1,x.pigeon.ringnumber||'',x.pigeon.name||'',r.complete?'ja':'nein','',x.prizes,de(x.as),x.picks.map(fl).join(' | ')])); out.push([c.name,'Summe','','',r.complete?'ja':'nein','',r.prizes,de(r.as),'']); }
+      else if(r.type==='comboAS'){ r.picks.forEach((k,i)=>out.push([c.name,i+1,k.x.pigeon.ringnumber||'',k.x.pigeon.name||'',k.x.complete?'ja':'nein','',k.x.prizes,de(k.x.as),k.part])); out.push([c.name,'Summe','','',r.complete?'ja':'nein','',r.prizes,de(r.as),'']); }
+      else if(r.type==='combo'){ out.push([c.name,'Summe','','',r.complete?'ja':'nein',de(r.total),'','',r.parts.map(p=>p.cat.name).join(' + ')]); }
+    });
+    dlCsv(out,'wettbewerb-'+String(cfg.name||'auswertung').replace(/[^A-Za-z0-9_-]+/g,'-')+'-'+cfg.year+'.csv'); EX.msg='Wettbewerb „'+cfg.name+'" ('+cfg.year+') exportiert.';
+  }catch(e){ EX.msg='Fehler: '+e.message; }
+  EX.busy=null; if(S.tab!=='export'){ S.tab='export'; setActiveNav('export'); } render();
+}
+function renderDataExport(){
+  if(!RT.trips.length && !EX._tl){ EX._tl=true; loadTrips().then(render); }
+  const ys=exYear(); const nF=(S.filtered||[]).length; const busy=EX.busy;
+  const picks=EX.picks.map(id=>S.pigeons.find(p=>p.pigeonid===id)).filter(Boolean);
+  const tpl=wtTplGet(); if(!CT.ready && RT.trips.length) ctLoadCfg(); const cfg=CT.ready?ctCfg():null;
+  const row=(what,desc,btns)=>`<tr style="cursor:default"><td style="font-weight:600;color:var(--text);white-space:nowrap;vertical-align:top">${what}</td><td style="font-size:13px;vertical-align:top">${desc}</td><td style="text-align:right;white-space:nowrap;vertical-align:top">${btns}</td></tr>`;
+  const b=(label,fn,dis)=>`<button class="btn btn-outline btn-sm" ${busy||dis?'disabled':''} onclick="${fn}">${label}</button>`;
+  const ySel=`<select onchange="EX.year=Number(this.value);render()" style="height:30px;padding:3px 8px">${ys.map(y=>`<option${y==EX.year?' selected':''}>${y}</option>`).join('')}</select>`;
+  return `<div><div class="serif" style="font-size:20px;margin-bottom:10px">📤 Export</div>
+    ${EX.msg?`<div style="font-size:13px;color:${/^Fehler/.test(EX.msg)?'#e07070':'var(--green)'};margin-bottom:10px">${escH(EX.msg)}</div>`:''}
+    ${busy?`<div style="font-size:13px;color:var(--text3);margin-bottom:10px">⏳ Export läuft…</div>`:''}
+    <div class="card" style="margin-bottom:16px"><div class="card-title">🕊️ Tauben</div>
+      <div class="table-wrap"><table><tbody>
+        ${row('Taubenliste','Die aktuell gefilterte Taubenliste (<strong>'+nF.toLocaleString('de')+'</strong> Tauben) mit den dort eingeblendeten Spalten. Filter und Spalten stellst du in der Taubenliste ein.', b('📥 CSV','exportCSV()',!nF)+' '+b('🖨 PDF-Liste','exportPDF()',!nF))}
+        ${row('Stammbaum','Drucken, PDF und PNG je Taube: im Stammbaum der Taube unter „🖨 Drucken / Export".','')}
+      </tbody></table></div>
+      <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+        <div style="font-weight:600;color:var(--text);margin-bottom:4px">Columba-Transferdatei (WinTra)</div>
+        <div style="font-size:13px;color:var(--text3);margin-bottom:10px">Je ausgewählter Taube entsteht eine Transferdatei mit allen Vorfahren. Absender-Vorlage: ${tpl?'gespeichert'+(tpl.name?' ('+escH(tpl.name)+')':''):'keine — im Profil festlegen, sonst fehlen Anschrift und Logo'}.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+          <input placeholder="Taube suchen: Ringnummer oder Name…" oninput="exSearch(this.value)" style="flex:1;min-width:240px;max-width:420px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-size:14px;font-family:inherit;outline:none">
+          ${S.bulkSelected&&S.bulkSelected.size?b('＋ '+S.bulkSelected.size+' aus der Mehrfachauswahl der Taubenliste','exPickBulk()'):''}
+        </div>
+        <div id="ex-results" style="margin-bottom:8px"></div>
+        ${picks.length?`<div class="table-wrap"><table><thead><tr><th>Ringnummer</th><th>Name</th><th>Jahrgang</th><th></th></tr></thead><tbody>
+          ${picks.map(p=>`<tr style="cursor:default"><td><span class="ring">${escH(p.ringnumber||'?')}</span></td><td>${escH(p.name||'—')}</td><td>${escH(String(p.date_year||'—'))}</td><td style="text-align:right"><button class="btn btn-outline btn-sm" onclick="exUnpick('${p.pigeonid}')">✕ entfernen</button></td></tr>`).join('')}
+          </tbody></table></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${b('📤 als .WinTra'+(picks.length>1?' ('+picks.length+' Dateien im ZIP)':''),'exWinTra(false)')} ${b('📦 als ZIP mit XML-Dateien','exWinTra(true)')} ${b('Auswahl leeren','EX.picks=[];render()')}</div>`
+          :'<div style="font-size:13px;color:var(--text3)">Noch keine Taube ausgewählt.</div>'}
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px"><div class="card-title" style="display:flex;align-items:center;gap:10px">🏁 Flüge <span style="font-size:13px;font-weight:400;color:var(--text3)">Saison</span> ${ys.length?ySel:'<span style="font-size:13px;font-weight:400;color:var(--text3)">(lade Flüge…)</span>'}</div>
+      <div class="table-wrap"><table><tbody>
+        ${row('Flugergebnisse','Alle Einzelergebnisse der gewählten Saison mit Preisen, AS-Punkten und bestem Koeffizienten je Taube und Flug.', b('📥 CSV','exFlightsCsv()',!EX.year))}
+        ${row('Bestenliste','Alle Kategorien der Bestenliste für die gewählte Saison, inklusive bestem Koeffizienten.', b('📥 CSV','exBestCsv()',!EX.year))}
+        ${row('Wettbewerb','Ergebnis des aktiven Wettbewerbs'+(cfg?' „<strong>'+escH(cfg.name)+'</strong>" ('+cfg.year+')':'')+' mit allen aktiven Wertungen. Den Wettbewerb wählst du unter Flüge → Wettbewerbe.', b('📥 CSV','exContestCsv()'))}
+      </tbody></table></div>
+    </div>
+    <div class="card"><div class="card-title">⚙️ Einstellungen &amp; Sicherung</div>
+      <div class="table-wrap"><table><tbody>
+        ${row('Wettbewerbe','Alle Wettbewerbs-Konfigurationen als Datei, zum Übertragen auf ein anderes Gerät oder zur Weitergabe.', b('⬇ wettbewerbe.json','dataCtExport()'))}
+        ${row('Datensicherung','Vollständige Sicherung aller Tauben, Flüge und Einstellungen.', `<button class="btn btn-outline btn-sm" onclick="showTab('backup')">📦 zur Sicherung</button>`)}
+      </tbody></table></div>
+    </div></div>`;
+}
+
+// ── Wartung ──
+let WA={check:null, busy:null, msg:{}};
+async function waCheck(){
+  if(WA.busy) return; WA.busy='check'; render();
+  try{
+    if(!RT.trips.length) await loadTrips();
+    if(!ZT.loaded) await loadZuechterData();
+    const c={};
+    const pig=S.pigeons.filter(p=>!p._virtual && !p.deleted);
+    c.ringFormat=pig.filter(p=>p.ringnumber && fmtRingnumber(p.ringnumber) && fmtRingnumber(p.ringnumber)!==p.ringnumber).length;
+    const byRing={}; pig.forEach(p=>{ const k=normRing(fmtRingnumber(p.ringnumber||'')||p.ringnumber||''); if(k) (byRing[k]=byRing[k]||[]).push(p); });
+    c.ringDup=Object.values(byRing).filter(g=>g.length>1).length;
+    const idx={}; pig.forEach(p=>{ [p.ringnumber,p.ringnumberold].forEach(r=>{ const k=normRing(r||''); if(k) idx[k]=1; const k2=normRingCore(r||''); if(k2) idx[k2]=1; }); });
+    const valid=new Set(pig.map(p=>p.pigeonid));
+    const orphans=ZT.rows.filter(r=>r.ringnumber && (!r.pigeonid || !valid.has(r.pigeonid)));
+    c.unlinked=orphans.length; c.linkable=orphans.filter(r=>idx[normRing(r.ringnumber)]||idx[normRingCore(r.ringnumber)]).length;
+    const tk={}; RT.trips.forEach(t=>{ const k=[t.vintage,String(t.location||'').trim().toLowerCase(),String(t.tripdate||'').slice(0,10)].join('|'); tk[k]=(tk[k]||0)+1; });
+    c.tripDup=Object.values(tk).filter(n=>n>1).length;
+    c.rvMissing=RT.trips.filter(t=>!t.pigeonsset_rv && t.pigeonsset_rv_calc==null).length;
+    c.zNr=new Set(ZT.rows.filter(r=>r.breedernumber && canonicalizeZuechternummer(r.breedernumber)!==String(r.breedernumber).trim()).map(r=>r.breedernumber)).size;
+    c.at=new Date();
+    WA.check=c;
+  }catch(e){ WA.msg.check='Prüfung fehlgeschlagen: '+e.message; }
+  WA.busy=null; render();
+}
+async function waRun(key){
+  if(WA.busy) return; WA.busy=key; delete WA.msg[key]; render();
+  try{
+    if(key==='link'){ const r=await backfillMissingPigeonLinks(); clearPTCache(); ZT.loaded=false;
+      WA.msg.link=r.geprueft?(r.linked.toLocaleString('de')+' von '+r.geprueft.toLocaleString('de')+' Ergebnissen verknüpft, '+r.noMatch.length.toLocaleString('de')+' ohne passende Taube'+(r.updateFailed.length?', '+r.updateFailed.length+' Fehler beim Speichern':'')+'.'):'Alle Ergebnisse sind bereits verknüpft.'; }
+    else if(key==='rv'){ const r=await backfillRVFallbackAll(); clearPTCache(); await loadTrips();
+      WA.msg.rv=r.geprueft+' Flüge ohne eigene RV-Liste geprüft: '+r.ok+' berechnet, '+r.mehrdeutig+' mit mehreren RVen, '+r.keine_rv_erkannt+' ohne erkennbare RV'+(r.fehler?', '+r.fehler+' Fehler ('+String(r.firstError||'').slice(0,120)+')':'')+'.'; }
+  }catch(e){ WA.msg[key]='Fehler: '+e.message; }
+  WA.busy=null; WA.check=null; render(); waCheck();
+}
+function renderWartung(){
+  const c=WA.check, busy=WA.busy;
+  const n=(v,okTxt,badTxt)=>c?(v>0?`<span style="color:#e0a030;font-weight:600">${badTxt}: ${v.toLocaleString('de')}</span>`:`<span style="color:#6fcf97">✓ ${okTxt}</span>`):'<span style="color:var(--text3)">noch nicht geprüft</span>';
+  const btn=(label,fn,k)=>`<button class="btn btn-outline btn-sm" ${busy?'disabled':''} onclick="${fn}">${busy&&busy===k?'⏳ läuft…':label}</button>`;
+  const msg=k=>WA.msg[k]?`<div style="font-size:12px;color:${/^Fehler/.test(WA.msg[k])?'#e07070':'var(--text2)'};margin-top:4px">${escH(WA.msg[k])}</div>`:'';
+  const row=(what,when,found,action)=>`<tr style="cursor:default"><td style="font-weight:600;color:var(--text);vertical-align:top">${what}</td><td style="font-size:13px;vertical-align:top">${when}</td><td style="font-size:13px;vertical-align:top">${found}</td><td style="text-align:right;white-space:nowrap;vertical-align:top">${action}</td></tr>`;
+  const head='<thead><tr><th>Funktion</th><th>Wann nötig</th><th>Befund</th><th></th></tr></thead>';
+  return `<div><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <div class="serif" style="font-size:20px">🛠 Wartung</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${c?`<span style="font-size:12px;color:var(--text3)">geprüft um ${c.at.toLocaleTimeString('de',{hour:'2-digit',minute:'2-digit'})} Uhr</span>`:''}
+        <button class="btn" ${busy?'disabled':''} onclick="waCheck()">${busy==='check'?'⏳ Prüfe…':'🔍 Datenbestand prüfen'}</button></div></div>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:14px">Hilfsfunktionen, die Folgen von Importen bereinigen. Die Prüfung zählt nur und ändert nichts. Flugergebnisse werden nach jedem Tauben-Import automatisch neu verknüpft, RV-Ranglisten nach jedem Flug-Import automatisch berechnet.</p>
+    ${msg('check')}
+    <div class="card" style="margin-bottom:16px"><div class="card-title">🕊️ Tauben</div><div class="table-wrap"><table>${head}<tbody>
+      ${row('Ringnummern bereinigen','Nach Importen aus fremden Quellen: vereinheitlicht die Schreibweise und führt doppelte Tauben zusammen.', (c?n(c.ringFormat,'einheitlich geschrieben','uneinheitlich geschrieben')+'<br>'+n(c.ringDup,'keine Dubletten','doppelte Ringnummern'):n(0)), btn('🧹 Bereinigen','cleanupRingnumbers()'))}
+      ${row('Stammbaum prüfen','Findet Tauben, die als eigener Vater, eigene Mutter oder in ihrer eigenen Ahnenlinie verknüpft sind.','<span style="color:var(--text3)">wird beim Öffnen ermittelt</span>', btn('🧬 Prüfen','showPedigreeProblemsModal()'))}
+      ${row('Linien ableiten','Schlägt Linien aus den Stammbäumen vor, wenn das Feld „Linie" bei vielen Tauben leer ist.','<span style="color:var(--text3)">Vorschlag zur Auswahl</span>', btn('🧬 Ableiten','showLineDeriveModal()'))}
+    </tbody></table></div></div>
+    <div class="card"><div class="card-title">🏁 Flüge</div><div class="table-wrap"><table>${head}<tbody>
+      ${row('Flug-Duplikate bereinigen','Wenn ein Flug versehentlich mehrfach importiert wurde (gleiche Saison, gleicher Ort, gleiches Datum).', n(c&&c.tripDup,'keine doppelten Flüge','mehrfach angelegte Flüge'), btn('🧹 Duplikate suchen','showDuplicateTripsModal()'))}
+      ${row('Verknüpfungen reparieren','Wenn Flugergebnisse als „nicht in DB" erscheinen, obwohl die Taube inzwischen angelegt ist.', (c?(c.unlinked>0?`<span style="color:${c.linkable?'#e0a030':'var(--text2)'};font-weight:600">ohne Taube: ${c.unlinked.toLocaleString('de')}, davon zuordenbar: ${c.linkable.toLocaleString('de')}</span>`:'<span style="color:#6fcf97">✓ alle verknüpft</span>'):'<span style="color:var(--text3)">noch nicht geprüft</span>')+msg('link'), btn('🔗 Reparieren','waRun(\'link\')','link'))}
+      ${row('RV-Ranglisten nachrechnen','Für Flüge ohne eigene RV-Liste. Wirkt auf Bestenliste, Koeffizient und Wettbewerbe.', n(c&&c.rvMissing,'alle berechnet','Flüge ohne RV-Rangliste')+msg('rv'), btn('🧮 Nachrechnen','waRun(\'rv\')','rv'))}
+      ${row('Züchternummern bereinigen','Wenn derselbe Züchter unter mehreren Nummern-Schreibweisen erscheint.', n(c&&c.zNr,'einheitlich geschrieben','abweichend geschriebene Nummern'), btn('🔢 Bereinigen','cleanupZuechterNumbers()'))}
+    </tbody></table></div></div></div>`;
+}
+
+// ── Wettbewerbe in Erfolgsbilanz und Flugdetail ──
+async function ctEnsure(){ if(!RT.trips.length) await loadTrips(); if(!CT.ready) ctLoadCfg(); await ctLoadRows(); }
+function ctResultCached(){
+  if(!CT.ready||!CT.rows) return null;
+  const key=JSON.stringify(ctCfg())+'|'+CT.rows.length+'|'+S.pigeons.length+'|'+RT.trips.length;
+  if(CT._ck!==key){ CT._cr=ctCompute(); CT._ck=key; }
+  return CT._cr;
+}
+function ctSortedList(r){ return r.list.slice().sort((a,b)=>(b.sel.complete-a.sel.complete)||(a.sel.total-b.sel.total)); }
+// Schlüssel "Taube|Flug" → Namen der Wertungen, in denen das Ergebnis zählt (nur wenn der aktive Wettbewerb zur Saison passt)
+function ctUseMap(year){
+  if(!CT.ready||!CT.rows||String(ctCfg().year)!==String(year)) return null;
+  const R=ctResultCached(); if(!R) return null; const m={};
+  Object.values(R.cats).forEach(r=>{ (r.used||[]).forEach(k=>{ (m[k]=m[k]||[]).push(r.cat.name); }); });
+  return m;
+}
+function ctPigeonBlock(p){
+  const label='<div class="section-label" style="margin-top:14px">Wettbewerbe</div>';
+  if(!CT.ready||!CT.rows){
+    return label+`<div style="font-size:13px;color:var(--text3);padding:4px 0">${CT.loading?'⏳ Lade Wertungen…':`<button class="btn btn-outline btn-sm" onclick="ctEnsure().then(()=>rerenderDetailArea())">🥇 Wertungen dieser Taube anzeigen</button>`}</div>`;
+  }
+  const cfg=ctCfg(); const R=ctResultCached(); const id=p.pigeonid;
+  const fl=f=>shortTripDate(f.trip.tripdate)+' '+escH(f.trip.location||'');
+  const rows=[];
+  cfg.cats.filter(c=>c.enabled).forEach(c=>{ const r=R.cats[c.id]; if(!r) return;
+    if(r.type==='team'){ const hit=r.sel.picks.filter(f=>f.members.some(m=>m.pigeon.pigeonid===id)); if(hit.length) rows.push([c.name,'im Team bei '+hit.length+' von '+r.sel.picks.length+' gewerteten Flügen','Koeff. '+hit.map(f=>ctF(f.members.find(m=>m.pigeon.pigeonid===id).coef,2)).join(' · '),hit.map(fl).join(', ')]); }
+    else if(r.type==='pigeon'){ const l=ctSortedList(r); const i=l.findIndex(x=>x.pigeon.pigeonid===id); if(i>=0){ const x=l[i]; rows.push([c.name,(x.sel.complete?'Rang '+(i+1)+' von '+l.filter(y=>y.sel.complete).length:'unvollständig ('+x.sel.picks.length+' von '+c.nFlights+' Flügen)'),'Koeff. '+ctF(x.sel.total,2),x.sel.picks.map(fl).join(', ')]); } }
+    else if(r.type==='pigeonAS'){ const i=r.list.findIndex(x=>x.pigeon.pigeonid===id); if(i>=0){ const x=r.list[i]; rows.push([c.name,(x.complete?'Rang '+(i+1):'unvollständig'),x.prizes+' Preise · '+ctF(x.as,2)+' AS',x.picks.map(fl).join(', ')]); } }
+    else if(r.type==='breederAS'){ const x=r.team.find(y=>y.pigeon.pigeonid===id); if(x) rows.push([c.name,'im Züchter-Team',x.prizes+' Preise · '+ctF(x.as,2)+' AS',x.picks.map(fl).join(', ')]); }
+    else if(r.type==='comboAS'){ const k=r.picks.find(y=>y.x.pigeon.pigeonid===id); if(k) rows.push([c.name,'zählt für '+escH(k.part),k.x.prizes+' Preise · '+ctF(k.x.as,2)+' AS','']); }
+  });
+  const head=`<div style="font-size:13px;color:var(--text3);margin-bottom:6px">Aktiver Wettbewerb: <strong style="color:var(--text)">${escH(cfg.name)}</strong> (${cfg.year}) · <span style="cursor:pointer;color:var(--green)" onclick="openContest()">zur Auswertung →</span></div>`;
+  if(!rows.length) return label+head+'<div style="font-size:13px;color:var(--text3)">Diese Taube zählt in keiner aktiven Wertung dieses Wettbewerbs.</div>';
+  return label+head+`<div class="table-wrap"><table style="width:100%;border-collapse:collapse"><thead><tr><th>Wertung</th><th>Stand</th><th>Wert</th><th>Gewertete Flüge</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr style="cursor:default"><td style="font-weight:600;color:var(--text)">${escH(r[0])}</td><td>${r[1]}</td><td style="white-space:nowrap">${r[2]}</td><td style="font-size:12px">${r[3]}</td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+// Absender-Vorlage (WinTra) direkt aus einer eigenen Columba-Transferdatei übernehmen
+async function wtTplFromFile(file){
+  if(!file) return;
+  try{
+    const files=await wtUnzipAll(new Uint8Array(await file.arrayBuffer()));
+    const u=files.find(f=>/(^|\/)userinfo\.xml$/i.test(f.name)); if(!u) throw new Error('Die Datei enthält keine Absenderdaten (userInfo.xml).');
+    const x=files.find(f=>/(^|\/)report\.repx$/i.test(f.name));
+    const txt=new TextDecoder().decode(u.data); const m=txt.match(/<USERINFO_NAME>([^<]*)<\/USERINFO_NAME>/);
+    const name=m?m[1].replace(/&amp;/g,'&').trim():'';
+    if(!name && !confirm('In dieser Datei ist kein Absendername eingetragen. Trotzdem als Vorlage speichern?')) return;
+    localStorage.setItem(WT_KEY, JSON.stringify({userXml:txt, repx:x?wtBytesToB64(x.data):null, name:name}));
+  }catch(e){ alert('Die Vorlage konnte nicht übernommen werden: '+e.message); return; }
+  if(document.querySelector('.profile-overlay')) showProfile(); else render();
 }
 
 function renderBackup(){
@@ -11002,7 +11296,6 @@ create policy "backups_rw" on storage.objects
         <div style="font-size:12px;color:var(--text3)">.json (von diesem Backup-Werkzeug erstellt)</div>
       </div>
     </div>
-    ${renderColumbaImport()}
   </div>`;
 }
 
@@ -11049,7 +11342,7 @@ function ctLoadCfg(){
 function ctSave(){ try{ localStorage.setItem(CT_KEY,JSON.stringify({cfgs:CT.cfgs,active:CT.active})); }catch(e){} }
 function ctCfg(){ return CT.cfgs.find(c=>c.id===CT.active)||CT.cfgs[0]; }
 async function openContest(){
-  RT.step='contest'; if(!CT.ready) ctLoadCfg(); render();
+  S.tab='contest'; S.selected=null; setActiveNav('contest'); if(RT.step==='contest') RT.step='list'; if(!CT.ready) ctLoadCfg(); render();
   if(!RT.trips.length){ await loadTrips(); }
   await ctLoadRows(); render();
 }
@@ -11253,7 +11546,7 @@ function ctDel(){ if(CT.cfgs.length<2){ alert('Der letzte Wettbewerb kann nicht 
 function ctAddCat(){ const c=ctCfg(); c.cats.push({id:'k'+Date.now().toString(36),name:'Neue Wertung',type:'team',scoring:'coef',who:'all',teamSize:3,nFlights:4,minKm:0,slots:[],enabled:true}); ctSave(); render(); }
 function ctDelCat(id){ const c=ctCfg(); c.cats=c.cats.filter(x=>x.id!==id); ctSave(); render(); }
 function ctExport(){ const b=new Blob([JSON.stringify({cfgs:CT.cfgs},null,1)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='wettbewerbe.json'; a.click(); }
-function ctImport(f){ if(!f) return; f.text().then(t=>{ try{ const j=JSON.parse(t); if(!Array.isArray(j.cfgs)||!j.cfgs.length) throw new Error('keine Wettbewerbe in der Datei'); j.cfgs.forEach(c=>{ c.id=ctNewId(); CT.cfgs.push(c); }); ctSwitch(CT.cfgs[CT.cfgs.length-1].id); }catch(e){ alert('Import fehlgeschlagen: '+e.message); } }); }
+function ctImport(f){ if(!f) return; return f.text().then(t=>{ try{ const j=JSON.parse(t); if(!Array.isArray(j.cfgs)||!j.cfgs.length) throw new Error('keine Wettbewerbe in der Datei'); j.cfgs.forEach(c=>{ c.id=ctNewId(); CT.cfgs.push(c); }); ctSwitch(CT.cfgs[CT.cfgs.length-1].id); }catch(e){ alert('Import fehlgeschlagen: '+e.message); } }); }
 function ctPigName(p){ return escH((p.name?p.name+' · ':'')+(p.ringnumber||'?')); }
 function ctBreederOptions(cfg){
   const bs=CT.rows?distinctBreeders(CT.rows):[];
@@ -11270,7 +11563,7 @@ function renderContest(){
   const sel=(id,k,val,opts)=>'<select style="'+inp+'" onchange="ctSetCat(\''+id+'\',\''+k+'\',this.value)">'+opts.map(([v,l])=>'<option value="'+v+'"'+(val===v?' selected':'')+'>'+l+'</option>').join('')+'</select>';
   const num=(id,k,val,w,ph)=>'<input type="number" style="'+inp+';width:'+w+'px" min="0" value="'+(val==null?'':val)+'"'+(ph?' placeholder="'+ph+'"':'')+' onchange="ctSetCat(\''+id+'\',\''+k+'\',this.value)">';
   const dm=(id,k,val)=>'<input style="'+inp+';width:64px" placeholder="TT.MM." value="'+ctShowDM(val)+'" onchange="ctSetCat(\''+id+'\',\''+k+'\',this.value)">';
-  let h='<div><button class="back-btn" onclick="RT.step=\'list\';render()">← Alle Flüge</button>';
+  let h='<div>';
   h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px"><div class="serif" style="font-size:22px">🏆 Wettbewerbs-Auswertung</div><div style="display:flex;gap:6px;flex-wrap:wrap">'
    +'<select style="'+inp+'" onchange="ctSwitch(this.value)">'+CT.cfgs.map(c=>'<option value="'+c.id+'"'+(c.id===cfg.id?' selected':'')+'>'+escH(c.name)+' ('+c.year+')</option>').join('')+'</select>'
    +'<select style="'+inp+'" onchange="ctNewFrom(this.value);this.value=\'\'"><option value="">＋ Neu aus Vorlage…</option>'+Object.keys(CT_TEMPLATES).map(k=>'<option value="'+k+'">'+escH(CT_TEMPLATES[k].label)+'</option>').join('')+'</select>'
@@ -11362,7 +11655,6 @@ function renderContest(){
 }
 
 function renderReisen(){
-  if(RT.step==='contest') return renderContest();
   if(RT.step==='import') return renderTripsImport();
   if(RT.step==='detail') return renderTripDetail();
   return renderTripsList();
@@ -11496,7 +11788,7 @@ function renderTripsList(){
     </div>`;
   }).join('');
 
-  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" title="Koeffizienten-Auswertung für Wettbewerbe wie den Vanrobaeys Supercup (frei konfigurierbar)." onclick="openContest()">🏆 Wettbewerbe</button><button class="btn btn-outline" title="Findet Reisen, die versehentlich mehrfach angelegt wurden (gleicher Jahrgang/Ort/Datum) und führt sie zusammen." onclick="showDuplicateTripsModal()">🧹 Duplikate bereinigen</button><button class="btn btn-outline" title="Gleicht Flugergebnisse ohne Taubenzuordnung (z.B. weil die Taube erst nach dem Import angelegt wurde) erneut per Ringnummer mit der Tauben-Datenbank ab." onclick="runBackfillMissingPigeonLinks(event)">🔗 Fehlende Verknüpfungen reparieren</button><button class="btn btn-outline" title="Für alle bereits importierten Flüge ohne eigene RV-Liste (zu wenig Tauben) die RV-Rangliste selbst berechnen und speichern — einmalig nötig für Altbestand, neue Importe machen das automatisch." onclick="runBackfillRVFallbackAll(event)">🧮 RV-Ranglisten nachrechnen</button><button class="btn" onclick="RT.step=\'import\';RT.imp={step:\'upload\',rows:[],breeders:[],vereinId:defaultVereinId(),stats:{trips:0,tripsUpdated:0,results:0,resultsNew:0,resultsUpdated:0,err:0,rlsBlocked:0}};render()">📥 '+t('import_perf')+'</button></div></div>'
+  return '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px"><div class="serif" style="font-size:20px">🏁 '+RT.trips.length+' '+t('trips_word')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="startTripsImport()">📥 '+t('import_perf')+'</button></div></div>'
     +(anyComputedRV?'<div style="font-size:12px;color:var(--text3);margin:-8px 0 12px">* RV-Taubenzahl selbst berechnet, da für diesen Flug keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene).</div>':'')
     +(RT.trips.length===0?'<div style="text-align:center;padding:48px;color:var(--text3)">'+t('no_trips')+'<br><button class="btn" style="margin-top:14px" onclick="RT.step=\'import\';render()">📥 '+t('import_now')+'</button></div>':cards)+'</div>';
 }
@@ -11600,6 +11892,10 @@ function renderTripDetail(){
   const alttierRows  = sorted.filter(r=>!isJungtierResult(r, trip));
   const isSplit = jungtierRows.length>0 && alttierRows.length>0;
 
+  const ctUse = ctUseMap(trip.vintage);
+  const ctNote = '<div style="font-size:12px;color:var(--text3);margin:0 0 8px">'+(ctUse
+    ? '🥇 = Ergebnis zählt im aktiven Wettbewerb „'+escH(ctCfg().name)+'" ('+ctCfg().year+')'
+    : (CT.loading?'⏳ Lade Wettbewerbs-Wertungen…':(CT.ready&&CT.rows?'Der aktive Wettbewerb „'+escH(ctCfg().name)+'" wertet die Saison '+ctCfg().year+' — für diesen Flug gibt es daher keine Markierung.':'<span style="cursor:pointer;color:var(--green)" onclick="ctEnsure().then(render)">🥇 Wettbewerbs-Markierung einblenden</span>')))+'</div>';
   const rowHtml = r => {
     const p=S.pigeons.find(x=>x.pigeonid===r.pigeonid||(r.ringnumber&&x.ringnumber===r.ringnumber));
     return '<tr onclick="'+(p?'selectPigeon(\''+p.pigeonid+'\')':'')+'" style="'+(p?'cursor:pointer':'')+'">'
@@ -11612,7 +11908,7 @@ function renderTripDetail(){
       +'<td>'+rvCellFor(r)+'</td><td>'+(r.prize_fg||'—')+'</td>'
       +'<td>'+(r.prize_reggr||'—')+'</td><td>'+(r.prize_reg||'—')+'</td>'
       +'<td>'+(r.as_reg>0?Number(r.as_reg).toFixed(2):'—')+'</td>'
-      +'<td style="text-align:center">'+coefCell(bestCoef(r,trip))+'</td>'
+      +'<td style="text-align:center;white-space:nowrap">'+coefCell(bestCoef(r,trip))+((p&&ctUse&&ctUse[p.pigeonid+'|'+trip.tripid])?' <span title="Zählt im Wettbewerb: '+escH(ctUse[p.pigeonid+'|'+trip.tripid].join(', '))+'" style="cursor:help">🥇</span>':'')+'</td>'
       +'<td style="text-align:center">'+tripFlagCell(r,'v','V')+'</td>'
       +'<td style="text-align:center">'+tripFlagCell(r,'j','J')+'</td>'
       +'<td style="text-align:center">'+tripFlagCell(r,'m','M')+'</td></tr>';
@@ -11699,7 +11995,7 @@ function renderTripDetail(){
     +rvChips
     +(rvFallback?'<div style="font-size:12px;color:var(--text3);margin-top:8px">* RV-Rang/AS-Punkte für diesen Flug selbst berechnet, da hierfür keine eigene RV-Liste importiert wurde (zu geringe Taubenzahl auf RV-Ebene) — Rang nach Geschwindigkeit unter allen Tauben dieser RV.</div>':'')
     +'</div>'
-    +resultsHtml
+    +(RT.results.length?ctNote:'')+resultsHtml
     +'</div></div>';
 }
 
@@ -13831,7 +14127,6 @@ function renderZuechter(){
   return `<div><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
       <div class="serif" style="font-size:20px">🧑‍🌾 ${list.length} ${t('breeders_word')}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-outline btn-sm" onclick="cleanupZuechterNumbers()">🔢 Nummern bereinigen</button>
         <button class="btn btn-outline btn-sm" onclick="showVereinManager()">🏛️ RVen verwalten</button>
       </div>
     </div>
