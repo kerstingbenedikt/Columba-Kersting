@@ -5641,8 +5641,8 @@ function renderScanEditPanel(k, p){
   const m   = SCAN.matches[k];
   const act = SCAN.actions[k] ?? (m?'update':'new');
 
-  const txt = (label, field, type='text') => `
-    <div class="form-field">
+  const txt = (label, field, type='text', full=false) => `
+    <div class="form-field"${full?' style="grid-column:1/-1"':''}>
       <label>${escH(label)}</label>
       <input type="${type}" value="${escH(p[field]!=null?p[field]:'')}"
         oninput="updateScanField('${k}','${field}',this.value);scanPatch()">
@@ -5690,7 +5690,7 @@ function renderScanEditPanel(k, p){
       </label>
     </div>
     <div class="scan-result-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:0" title="Änderungen gelten erst nach „Ausführen". Ohne den Haken „Bestandstaube" wird die Position nur als Ahnen-Datensatz gespeichert.">
-      ${txt('Ringnummer','ringnumber')}
+      ${txt('Ringnummer','ringnumber','text',true)}
       ${txt('Name','name')}
       ${txt('Jahrgang','date_year','number')}
       <div class="form-field">
@@ -6133,6 +6133,8 @@ async function runScanAI(){
       return !(py&&cy) || py>cy;
     });
     PED_KEYS.forEach(k => scanGuessColor(SCAN.pigeons[k]));
+    // Im Stammbaum steht der Züchter meist unbeschriftet im Kästchen und landet sonst in „Linie/Stamm“
+    PED_KEYS.forEach(k => { const q=SCAN.pigeons[k]; if(q && q.strain && !q.breeder){ q.breeder=q.strain; q.strain=null; } });
     stopScanProgress('Abgleich mit Datenbank…');
     fixGenderSlotMismatches();
     checkScanPlausibility();
@@ -6176,7 +6178,7 @@ async function executeScanSave(){
   const uuidMap = {};
   S.pigeons.forEach(p => { if(p.ringnumber) uuidMap[normRing(p.ringnumber)]=p.pigeonid; });
 
-  const saveErrors = []; let savedCount = 0;
+  const saveErrors = []; let savedCount = 0; const savedIds = new Set();
   for(const k of PED_KEYS){
     const p   = SCAN.pigeons[k];
     const act = SCAN.actions[k];
@@ -6224,7 +6226,7 @@ async function executeScanSave(){
         // (Standard: AUS) — importierte Abstammungen sind erstmal nur Ahnen-Datensätze.
         row.pigeonid=newId; row.deleted=false; row.instock=!!SCAN.instock[k];
         await apiPost('pigeons', row);
-        uuidMap[normRing(p.ringnumber)] = newId; savedCount++;
+        uuidMap[normRing(p.ringnumber)] = newId; savedIds.add(newId); savedCount++;
       } else if(act==='update'){
         const m = SCAN.matches[k];
         const updates={};
@@ -6234,7 +6236,7 @@ async function executeScanSave(){
         // Bestandstaube-Umschaltung greift auch beim Ergänzen bestehender Tauben
         if(SCAN.instock[k] && !m.instock) updates.instock = true;
         if(Object.keys(updates).length) await apiPatch('pigeons',m.pigeonid,updates);
-        uuidMap[normRing(p.ringnumber)] = m.pigeonid; savedCount++;
+        uuidMap[normRing(p.ringnumber)] = m.pigeonid; savedIds.add(m.pigeonid); savedCount++;
       }
     } catch(e){ console.warn(`Fehler bei ${p.ringnumber}:`, e.message); saveErrors.push(`${p.ringnumber}: ${e.message}`); }
   }
@@ -6259,6 +6261,17 @@ async function executeScanSave(){
   setS('Lade Datenbank neu…');
   await loadData();
   scanReset();
+  // Gerade gespeicherte Tauben (v. a. Ahnen ohne Bestand) sicher nachladen, sonst fehlt im Stammbaum
+  // zunächst ein Teil, bis der Hintergrundlauf von loadData fertig ist
+  try{
+    const miss=[...savedIds].filter(id=>!LOADED_PIGEON_IDS.has(id));
+    for(let i=0;i<miss.length;i+=40){
+      const chunk=miss.slice(i,i+40).map(encodeURIComponent).join(',');
+      const rows=await apiGet('/pigeons?deleted=eq.false&pigeonid=in.('+chunk+')');
+      (rows||[]).forEach(r=>{ if(r&&r.pigeonid&&!LOADED_PIGEON_IDS.has(r.pigeonid)){ LOADED_PIGEON_IDS.add(r.pigeonid); S.pigeons.push(r); } });
+    }
+    if(miss.length) invalidatePedigreeCache();
+  }catch(e){ console.warn('Nachladen gespeicherter Tauben fehlgeschlagen', e); }
   // Proband sicher in den Speicher holen (neu angelegte Tauben können außerhalb der ersten Ladeseiten liegen)
   let found = probandRing ? S.pigeons.find(p=>normRing(p.ringnumber)===normRing(probandRing)) : null;
   if(!found && probandId){
