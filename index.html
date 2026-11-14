@@ -3669,6 +3669,7 @@ function renderPedigreeInner(root, opts, embedded){
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <button class="btn btn-sm" onclick="pedPrintOpen('${root.pigeonid}')" title="Fächer- oder Familienstil, Vorschau, Drucken, PDF, PNG">🖨 Drucken / Export</button>
+            ${root._virtual?'':`<button class="btn btn-outline btn-sm" onclick="wtExport('${root.pigeonid}')" title="Transferdatei für Columba: diese Taube mit allen Vorfahren">📤 Columba (WinTra)</button><button class="btn btn-outline btn-sm" onclick="wtExport('${root.pigeonid}',true)" title="Dieselben Daten als ZIP-Archiv mit den XML-Dateien (Tauben, master_v8.xml, userInfo.xml)">📦 WinTra als ZIP</button>`}
             ${!embedded?`<button class="btn btn-outline btn-sm" onclick="toggleBreederProfileEditor()">🧑‍🌾 ${t('breeder_data_btn')}</button>`:''}
           </div>
         </div>
@@ -10484,17 +10485,19 @@ async function handleCiFile(file){
   CI.busy=true; CI.error=null; CI.res=null; CI.done=null; CI.progress='Lese Datei…'; render();
   try{
     const nm=file.name.toLowerCase();
-    if(nm.endsWith('.zip')||nm.endsWith('.sdf')){
-      let sdfBytes;
-      if(nm.endsWith('.zip')){
-        CI.progress='Entpacke ZIP…'; render();
-        const f=await SDF.unzipFind(new Uint8Array(await file.arrayBuffer()), n=>/\.sdf$/i.test(n));
-        if(!f) throw new Error('In der ZIP-Datei wurde keine .sdf-Datenbank gefunden (erwartet: columba-xt.sdf).');
-        sdfBytes=f.data;
-      } else sdfBytes=new Uint8Array(await file.arrayBuffer());
+    const buf=new Uint8Array(await file.arrayBuffer());
+    const isZip=buf.length>4&&buf[0]===0x50&&buf[1]===0x4b;
+    if(isZip){
+      CI.progress='Entpacke Datei…'; render();
+      const files=await wtUnzipAll(buf);
+      const sdf=files.find(f=>/\.sdf$/i.test(f.name));
+      if(sdf){ CI.progress='Lese Columba-Datenbank…'; render(); await new Promise(r=>setTimeout(r,30)); CI.data=ciDataFromSdf(sdf.data); }
+      else if(files.some(f=>/(^|\/)master_v\d+\.xml$/i.test(f.name)) || files.some(f=>/\.xml$/i.test(f.name))){ CI.progress='Lese Transferdatei…'; render(); CI.data=wtDataFromFiles(files); CI.opt.noStock=true; }
+      else throw new Error('Die Datei enthält weder eine Columba-Sicherung (.sdf) noch eine Transferdatei (WinTra).');
+    } else if(nm.endsWith('.sdf')){
       CI.progress='Lese Columba-Datenbank…'; render(); await new Promise(r=>setTimeout(r,30));
-      CI.data=ciDataFromSdf(sdfBytes);
-    } else CI.data = JSON.parse(await file.text());
+      CI.data=ciDataFromSdf(buf);
+    } else CI.data = JSON.parse(new TextDecoder().decode(buf));
     CI.fileName=file.name;
     if(!CI.data.pigeons) throw new Error('Keine Columba-Daten gefunden.');
     await analyzeColumba();
@@ -10614,12 +10617,12 @@ function renderColumbaImport(){
   let h=`<div class="card" style="margin-top:16px">
     <div class="card-title serif" style="font-size:18px">🕊️ Import aus Columba XT</div>`;
   if(!R){
-    h+=`<p style="color:var(--text3);font-size:13px;margin:10px 0 14px">Lade die <strong>Columba-Datensicherung (.zip)</strong> direkt hoch — sie wird im Browser entpackt und gelesen, es ist kein Zwischenschritt nötig. Es wird zuerst nur <strong>verglichen</strong> — angezeigt wird, was neu angelegt, ergänzt oder abweichend wäre. Geschrieben wird erst nach deiner Freigabe.</p>
+    h+=`<p style="color:var(--text3);font-size:13px;margin:10px 0 14px">Lade die <strong>Columba-Datensicherung (.zip)</strong> direkt hoch — sie wird im Browser entpackt und gelesen, es ist kein Zwischenschritt nötig. Es wird zuerst nur <strong>verglichen</strong> — angezeigt wird, was neu angelegt, ergänzt oder abweichend wäre. Geschrieben wird erst nach deiner Freigabe. Ebenso lassen sich <strong>Columba-Transferdateien (.WinTra)</strong> mit einzelnen Tauben samt Abstammung einlesen; der Export in dieses Format steht im Stammbaum jeder Taube unter „📤 Columba (WinTra)“.</p>
       <div class="imp-drop" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')"
         ondrop="event.preventDefault();this.classList.remove('drag-over');handleCiFile(event.dataTransfer.files[0])">
-        <input type="file" accept=".zip,.sdf,.json" onchange="handleCiFile(this.files[0])">
+        <input type="file" accept=".zip,.sdf,.json,.wintra,.WinTra" onchange="handleCiFile(this.files[0])">
         <div style="font-size:15px;color:var(--text2);font-weight:500">Columba-Sicherung (.zip) hochladen oder hierher ziehen</div>
-        <div style="font-size:12px;color:var(--text3)">auch .sdf oder die bisherige columba_import.json möglich</div>
+        <div style="font-size:12px;color:var(--text3)">auch <strong>Transferdatei (.WinTra)</strong>, .sdf oder die bisherige columba_import.json möglich</div>
       </div>
       ${CI.progress?`<div style="font-size:12px;color:var(--text3);margin-top:10px">⏳ ${escH(CI.progress)}</div>`:''}
       ${CI.error?`<div style="font-size:13px;color:#e07070;margin-top:10px">${escH(CI.error)}</div>`:''}</div>`;
@@ -10634,6 +10637,17 @@ function renderColumbaImport(){
       ${tile('abweichend','abweichende Werte',c.abweichend,'#e0a030')}${tile('gleich','unverändert',c.gleich,'var(--text3)')}
       ${tile('konflikt','nicht zuordenbar',R.conflicts.length,'#d9534f')}${tile('felder','Feld-Statistik',nFall+nDall,'var(--text2)')}
     </div>`;
+  const WTm=CI.data&&CI.data.meta&&CI.data.meta.wintra?CI.data.meta:null;
+  if(WTm){
+    const tpl=wtTplGet(); const u=WTm.user||{}; const who=[u.first,u.name].filter(Boolean).join(' ')+(u.city?', '+u.city:'');
+    h+=`<div style="background:var(--bg3);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;margin-bottom:14px">
+      <strong>Transferdatei (WinTra)</strong>${WTm.root?' · Stammbaum von <strong>'+escH(WTm.root)+'</strong>':''}${who?' · Absender: '+escH(who):' · ohne Absenderdaten'}<br>
+      <span style="color:var(--text3);font-size:12px">Absender-Vorlage für den eigenen Export: ${tpl?'gespeichert'+(tpl.name?' ('+escH(tpl.name)+')':''):'keine — exportierte Dateien enthalten dann keine Anschrift und kein Logo'}.</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        ${WT.userXml?`<button class="btn btn-outline btn-sm" onclick="wtTplSave()">Absenderdaten dieser Datei als meine Export-Vorlage speichern</button>`:''}
+        ${tpl?`<button class="btn btn-outline btn-sm" onclick="wtTplClear()">Vorlage löschen</button>`:''}
+      </div></div>`;
+  }
   // Liste je Tab
   if(CI.tab==='felder'){
     h+=`<div class="table-wrap"><table><thead><tr><th>Feld</th><th style="text-align:right">in DB leer → wird ergänzt</th><th style="text-align:right">abweichend</th><th style="text-align:right">identisch</th></tr></thead><tbody>
@@ -10657,16 +10671,19 @@ function renderColumbaImport(){
   const miss=Object.values(R.stateMiss);
   if(miss.length) h+=`<div style="margin-top:12px;font-size:12px;color:#e0a030">Status in Columba ohne Entsprechung in PIGMAN (werden nicht übernommen): ${miss.map(escH).join(', ')}</div>`;
   const T=R.tripInfo;
+  if(!WTm){
   h+=`<div style="margin-top:16px;background:var(--bg3);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px"><strong>Reisen &amp; Flugergebnisse (nur Vorschau)</strong><br>`;
   h+= T&&!T.error ? `Reisen: ${T.total} in Columba, davon ${T.tSame} bereits in PIGMAN (gleiche ID oder gleiches Datum+Ort), ${T.tNew} fehlen.<br>
       Einzelergebnisse: ${T.ptTotal.toLocaleString('de')} in Columba — ${T.ptHave.toLocaleString('de')} schon in PIGMAN, ${T.ptNew.toLocaleString('de')} fehlen (Taube + Reise vorhanden), ${T.ptNoTrip.toLocaleString('de')} Reise fehlt, ${T.ptNoPigeon.toLocaleString('de')} Taube nicht zuordenbar.<br>
       <span style="color:var(--text3)">Diese Daten werden im aktuellen Schritt <em>nicht</em> importiert, weil PIGMAN dafür andere Felder (RV/RegGr-Preise, Platzierung) nutzt als Columba.</span>`
     : `<span style="color:#e07070">Nicht ermittelbar: ${escH(T&&T.error||'')}</span>`;
   h+=`</div>`;
+  }
   // Import
   h+=`<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
     <div style="font-weight:600;margin-bottom:8px">Import-Optionen</div>
     <label style="display:block;font-size:13px;margin-bottom:5px"><input type="checkbox" ${CI.opt.neu?'checked':''} onchange="CI.opt.neu=this.checked"> ${c.neu.toLocaleString('de')} neue Tauben anlegen (inkl. Vater/Mutter-Verknüpfung; „Im Bestand" wie in Columba)</label>
+    ${WTm?`<label style="display:block;font-size:13px;margin-bottom:5px;margin-left:22px"><input type="checkbox" ${CI.opt.noStock?'checked':''} onchange="CI.opt.noStock=this.checked"> neue Tauben als „nicht im Bestand" anlegen (empfohlen bei Stammbäumen anderer Züchter; abwählen, um das Kennzeichen aus der Datei zu übernehmen)</label>`:''}
     <label style="display:block;font-size:13px;margin-bottom:5px"><input type="checkbox" ${CI.opt.fill?'checked':''} onchange="CI.opt.fill=this.checked"> leere Felder bestehender Tauben ergänzen (Status, Geschlecht, Info, Interne Info; im Reiter „ergänzen" einzeln abwählbar) (${nF.toLocaleString('de')} Werte) — vorhandene Werte bleiben unangetastet</label>
     <div style="font-size:13px;margin-bottom:10px">Abweichende Werte: <strong>${nD.toLocaleString('de')}</strong> von ${nDall.toLocaleString('de')} zum Übernehmen markiert (im Reiter „abweichende Werte" per Häkchen wählbar; Standard: keine).</div>
     ${CI.importing||CI.log.length?`<div style="background:var(--bg2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:10px;font-size:12px;font-family:monospace;max-height:200px;overflow-y:auto">${CI.log.map(escH).join('<br>')}</div>`:''}
@@ -10689,7 +10706,8 @@ async function runColumbaImport(){
   const errors=[];
   try{
     const FIELDS=CI_FIELDS.map(x=>x[0]);
-    const full=r=>{ const o={pigeonid:r.c.id, ringnumber:r.m.ringnumber, instock:!!r.c.ins, deleted:false};
+    const wtNoStock=!!(CI.data&&CI.data.meta&&CI.data.meta.wintra&&CI.opt.noStock);
+    const full=r=>{ const o={pigeonid:r.c.id, ringnumber:r.m.ringnumber, instock:wtNoStock?false:!!r.c.ins, deleted:false};
       FIELDS.forEach(f=>{ if(f==='fatherid'||f==='motherid') return; o[f]=(r.m[f]===undefined||r.m[f]===''?null:r.m[f]); }); return o; };
     if(news.length){
       // Pass 1: ohne Eltern-IDs (vermeidet Reihenfolge-Probleme bei Fremdschlüsseln)
@@ -10725,6 +10743,176 @@ async function runColumbaImport(){
     CI.done={errors:errors.length};
   }catch(e){ log('❌ Abbruch: '+e.message); }
   CI.importing=false; render();
+}
+
+// ── WinTra: Columba-Transferdatei (.WinTra = ZIP mit einer XML je Taube, master_v8.xml, userInfo.xml, report.repx) ──
+// Import: läuft über dieselbe Vorschau wie der Columba-Import. Export: eine Taube mit allen Vorfahren.
+const WT_REPX_B64='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';
+const WT_KEY='pigman_wintra_tpl_v1';
+let WT={userXml:null, repx:null};
+function wtB64ToBytes(b){ const t=atob(b); const u=new Uint8Array(t.length); for(let i=0;i<t.length;i++) u[i]=t.charCodeAt(i); return u; }
+function wtBytesToB64(u){ let t=''; for(let i=0;i<u.length;i+=0x8000) t+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000)); return btoa(t); }
+function wtDecodeText(v){ // Columba legt mehrzeilige Texte als Base64 (UTF-8) ab; sonst Text unverändert
+  v=String(v||'').trim(); if(!v) return null;
+  if(v.length%4===0 && /^[A-Za-z0-9+\/]+={0,2}$/.test(v)){
+    try{ return new TextDecoder('utf-8',{fatal:true}).decode(wtB64ToBytes(v)).replace(/\r\n/g,'\n').replace(/\s+$/,'')||null; }catch(e){}
+  }
+  return v;
+}
+async function wtPipe(data, stream){ return new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(stream)).arrayBuffer()); }
+async function wtUnzipAll(u){
+  const v=new DataView(u.buffer,u.byteOffset,u.byteLength); let e=-1;
+  for(let i=u.length-22;i>=Math.max(0,u.length-65557);i--){ if(v.getUint32(i,true)===0x06054b50){ e=i; break; } }
+  if(e<0) throw new Error('Keine gültige ZIP-/WinTra-Datei');
+  const n=v.getUint16(e+10,true); let off=v.getUint32(e+16,true); const out=[]; const td=new TextDecoder();
+  for(let k=0;k<n;k++){
+    if(v.getUint32(off,true)!==0x02014b50) break;
+    const method=v.getUint16(off+10,true), csize=v.getUint32(off+20,true);
+    const nl=v.getUint16(off+28,true), el=v.getUint16(off+30,true), cl=v.getUint16(off+32,true), lho=v.getUint32(off+42,true);
+    const name=td.decode(u.subarray(off+46,off+46+nl)); off+=46+nl+el+cl;
+    if(name.endsWith('/')) continue;
+    const ds=lho+30+v.getUint16(lho+26,true)+v.getUint16(lho+28,true); const raw=u.subarray(ds,ds+csize);
+    out.push({name, data: method===0?raw:await wtPipe(raw,new DecompressionStream('deflate-raw'))});
+  }
+  return out;
+}
+function wtDataFromFiles(files){
+  const dec=new TextDecoder('utf-8'); const P=[]; const states=new Map(); let user=null, rootId=null;
+  WT={userXml:null, repx:null};
+  const parse=t=>new DOMParser().parseFromString(t.replace(/^﻿/,''),'application/xml');
+  files.forEach(f=>{
+    const base=f.name.split('/').pop();
+    if(/^report\.repx$/i.test(base)){ WT.repx=f.data; return; }
+    if(!/\.xml$/i.test(base)) return;
+    const txt=dec.decode(f.data); const d=parse(txt);
+    if(d.getElementsByTagName('parsererror').length) return;
+    const tx=(k)=>{ const e=d.getElementsByTagName(k)[0]; const t=e?e.textContent.trim():''; return t||null; };
+    if(/^userinfo\.xml$/i.test(base)){ WT.userXml=txt; user={name:tx('USERINFO_NAME'), first:tx('USERINFO_FIRSTNAME'), city:tx('USERINFO_CITY')}; return; }
+    if(/^master_v\d+\.xml$/i.test(base)){ rootId=(tx('RELATION_PIGEON_ID')||'').toLowerCase()||null; return; }
+    const g=k=>tx('PIGEON_'+k);
+    const id=g('PIGEONID'); if(!id) return;
+    const num=k=>{ const x=g(k); const n=x==null?NaN:Number(String(x).replace(',','.')); return isNaN(n)?null:n; };
+    const dt=k=>{ const x=g(k); return x&&/^\d{4}-\d{2}-\d{2}/.test(x)?x.slice(0,10):null; };
+    const bool=k=>/^true$/i.test(g(k)||'');
+    const lc=x=>x?x.toLowerCase():null;
+    const st=lc(g('PIGEONSTATEID')); if(st&&!states.has(st)) states.set(st,{id:st,name:g('STATE')||''});
+    const nr=num('NUMBER');
+    P.push({id:id.toLowerCase(), rn:g('RINGNUMBER'), rno:g('RINGNUMBEROLD'), cc:g('COUNTRYCODE'), an:g('ASSOCIATIONNO'), y:num('DATE')||null, n:nr>0?nr:null, g:num('GENDER'),
+      nm:g('NAME'), col:g('COLOR'), race:g('RACE'), str:g('STRAIN'), ins:bool('INSTOCK'), inf:wtDecodeText(g('INFO')), infi:wtDecodeText(g('INFOINTERNAL')),
+      bd:dt('BIRTHDAY'), died:dt('DIED'), bought:dt('BOUGHT'), sold:dt('SOLD'), u1:null, u2:null, u3:null, ibc:num('INBREEDCOEFFICIENT'),
+      fid:lc(g('FATHERID')), mid:lc(g('MOTHERID')), rnf:null, rnm:null, st:st, del_:bool('DELETED')});
+  });
+  if(!P.length) throw new Error('In der Datei wurden keine Tauben gefunden (erwartet: Columba-Transferdatei .WinTra).');
+  const byId=new Map(P.map(p=>[p.id,p]));
+  P.forEach(p=>{ const f=byId.get(p.fid), m=byId.get(p.mid); p.rnf=f?f.rn:null; p.rnm=m?m.rn:null; });
+  const root=rootId?byId.get(rootId):null;
+  return { meta:{app:'Columba-Transferdatei (WinTra)', wintra:true, user:user, root:root?root.rn:null}, pigeons:P, states:[...states.values()], trips:[], pigeontrips:[] };
+}
+function wtTplGet(){ try{ const t=JSON.parse(localStorage.getItem(WT_KEY)||'null'); return t&&t.userXml?t:null; }catch(e){ return null; } }
+function wtTplSave(){
+  if(!WT.userXml){ alert('Diese Datei enthält keine Absenderdaten (userInfo.xml).'); return; }
+  try{ localStorage.setItem(WT_KEY, JSON.stringify({userXml:WT.userXml, repx:WT.repx?wtBytesToB64(WT.repx):null, name:(CI.data&&CI.data.meta.user&&CI.data.meta.user.name)||''})); }
+  catch(e){ alert('Die Vorlage konnte nicht gespeichert werden: '+e.message); return; }
+  render();
+}
+function wtTplClear(){ try{ localStorage.removeItem(WT_KEY); }catch(e){} render(); }
+function wtX(v){ return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function wtUtf8B64(t){ return wtBytesToB64(new TextEncoder().encode(String(t).replace(/\r\n/g,'\n').replace(/\n/g,'\r\n'))); }
+function wtColumbaRing(p){ // PIGMAN "DE-06559-24-4483" → Columba "06559-24-4483 W"; "BE-…" → "B-…"
+  let r=String(p.ringnumber||'').trim(); if(!r) return '';
+  r=r.replace(/^DE-/i,'').replace(/^BE-/i,'B-');
+  const g=ciNorm('gender',p.gender);
+  return r+(g==='1'?' V':g==='2'?' W':'');
+}
+function wtPigeonXml(p){
+  const segs=String(p.ringnumber||'').split('-');
+  let cc=String(p.countrycode||'').trim().toUpperCase(); if(!cc && /^[A-Z]{1,3}$/i.test(segs[0]||'')) cc=segs[0].toUpperCase();
+  const isDE=cc==='DE'||cc==='0'||(!cc&&segs.length===3);
+  let an=String(p.associationno||'').trim(); if(!an && isDE) an=segs.length===4?segs[1]:segs.length===3?segs[0]:'';
+  if(/^0\d{4}$/.test(an)) an=an.slice(1);
+  const ccOut=isDE?'0':cc==='BE'?'B':cc;
+  const last=parseInt(segs[segs.length-1],10);
+  const nr=p.number!=null&&p.number!==''?p.number:(p.endnumber!=null&&p.endnumber!==''?p.endnumber:(isNaN(last)?0:last));
+  const g=ciNorm('gender',p.gender);
+  const st=p.pigeonstateid?(S.pigeonStates||[]).find(x=>x.pigeonstateid===p.pigeonstateid):null;
+  const dt=x=>{ const t=String(x||'').slice(0,10); return /^\d{4}-\d{2}-\d{2}$/.test(t)?t+'T00:00:00':null; };
+  const el=(k,x)=>(x===null||x===undefined)?'  <PIGEON_'+k+' />':'  <PIGEON_'+k+'>'+wtX(x)+'</PIGEON_'+k+'>';
+  const ibc=Number(p.inbreedcoefficient);
+  const L=['<?xml version="1.0" encoding="utf-8"?>','<ROOT>',
+    el('ASSOCIATIONNO',an), el('BIRTHDAY',dt(p.birthday)), el('BORROWED',dt(p.borrowed)), el('BOUGHT',dt(p.bought)),
+    el('COLOR',p.color||''), el('COUNTRYCODE',ccOut||''), el('DATE',p.date_year||''), el('DIED',dt(p.died)),
+    el('GENDER',g||'0'), el('INFO',p.info?wtUtf8B64(p.info):''), el('INFOINTERNAL',''),
+    el('INSTOCK',(p.instock===true||p.instock==='true')?'true':'false'), el('ISEGG','false'),
+    el('NAME',p.name||''), el('NUMBER',nr), el('ONTRIP','false'), el('PIGEONID',p.pigeonid),
+    el('RACE',p.race||''), el('RINGNUMBER',wtColumbaRing(p)), el('RINGNUMBEROLD',p.ringnumberold||null), el('SOLD',dt(p.sold)),
+    el('STRAIN',p.strain||null), el('FATHERID',p.fatherid||null), el('MOTHERID',p.motherid||null),
+    el('PIGEONSTATEID',st?st.pigeonstateid:null), el('OWNERCONTACTID',null), el('BREEDERCONTACTID',null),
+    el('STATE',st?(st.name||''):''), el('PEDIGREECOLOR',p.pedigreecolor!=null&&p.pedigreecolor!==''?p.pedigreecolor:16777215),
+    el('INBREEDCOEFFICIENT',ibc>0?ibc:null), el('ANCESTORLOSSCOEFFICIENT',null), el('DELETED','false'),'</ROOT>'];
+  return '﻿'+L.join('\r\n');
+}
+const WT_USERINFO_BLANK=['<?xml version="1.0" encoding="utf-8"?>','<ROOT>','  <USERINFO_ADDITION />','  <USERINFO_CITY />','  <USERINFO_EMAIL />','  <USERINFO_FAX />','  <USERINFO_FIRSTNAME />','  <USERINFO_MOBILE />','  <USERINFO_NAME />','  <USERINFO_PHONE />','  <USERINFO_STREET />','  <USERINFO_PHONE />','  <USERINFO_ZIPCODE />','  <USERINFO_SELFCOUNTRY>0</USERINFO_SELFCOUNTRY>','  <USERINFO_SELFVEREIN>0</USERINFO_SELFVEREIN>','  <USERINFO_TRIDATAASSOCIATION>0</USERINFO_TRIDATAASSOCIATION>','  <USERINFO_TRIPDATABREEDERNR>0</USERINFO_TRIPDATABREEDERNR>','  <USERINFO_TRIPDATARVNR>0</USERINFO_TRIPDATARVNR>','  <USERINFO_TRIPDATAVEREIN>0</USERINFO_TRIPDATAVEREIN>','  <BLOODLINE_BREEDERDATAFORMAT>Arial, 8pt;Navy</BLOODLINE_BREEDERDATAFORMAT>','  <BLOODLINE_COLORFORMAT>Arial, 10pt;Blue</BLOODLINE_COLORFORMAT>','  <BLOODLINE_INFOFORMAT>Arial, 9pt;Maroon</BLOODLINE_INFOFORMAT>','  <BLOODLINE_NAMEFORMAT>Arial, 10pt, style=Bold, Italic;Teal</BLOODLINE_NAMEFORMAT>','  <BLOODLINE_OWNER1FORMAT>Times New Roman, 26pt, style=Bold;Black</BLOODLINE_OWNER1FORMAT>','  <BLOODLINE_OWNER2FORMAT>Arial, 16pt, style=Italic;Black</BLOODLINE_OWNER2FORMAT>','  <BLOODLINE_OWNER3FORMAT>Arial, 12pt, style=Bold;Black</BLOODLINE_OWNER3FORMAT>','  <BLOODLINE_RACEFORMAT>Arial, 10pt, style=Bold;Magenta</BLOODLINE_RACEFORMAT>','  <BLOODLINE_RINGNUMBERFORMAT>Arial, 12pt, style=Bold;Black</BLOODLINE_RINGNUMBERFORMAT>','</ROOT>'].join('\r\n');
+// Baut die Dateien einer Transferdatei: Taube + alle Vorfahren aus S.pigeons
+function wtBuildFiles(rootId){
+  const byId=new Map(S.pigeons.filter(p=>!p._virtual).map(p=>[p.pigeonid,p]));
+  const root=byId.get(rootId); if(!root) throw new Error('Taube nicht gefunden.');
+  const used=new Map(); const MAXGEN=14;
+  const par=(p,k,path,depth)=>{ const id=p[k]; const x=id?byId.get(id):null; return (x && depth<MAXGEN && !path.has(x.pigeonid))?x:null; };
+  const node=(p,tag,ind,path,depth)=>{
+    const f=par(p,'fatherid',path,depth), m=par(p,'motherid',path,depth);
+    if(!used.has(p.pigeonid)) used.set(p.pigeonid,{p:p,f:f?f.pigeonid:null,m:m?m.pigeonid:null});
+    const i2=ind+'  '; const np=new Set(path); np.add(p.pigeonid);
+    const L=[ind+'<'+tag+'>', i2+'<RELATION_PIGEON_ID>'+p.pigeonid+'</RELATION_PIGEON_ID>', i2+'<RELATION_PIGEON_RINGNUMBER>'+wtX(wtColumbaRing(p))+'</RELATION_PIGEON_RINGNUMBER>',
+      f?i2+'<RELATION_FATHER_NODE_ID>'+f.pigeonid+'</RELATION_FATHER_NODE_ID>':i2+'<RELATION_FATHER_NODE_ID />',
+      m?i2+'<RELATION_MOTHER_NODE_ID>'+m.pigeonid+'</RELATION_MOTHER_NODE_ID>':i2+'<RELATION_MOTHER_NODE_ID />',
+      f?node(f,'RELATION_FATHER',i2,np,depth+1):i2+'<RELATION_FATHER />',
+      m?node(m,'RELATION_MOTHER',i2,np,depth+1):i2+'<RELATION_MOTHER />',
+      ind+'</'+tag+'>'];
+    return L.join('\r\n');
+  };
+  const master='﻿'+['<?xml version="1.0" encoding="utf-8"?>','<ROOT>',node(root,'RELATIONS','  ',new Set(),0),'</ROOT>'].join('\r\n');
+  const enc=new TextEncoder(); const files=[];
+  used.forEach(u=>{ const p=Object.assign({},u.p,{_wtF:u.f,_wtM:u.m}); files.push({name:u.p.pigeonid+'.xml', data:enc.encode(wtPigeonXml(p))}); });
+  files.push({name:'master_v8.xml', data:enc.encode(master)});
+  const tpl=wtTplGet();
+  files.push({name:'userInfo.xml', data:enc.encode(tpl?('﻿'+tpl.userXml.replace(/^﻿/,'')):('﻿'+WT_USERINFO_BLANK))});
+  return {files, root, count:used.size, tpl};
+}
+async function wtZip(files){
+  const T=wtZip._t||(wtZip._t=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t; })());
+  const crc=u=>{ let c=0xFFFFFFFF; for(let i=0;i<u.length;i++) c=T[(c^u[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; };
+  const canDeflate=typeof CompressionStream!=='undefined';
+  const d=new Date(); const dosT=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1), dosD=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+  const enc=new TextEncoder(); const parts=[]; const cen=[]; let off=0;
+  for(const f of files){
+    const name=enc.encode(f.name); let method=0, body=f.data;
+    if(canDeflate){ try{ const z=await wtPipe(f.data,new CompressionStream('deflate-raw')); if(z.length<f.data.length){ body=z; method=8; } }catch(e){} }
+    const c=crc(f.data);
+    const lh=new DataView(new ArrayBuffer(30)); lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true); lh.setUint16(6,0,true); lh.setUint16(8,method,true);
+    lh.setUint16(10,dosT,true); lh.setUint16(12,dosD,true); lh.setUint32(14,c,true); lh.setUint32(18,body.length,true); lh.setUint32(22,f.data.length,true); lh.setUint16(26,name.length,true); lh.setUint16(28,0,true);
+    parts.push(new Uint8Array(lh.buffer),name,body);
+    const ch=new DataView(new ArrayBuffer(46)); ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true); ch.setUint16(8,0,true); ch.setUint16(10,method,true);
+    ch.setUint16(12,dosT,true); ch.setUint16(14,dosD,true); ch.setUint32(16,c,true); ch.setUint32(20,body.length,true); ch.setUint32(24,f.data.length,true); ch.setUint16(28,name.length,true); ch.setUint32(42,off,true);
+    cen.push(new Uint8Array(ch.buffer),name);
+    off+=30+name.length+body.length;
+  }
+  const cenSize=cen.reduce((a,x)=>a+x.length,0);
+  const eo=new DataView(new ArrayBuffer(22)); eo.setUint32(0,0x06054b50,true); eo.setUint16(8,files.length,true); eo.setUint16(10,files.length,true); eo.setUint32(12,cenSize,true); eo.setUint32(16,off,true);
+  return new Blob([...parts,...cen,new Uint8Array(eo.buffer)],{type:'application/octet-stream'});
+}
+async function wtExport(pid, asZip){
+  try{
+    const B=wtBuildFiles(pid);
+    let repx=null;
+    if(asZip){ /* ZIP-Variante: nur die XML-Dateien (Tauben, master_v8.xml, userInfo.xml) */ }
+    else if(B.tpl&&B.tpl.repx) repx=wtB64ToBytes(B.tpl.repx);
+    else { try{ repx=await wtPipe(wtB64ToBytes(WT_REPX_B64),new DecompressionStream('deflate-raw')); }catch(e){} }
+    if(repx) B.files.push({name:'report.repx', data:repx});
+    const blob=await wtZip(B.files);
+    const fn=(String(B.root.ringnumber||'Transfer').replace(/[^A-Za-z0-9_.-]+/g,'-'))+(asZip?'.WinTra.zip':'.WinTra');
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=fn;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(()=>URL.revokeObjectURL(url),4000);
+  }catch(e){ alert('Der WinTra-Export ist fehlgeschlagen: '+e.message); }
 }
 
 function renderBackup(){
