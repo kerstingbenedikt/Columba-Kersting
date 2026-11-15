@@ -42,6 +42,7 @@ AUFBAU EINES STAMMBAUMS (gilt für alle Layouts):
 - Variante A: ganz links steht nur der Proband, daneben die beiden Eltern-Kästchen in der nächsten Spalte.
 - Variante B ("zusammengefasste erste Spalte"): in der ersten Spalte stehen untereinander Vater (oben), Proband (Mitte, oft ein kleineres Kästchen unter/über der Zeile "Stammbaum von Taube:"), Mutter (unten). Gib sie dann alle drei in der Reihenfolge oben → unten in EINER Spalte aus.
 - Unbekannte, leere oder nicht lesbare Kästchen (nur Rahmen, "unbekannt", "?", leeres Feld) MÜSSEN als Platzhalter mit "empty": true ausgegeben werden, damit die Zählung stimmt. Eine Spalte der Generation g hat (außer Variante B, erste Spalte) immer GENAU 2^g Einträge. Lass nie einen Eintrag weg und erfinde keinen.
+- Erfinde NIE Ringnummern und gib keine Spalte aus, die im Bild nicht existiert (hat der Stammbaum nur 4 Spalten, gib genau 4 aus). Dieselbe Ringnummer darf nur dann mehrfach vorkommen, wenn sie wirklich so im Bild steht.
 - Dieselbe Taube kann an mehreren Stellen vorkommen (Ahnenverlust, gleiche Ringnummer) - gib sie jedes Mal wieder mit aus, nicht zusammenfassen.
 - Ganz rechts steht manchmal eine Spalte mit sehr kleinen Kästchen, die nur zwei Ringnummern (Vater oben, Mutter unten) ohne weitere Daten enthalten. Gib so ein Kästchen als EIN Element mit "pair_rings": ["RING_OBEN", "RING_UNTEN"] aus (ringnumber dann null).
 - NICHT in die Spalten aufnehmen: Kopfzeilen, Logos, Adresse/Kontakt, Züchtererfolge-Listen, Fußzeilen, DNA-/QR-Zertifikat-Kästchen und Notizen, die nur eine Beziehung zu einer anderen Taube beschreiben ("is half sister to ...").
@@ -52,9 +53,12 @@ PROBAND: Die Box, auf die die Zeile "Stammbaum von Taube: ...", "Pedigree of pig
 FELDER je Kästchen (empty-Platzhalter: nur "empty": true, alles andere null):
 - ringnumber: vollständige Ringnummer (z.B. DE-04987-25-001, NL-25-1234567, BE-15-1029362), Zeichen für Zeichen, ziffernweise nachzählen, nichts ergänzen oder doppeln; Leerzeichen/Bindestriche wie gedruckt.
 - name: echter Name/Spitzname. Reihenfolge in einer Box meist: Ringnummer → Name/Titel → Züchter → Erfolge. Das Farbwort (blau, Grizzle, gehämmert-scheck ...) gehört in "color", nie in "name".
-- date_year: Jahrgang aus der Ringnummer/dem Text als Zahl (z.B. 2015), sonst null.
+- date_year: Jahrgang als vierstellige Zahl (z.B. 2015), sonst null. Er steht in der Ringnummer als zweistelliger Block direkt VOR der laufenden Nummer (DE-01971-26-57 → 2026, NL-25-1234567 → 2025). Die Vereinsnummer (hier 01971) ist NIE der Jahrgang.
 - gender: "M" (♂, Täuber, V, Vogel) oder "F" (♀, Täubin, W, Weibchen) für JEDES Kästchen einzeln aus dem Symbol/Buchstaben hinter der Ringnummer oder der farbigen Markierung (blau = M, rosa/violett = F). Nur wenn nichts erkennbar ist: null. Nicht raten.
-- color, race, strain, breeder, owner, countrycode, associationno: wie beschriftet, sonst null.
+- color: Gefiederfarbe. Sie steht meist OHNE Beschriftung als einzelnes Wort oder Abkürzung im Kästchen (blau, bl., gehämmert, geh., fahl, rot, dunkel, schimmel, scheck, weißschlag, blau-scheck; niederländisch blauw, kras, geschelpt, vaal, rood, bont, witpen; englisch blue, check, red, grizzle, pied). Immer in "color" eintragen, so wie gedruckt; nicht in "name" oder "info" wiederholen. Nur wenn keine Farbe im Kästchen steht: null.
+- breeder (Züchter): Der Züchtername steht meist unbeschriftet unter dem Namen/Titel (z.B. "Homberg", "Dörner Heinz", "Karl Hans van Loon") und gehört IMMER in "breeder", nicht in "strain".
+- strain (Linie/Stamm) nur, wenn ausdrücklich so beschriftet (Stamm, Linie, Strain), sonst null.
+- race, owner, countrycode, associationno: wie beschriftet, sonst null.
 - info: alle weiteren Texte des Kästchens (Erfolge, Preise, Beschreibungen) als ein Freitext, Zeilenumbrüche als ' / ', sonst null.
 
 Antworte NUR mit dem JSON-Objekt (kein Markdown):
@@ -83,10 +87,16 @@ function genderOrNull(v: unknown): "M" | "F" | null {
   return null;
 }
 
+// Abschließendes V/W hinter der Ringnummer = Vogel/Weibchen, gehört nicht zur Ringnummer
+function ringSexLetter(v: unknown): "M" | "F" | null {
+  const m = String(v ?? "").trim().match(/\d\s*[-\/]?\s*([VWvw])\.?$/);
+  return m ? (m[1].toUpperCase() === "V" ? "M" : "F") : null;
+}
+
 function normalizeRing(v: unknown): string | null {
   const raw = stringOrNull(v);
   if (!raw) return null;
-  const ring = raw.toUpperCase().replace(/[–—−]/g, "-").replace(/\s+/g, "");
+  const ring = raw.toUpperCase().replace(/[–—−]/g, "-").replace(/\s+/g, "").replace(/(\d)[-\/]?[VW]\.?$/, "$1");
   return ring || null;
 }
 
@@ -120,7 +130,7 @@ function normalizeBox(raw: unknown): Box | null {
     ringnumber: normalizeRing(b.ringnumber),
     name: stringOrNull(b.name),
     date_year: intOrNull(b.date_year),
-    gender: genderOrNull(b.gender),
+    gender: ringSexLetter(b.ringnumber) ?? genderOrNull(b.gender),
     color: stringOrNull(b.color),
     race: stringOrNull(b.race),
     strain: stringOrNull(b.strain),
@@ -168,6 +178,49 @@ function levenshtein(a: string, b: string): number {
     }
   }
   return dp[m][n];
+}
+
+// ---------------------------------------------------------------------------------
+// PDF-Textebene: Ringnummern aus dem Text haben Vorrang vor der KI-Lesung (kein OCR-Fehler)
+// ---------------------------------------------------------------------------------
+
+const RING_TOKEN = /[A-Z]{1,3} ?-? ?\d{1,5} ?- ?\d{2} ?- ?\d{1,7}|[A-Z]{1,3} ?-? ?\d{2} ?- ?\d{5,8}|\b\d{5,8}-\d{2}\b/g;
+
+function ringsFromText(text: string): string[] {
+  const t = text.toUpperCase().replace(/[–—−]/g, "-");
+  const out = new Set<string>();
+  for (const m of t.matchAll(RING_TOKEN)) out.add(m[0].replace(/\s+/g, ""));
+  return [...out];
+}
+
+function snapRing(ring: string | null, known: string[]): { ring: string | null; changed: boolean } {
+  if (!ring || !known.length) return { ring, changed: false };
+  if (known.includes(ring)) return { ring, changed: false };
+  let best: string | null = null, bestD = 99, tie = false;
+  for (const k of known) {
+    const d = levenshtein(ring, k);
+    if (d < bestD) { bestD = d; best = k; tie = false; } else if (d === bestD) tie = true;
+  }
+  if (best && bestD <= 2 && !tie) return { ring: best, changed: true };
+  return { ring, changed: false };
+}
+
+function snapRings(columns: Box[][], pdfText: string): string[] {
+  const known = ringsFromText(pdfText);
+  const notes: string[] = [];
+  if (!known.length) return notes;
+  for (const c of columns) for (const b of c) {
+    const r = snapRing(b.ringnumber, known);
+    if (r.changed) { notes.push(`Ringnummer ${b.ringnumber} → ${r.ring} (laut PDF-Text korrigiert).`); b.ringnumber = r.ring; }
+    if (b.pair_rings) {
+      b.pair_rings = b.pair_rings.map((p) => {
+        const q = snapRing(p, known);
+        if (q.changed) notes.push(`Ringnummer ${p} → ${q.ring} (laut PDF-Text korrigiert).`);
+        return q.ring;
+      }) as [string | null, string | null];
+    }
+  }
+  return notes;
 }
 
 // ---------------------------------------------------------------------------------
@@ -284,8 +337,16 @@ function buildTree(columnsRaw: Box[][], labelRing: string | null = null): BuildR
   const slots: Record<string, number> = {};
   let structureOk = true;
 
-  // leere Spalten entfernen
-  const columns = columnsRaw.filter((c) => c.length > 0);
+  // leere Spalten entfernen; Spalten mit lauter gleichen Ringnummern sind von der KI erfunden
+  const columns = columnsRaw.filter((c, ci) => {
+    if (c.length === 0) return false;
+    const rings = c.flatMap((b) => b.pair_rings ? b.pair_rings : [b.ringnumber]).filter((r): r is string => !!r);
+    if (rings.length >= 4 && new Set(rings).size / rings.length <= 0.25) {
+      warnings.push(`Spalte ${ci + 1} enthielt fast nur dieselbe Ringnummer (${rings[0]}) - vermutlich von der KI erfunden und ignoriert.`);
+      return false;
+    }
+    return true;
+  });
   if (!columns.length) return { tree, warnings: ["Es wurden keine Kästchen erkannt."], slots, structureOk: false };
 
   const pos = findProband(columns, labelRing);
@@ -466,24 +527,35 @@ const RESPONSE_SCHEMA = {
   required: ["proband_label_ring", "columns"],
 };
 
-async function callGemini(model: string, mediaType: string, imageData: string, maxOutputTokens = 32768): Promise<Response> {
+function promptWith(pdfText: string): string {
+  if (!pdfText) return EXTRACTION_PROMPT;
+  return EXTRACTION_PROMPT + `
+
+ZUSATZ - TEXT AUS DER PDF-TEXTEBENE (fehlerfrei, aber nur grob nach Spalten gruppiert - die Gruppierung kann ungenau sein, verlasse dich für Struktur und Reihenfolge auf das Bild):
+"""
+${pdfText}
+"""
+Übernimm Ringnummern, Namen und Zahlen Zeichen für Zeichen aus diesem Text, wenn sie dort vorkommen. Die Struktur (Spalte/Reihenfolge, leere Kästchen) bestimmst du weiterhin anhand des Bildes.`;
+}
+
+async function callGemini(model: string, mediaType: string, imageData: string, pdfText: string, maxOutputTokens = 32768): Promise<Response> {
   return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [{ parts: [{ inline_data: { mime_type: mediaType, data: imageData } }, { text: EXTRACTION_PROMPT }] }],
+      contents: [{ parts: [{ inline_data: { mime_type: mediaType, data: imageData } }, { text: promptWith(pdfText) }] }],
       generationConfig: { temperature: 0.1, maxOutputTokens, responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA },
     }),
   });
 }
 
-async function runModel(model: string, mediaType: string, imageData: string): Promise<{ parsed: JsonObject; ok: boolean; err?: string }> {
+async function runModel(model: string, mediaType: string, imageData: string, pdfText: string): Promise<{ parsed: JsonObject; ok: boolean; err?: string }> {
   let lastErr = "";
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, 3000 * attempt));
     let resp: Response;
     try {
-      resp = await callGemini(model, mediaType, imageData);
+      resp = await callGemini(model, mediaType, imageData, pdfText);
     } catch (e) {
       lastErr = `${model}: ${String(e)}`;
       continue;
@@ -495,7 +567,7 @@ async function runModel(model: string, mediaType: string, imageData: string): Pr
     }
     let data = await resp.json();
     if (data?.candidates?.[0]?.finishReason === "MAX_TOKENS") {
-      const retry = await callGemini(model, mediaType, imageData, 60000);
+      const retry = await callGemini(model, mediaType, imageData, pdfText, 60000);
       if (retry.ok) {
         const retryData = await retry.json();
         if (retryData?.candidates?.[0]?.finishReason !== "MAX_TOKENS") data = retryData;
@@ -516,7 +588,7 @@ function parseColumns(parsed: JsonObject): Box[][] {
 }
 
 // ---------------------------------------------------------------------------------
-// HTTP-Handler (wird beim Testen abgeschnitten: alles oberhalb von "// ==SERVER==" ist reine Logik)
+// HTTP-Handler (alles oberhalb davon ist reine Logik)
 // ---------------------------------------------------------------------------------
 // ==SERVER==
 serve(async (req: Request): Promise<Response> => {
@@ -526,6 +598,7 @@ serve(async (req: Request): Promise<Response> => {
     const body = await req.json();
     const imageData = stringOrNull(body?.imageData);
     const mediaType = stringOrNull(body?.mediaType) ?? "image/jpeg";
+    const pdfText = (stringOrNull(body?.pdfText) ?? "").slice(0, 12000);
     if (!imageData) throw new Error("Kein Bild übermittelt");
     if (!GEMINI_KEY) throw new Error("GEMINI_API_KEY nicht konfiguriert");
 
@@ -535,11 +608,13 @@ serve(async (req: Request): Promise<Response> => {
 
     for (let i = 0; i < MODELS.length; i++) {
       const model = MODELS[i];
-      const result = await runModel(model, mediaType, imageData);
+      const result = await runModel(model, mediaType, imageData, pdfText);
       if (!result.ok) { lastErr = result.err ?? lastErr; continue; }
       const columns = parseColumns(result.parsed);
+      const snapNotes = pdfText ? snapRings(columns, pdfText) : [];
       const labelRing = normalizeRing(result.parsed.proband_label_ring);
       const build = buildTree(columns, labelRing);
+      build.warnings.push(...snapNotes);
       const score = structureScore(columns, build);
       if (!best || score > best.score) best = { build, columns, score, model, labelRing };
       // Gut genug: Struktur stimmt und Proband gefunden → kein teureres Modell nötig
@@ -555,6 +630,7 @@ serve(async (req: Request): Promise<Response> => {
     if (allWarnings.length) responseData._warnings = allWarnings;
     responseData._slots = best.build.slots; // Schlüssel → Nr. (0 = Proband, 1 = Vater, 2 = Mutter, 3–6 = Großeltern …)
     responseData._model = best.model;
+    responseData._pdfText = !!pdfText;
     // Rohdaten zur Fehlersuche: tatsächlich gelieferte Spalten (Anzahl je Spalte + Ringnummern)
     responseData._debugColumns = best.columns.map((c) => c.map((b) => (b.empty ? "(leer)" : b.pair_rings ? b.pair_rings.join(" | ") : b.ringnumber ?? b.name ?? "?")));
 
