@@ -525,6 +525,8 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .zs-dot{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#fff;border:2px solid var(--bg);z-index:2}
 .zs-det{margin:14px 0 10px 130px}.zs-det summary{cursor:pointer;font-size:12px;color:var(--text3)}.zs-det .zs-row{margin-left:-130px}
 .zs-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text2);margin-bottom:6px}.zs-lg{display:inline-flex;align-items:center;gap:5px}.zs-lg i{width:12px;height:12px;border-radius:3px;display:inline-block}.zs-lg i.zs-dotk{background:#fff;border-radius:50%}
+.ml-stb{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;background:var(--bg3);border:1px solid var(--border);color:var(--text2)}
+.ml-stb.st-abgeschlossen{color:var(--green);border-color:var(--green)}.ml-stb.st-Jungtiere{color:#4a9ede;border-color:#4a9ede}.ml-stb.st-Eier{color:#e08a3c;border-color:#e08a3c}.ml-stb.st-gepaart{color:#c9a227;border-color:#c9a227}
 .tm-fin{opacity:.6}
 .tm-mob{display:none}
 .tm-card{cursor:pointer}
@@ -10252,6 +10254,18 @@ function mlRows(){
   if(st.zucht && st.zucht!=='*') rows=rows.filter(r=>mlZuchtOf(r)===st.zucht);
   return rows.slice().sort((a,b)=>mlNat(mlZuchtOf(a),mlZuchtOf(b)) || String(b.created_at||'').localeCompare(String(a.created_at||'')));
 }
+// Suche in der Paarungsliste: Ring (komplett oder Endnummer), Name, Zelle, Abteil – über alle Zuchten der Liste
+function mlSearchRows(q){
+  const ql=String(q).trim().toLowerCase(), L=mlCurListe(); if(!ql) return mlRows();
+  const norm=x=>String(x||'').toLowerCase().replace(/[\s.]/g,'');
+  const qn=norm(ql), hit=r=>[r.father_ring,r.mother_ring].some(g=>{ const n=norm(g); return n.includes(qn)||tmEnd(g)===ql; })
+    || [r.father_name,r.mother_name,r.zelle,r.abteil].some(x=>String(x||'').toLowerCase().includes(ql));
+  return (S.matings||[]).filter(r=>mlListOf(r)===L && hit(r)).sort((a,b)=>mlNat(mlZuchtOf(a),mlZuchtOf(b))||String(b.created_at||'').localeCompare(String(a.created_at||'')));
+}
+function mlSearch(v,el){
+  S.mlQ=v; const pos=el&&el.selectionStart; render();
+  setTimeout(()=>{ const i=document.getElementById('ml-q'); if(i){ i.focus(); try{ i.setSelectionRange(pos,pos); }catch(e){} } },0);
+}
 function renderMatingsList(){
   loadMatingsIfNeeded();
   if(S.matingsError) return `<div class="card"><div style="color:#e07070;font-size:13px">Paarungsliste konnte nicht geladen werden: ${escH(S.matingsError)}</div>
@@ -10262,7 +10276,7 @@ function renderMatingsList(){
       <div style="font-size:13px;color:var(--text2);margin-bottom:8px">Damit du Listen wie „Zucht 2027“ mit mehreren Zuchten (1. Zucht, 2. Zucht, Herbstzucht …), Status und Notizen nutzen kannst, einmal dieses SQL im Supabase-SQL-Editor ausführen. Bis dahin funktioniert die Liste wie bisher.</div>
       <pre class="ml-sql" id="ml-sql">${escH(ML_SQL)}</pre>
       <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('ml-sql').textContent).then(()=>alert('SQL kopiert.'))">📋 SQL kopieren</button></div>`;
-  const rows=L?mlRows():[], Z=L?mlZuchten(L):[];
+  const q=(S.mlQ||'').trim(), rows=L?(q?mlSearchRows(q):mlRows()):[], Z=L?mlZuchten(L):[];
   const cnt=z=>(S.matings||[]).filter(r=>mlListOf(r)===L && (z==null||mlZuchtOf(r)===z)).length;
   const bar = `<div class="card">
     <div class="ml-bar"><span class="pv-ctl-l" style="margin:0">Liste</span>
@@ -10278,8 +10292,10 @@ function renderMatingsList(){
     </div>
     ${L?`<div class="ml-chips"><button class="ml-chip ${st.zucht==='*'?'on':''}" onclick="mlPickZucht(-1)">Alle · ${cnt()}</button>${Z.map((z,i)=>`<button class="ml-chip ${st.zucht===z?'on':''}" onclick="mlPickZucht(${i})">${escH(z)} · ${cnt(z)}</button>`).join('')}${ext?`<button class="ml-chip" onclick="mlNewZucht()">＋ Zucht</button>`:''}
       ${ext&&st.zucht&&st.zucht!=='*'?`<button class="btn btn-outline btn-sm" onclick="mlRenameZucht()" title="Zucht umbenennen">✎</button><button class="btn btn-outline btn-sm" onclick="mlDeleteZucht()" title="Zucht löschen">🗑</button>`:''}</div>
+    <div style="margin:8px 0"><input type="search" id="ml-q" class="tm-in" style="max-width:420px;min-height:40px;padding:8px 12px;font-size:15px" placeholder="🔎 Taube suchen: Ringnummer, Endnummer oder Name" value="${escH(S.mlQ||'')}" oninput="mlSearch(this.value,this)" autocomplete="off"></div>
     <div style="font-size:12px;color:var(--text3)">Neue Paare aus Zuchtplan und Paarungscheck landen in <b>${escH(mlTarget().liste)} › ${escH(mlTarget().zucht)}</b> – das ist die Liste/Zucht, die du hier gerade gewählt hast.</div>`:''}
   </div>`;
+  if(L && q && !rows.length) return setup+bar+`<div class="card" style="color:var(--text3);font-size:13px">Keine Paarung mit „${escH(q)}“ in dieser Liste.</div>`;
   if(!L || !rows.length) return setup+bar+`<div class="card"><div style="color:var(--text3);font-size:13px">${L?'In dieser Auswahl sind noch keine Paarungen – im Zuchtplan „In Paarungsliste übernehmen“ oder im Paarungscheck „💾 Paarung speichern“ nutzen.':'Noch keine Paarungen gespeichert – im Paarungscheck auf „💾 Paarung speichern“ klicken oder eine JSON-Datei importieren.'}</div></div>`;
   const cColor = v => v==null?'var(--text3)':v>=60?'var(--green)':v>=35?'var(--orange)':'#e07070';
   const sc = v => v==null?'—':v;
@@ -10293,14 +10309,14 @@ function renderMatingsList(){
       <td style="text-align:center;color:${cColor(r.score_father)}">${sc(r.score_father)}</td>
       <td style="text-align:center;color:${cColor(r.score_mother)}">${sc(r.score_mother)}</td>
       <td style="text-align:center;font-weight:700;color:${cColor(r.score_combined)}">${sc(r.score_combined)}</td>
-      ${ext?`<td><select onchange="mlSetStatus('${r.id}',this.value)" style="padding:4px 6px;font-size:12.5px">${ML_STATUS.map(x=>`<option ${(r.status||'geplant')===x?'selected':''}>${x}</option>`).join('')}</select></td>
+      ${ext?`<td>${tmDerive(r)?`<span class="ml-stb st-${escH(tmDerive(r))}" title="Der Status folgt den Terminen (Schritt ④). Zum Ändern die Termine anpassen.">${escH(tmDerive(r))}</span><div style="font-size:11px;color:var(--text3);margin-top:2px;cursor:pointer" onclick="tmMask('${r.id}')">📅 ${(()=>{ const n=tmPlan(r).next; return n?escH(n.lbl)+' '+tmFmt(n.date):'Termine ›'; })()}</div>`:`<select onchange="mlSetStatus('${r.id}',this.value)" style="padding:4px 6px;font-size:12.5px">${ML_STATUS.map(x=>`<option ${(r.status||'geplant')===x?'selected':''}>${x}</option>`).join('')}</select>`}</td>
       <td class="ml-note" onclick="mlEditNote('${r.id}')" title="Notiz bearbeiten">${r.note?escH(r.note):'<span style="color:var(--text3)">＋ Notiz</span>'}</td>`:''}
       <td style="text-align:center">${r.created_at?new Date(r.created_at).toLocaleDateString('de'):''}</td>
       <td style="text-align:center"><button class="btn btn-outline btn-sm" onclick="deleteMating('${r.id}')">🗑</button></td>
     </tr>`;
   }).join('');
   return setup+bar+`<div class="card">
-    <div class="card-title" style="margin-bottom:2px">📋 ${escH(L)}${st.zucht&&st.zucht!=='*'?' › '+escH(st.zucht):''} <span style="color:var(--text3);font-weight:400">(${rows.length} Paare)</span></div>
+    <div class="card-title" style="margin-bottom:2px">📋 ${escH(L)}${q?' – Suche „'+escH(q)+'“':st.zucht&&st.zucht!=='*'?' › '+escH(st.zucht):''} <span style="color:var(--text3);font-weight:400">(${rows.length} Paare)</span></div>
     <div style="font-size:12px;color:var(--text3);margin:6px 0 10px">Vater/Mutter anklicken lädt die Paarung in den Paarungscheck. Score = Erfolgs-Score (Beständigkeit + Schnelligkeit aus Eigenleistung und Nachkommen).</div>
     <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr>${ext?'<th>Zucht</th>':''}<th>Vater</th><th>Mutter</th><th>Inzucht</th><th>Score V</th><th>Score M</th><th>Score Ø</th>${ext?'<th>Status</th><th>Notiz</th>':''}<th>Datum</th><th></th></tr></thead>
@@ -10352,6 +10368,16 @@ function tmPlan(r){
   return o;
 }
 // Reihenfolge: Paare mit Zellennummer zuerst (natürlich sortiert: 2 vor 10), danach die ohne
+// Status folgt den Terminen: Absetzen → abgeschlossen · Schlupf → Jungtiere · Eiablage → Eier · Anpaarung erreicht → gepaart
+function tmDerive(r){
+  if(!S.matingsTm) return null;
+  if(r.absetzen_ist) return 'abgeschlossen';
+  if(r.schlupf_ist) return 'Jungtiere';
+  if(r.eiablage_ist) return 'Eier';
+  if(r.anpaarung && r.anpaarung<=tmToday()) return 'gepaart';
+  return null;
+}
+const tmEff=r=>tmDerive(r)||r.status||'geplant';
 function tmRows(){
   const rows=mlRows(), z=r=>String(r.zelle||'').trim(), ab=r=>String(r.abteil||'').trim();
   const cmp=(f,a,b)=>{ const x=f(a), y=f(b); if(x&&y) return mlNat(x,y); return x?-1:y?1:0; };   // gefüllt vor leer
@@ -10378,11 +10404,7 @@ function tmSearch(q){
 async function tmPatch(id,f){
   const r=(S.matings||[]).find(x=>String(x.id)===String(id)); if(!r) return;
   const up=Object.assign({},f);
-  // Status automatisch nachziehen (nur vorwärts)
-  const rank={geplant:0,gepaart:1,Eier:2,Jungtiere:3,abgeschlossen:4}, cur=rank[r.status||'geplant']||0;
-  const m=Object.assign({},r,f); let want=null;
-  if(m.absetzen_ist) want='abgeschlossen'; else if(m.schlupf_ist) want='Jungtiere'; else if(m.eiablage_ist) want='Eier'; else if(m.anpaarung && m.anpaarung<=tmToday()) want='gepaart';
-  if(want && (rank[want]||0)>cur) up.status=want;
+  { const d=tmDerive(Object.assign({},r,f)); if(d && d!==r.status) up.status=d; }   // Status folgt den Terminen
   try{ await apiPatchBy('matings','id=eq.'+id,up); Object.assign(r,up); render(); if(TM.id) tmMask(TM.id,true); }
   catch(e){ alert('Speichern fehlgeschlagen: '+e.message); }
 }
@@ -10521,7 +10543,7 @@ function tmMask(id,keep){
       ${field('schlupf','🐣','Schlupf (tatsächlich)','schlupf_ist','plant '+c.brut+' Tage nach Eiablage')}
       ${field('beringung','💍','Beringen der Jungtauben','beringung_ist','plant '+c.ring+' Tage nach Schlupf')}
       ${field('absetzen','✂️','Absetzen der Jungtauben','absetzen_ist','plant '+c.absetz+' Tage nach Schlupf')}
-      <div style="font-size:12px;color:var(--text3);margin:4px 2px 0">Status: <b>${escH(r.status||'geplant')}</b> – wird mit den Terminen automatisch weitergesetzt. Alle Folgetermine rechnen ab dem tatsächlichen Datum neu.</div></div>
+      <div style="font-size:12px;color:var(--text3);margin:4px 2px 0">Status: <b>${escH(tmEff(r))}</b> – wird mit den Terminen automatisch weitergesetzt. Alle Folgetermine rechnen ab dem tatsächlichen Datum neu.</div></div>
     <div class="tm-foot"><button class="btn btn-outline tm-b" ${i<=0?'disabled':''} onclick="tmMask('${i>0?rows[i-1].id:id}')">‹ Vorheriges Paar</button><span style="color:var(--text3);font-size:12px">${i+1} / ${rows.length}</span><button class="btn tm-b" ${i>=rows.length-1?'disabled':''} onclick="tmMask('${i<rows.length-1?rows[i+1].id:id}')">Nächstes Paar ›</button></div></div>`;
   w.querySelector('.tm-body').scrollTop = keep?scroll:0;
 }
@@ -10540,7 +10562,7 @@ function mlExportJson(all){
     vater_ring:r.father_ring||null, vater_name:r.father_name||null, vater_id:r.fatherid||null,
     mutter_ring:r.mother_ring||null, mutter_name:r.mother_name||null, mutter_id:r.motherid||null,
     inzucht:r.inzucht??null, score_vater:r.score_father??null, score_mutter:r.score_mother??null, score:r.score_combined??null,
-    status:r.status||'geplant', notiz:r.note||null, erstellt:r.created_at||null,
+    status:tmEff(r), notiz:r.note||null, erstellt:r.created_at||null,
     termine:{anpaarung:r.anpaarung||null, eiablage_ist:r.eiablage_ist||null, schlupf_ist:r.schlupf_ist||null, beringung_ist:r.beringung_ist||null, absetzen_ist:r.absetzen_ist||null, zelle:r.zelle||null, abteil:r.abteil||null} })) })) }));
   const d=new Date().toISOString().slice(0,10), slug=(all?'alle':String(names[0]).toLowerCase().replace(/[^a-z0-9äöüß]+/g,'_').replace(/^_|_$/g,''))||'liste';
   mlDownload('paarungsliste_'+slug+'_'+d+'.json', JSON.stringify({format:'pigman-paarungsliste', version:1, exportiert:new Date().toISOString(), listen}, null, 1), 'application/json');
@@ -10587,7 +10609,7 @@ function exportMatingsCSV(){
   const ext=!!S.matingsExt;
   const header=[...(ext?['Liste','Zucht']:[]),'Vater Ring','Vater Name','Mutter Ring','Mutter Name','Inzucht %','Score Vater','Score Mutter','Score Ø',...(ext?['Status','Notiz']:[]),'Datum'];
   const data=rows.map(r=>[...(ext?[mlListOf(r),mlZuchtOf(r)]:[]), r.father_ring||'', r.father_name||'', r.mother_ring||'', r.mother_name||'',
-    r.inzucht!=null?Number(r.inzucht).toFixed(2):'', r.score_father??'', r.score_mother??'', r.score_combined??'', ...(ext?[r.status||'',r.note||'']:[]),
+    r.inzucht!=null?Number(r.inzucht).toFixed(2):'', r.score_father??'', r.score_mother??'', r.score_combined??'', ...(ext?[tmEff(r),r.note||'']:[]),
     r.created_at?new Date(r.created_at).toLocaleDateString('de'):'']);
   mlDownload('paarungsliste.csv','﻿'+[header,...data].map(r=>r.map(mlCsvCell).join(';')).join('\n'),'text/csv;charset=utf-8');
 }
@@ -10604,7 +10626,7 @@ function printMatingsList(){
     <td>${esc(r.mother_ring)}${r.mother_name?'<br><span class="sub">'+esc(r.mother_name)+'</span>':''}</td>
     <td style="text-align:center">${r.inzucht!=null?Number(r.inzucht).toFixed(2)+' %':'—'}</td>
     <td style="text-align:center;font-weight:700">${r.score_combined??'—'}</td>
-    ${ext?`<td>${esc(r.status||'geplant')}</td><td>${esc(r.note||'')}</td>`:''}
+    ${ext?`<td>${esc(tmEff(r))}</td><td>${esc(r.note||'')}</td>`:''}
   </tr>`).join('');
   const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
 <title>Paarungsliste ${today}</title>
