@@ -1916,21 +1916,39 @@ document.addEventListener('click', (e)=>{
 });
 
 
+// Index über alle Tauben (Id, Ringnummer, normierte Ringnummer) – ersetzt die Linearsuche, die bei ~10.000 Tauben jede Berechnung ausgebremst hat
+let _PX=null;
+function pIdx(){
+  const a=S.pigeons;
+  if(_PX && _PX.a===a && _PX.n===a.length) return _PX;
+  const byId=new Map(), byRing=new Map(), byNorm=new Map();
+  for(let i=0;i<a.length;i++){
+    const p=a[i]; if(!p) continue;
+    if(!byId.has(p.pigeonid)) byId.set(p.pigeonid,p);
+    if(p.ringnumber!=null){ const k=String(p.ringnumber); if(!byRing.has(k)) byRing.set(k,p); }
+    const n1=normRing(p.ringnumber); if(n1 && !byNorm.has(n1)) byNorm.set(n1,p);
+    const n2=normRing(p.ringnumberold||''); if(n2 && !byNorm.has(n2)) byNorm.set(n2,p);
+  }
+  return (_PX={a, n:a.length, byId, byRing, byNorm});
+}
+function pIdxReset(){ _PX=null; if(typeof IB_MEMO!=='undefined') IB_MEMO.clear(); }
 function findFather(p){
   if(!p) return null;
-  if(p.fatherid){ const byId=S.pigeons.find(x=>x.pigeonid===p.fatherid); if(byId) return byId; }
+  const ix=pIdx();
+  if(p.fatherid){ const byId=ix.byId.get(p.fatherid); if(byId) return byId; }
   if(!p.ringnumberfather) return null;
   const target=normRing(p.ringnumberfather);
   if(!target) return null;
-  return S.pigeons.find(x=>normRing(x.ringnumber)===target || normRing(x.ringnumberold||'')===target) || null;
+  return ix.byNorm.get(target) || null;
 }
 function findMother(p){
   if(!p) return null;
-  if(p.motherid){ const byId=S.pigeons.find(x=>x.pigeonid===p.motherid); if(byId) return byId; }
+  const ix=pIdx();
+  if(p.motherid){ const byId=ix.byId.get(p.motherid); if(byId) return byId; }
   if(!p.ringnumbermother) return null;
   const target=normRing(p.ringnumbermother);
   if(!target) return null;
-  return S.pigeons.find(x=>normRing(x.ringnumber)===target || normRing(x.ringnumberold||'')===target) || null;
+  return ix.byNorm.get(target) || null;
 }
 // Prüft, ob targetId irgendwo in der Ahnenlinie von `pigeon` auftaucht (über
 // BEIDE Elternlinien, rekursiv) — Grundlage für die Stammbaum-Bereinigung
@@ -2023,7 +2041,7 @@ async function clearPigeonParent(pigeonid, side){
 // wiederverwendet werden kann. findById() löst diese ID zusätzlich zu echten
 // Tauben auf.
 let VIRTUAL_PROBAND = null;
-function findById(id){ if(!id)return null; if(VIRTUAL_PROBAND && id===VIRTUAL_PROBAND.pigeonid) return VIRTUAL_PROBAND; return S.pigeons.find(p=>p.pigeonid===id||p.ringnumber===String(id))||null; }
+function findById(id){ if(!id)return null; if(VIRTUAL_PROBAND && id===VIRTUAL_PROBAND.pigeonid) return VIRTUAL_PROBAND; const ix=pIdx(); return ix.byId.get(id)||ix.byRing.get(String(id))||null; }
 function getAncestors(p, depth=4){
   if(!p||depth===0) return new Set();
   const s = new Set([p.pigeonid]);
@@ -2058,7 +2076,12 @@ function calcInbreeding(bird, depth=5){
   return coeff;
 }
 
+const IB_MEMO=new Map();
 function calcInbreedingPair(male, female, depth=5){
+  const _k=male.pigeonid+'|'+female.pigeonid+'|'+depth; if(IB_MEMO.has(_k)) return IB_MEMO.get(_k);
+  const _r=calcInbreedingPair0(male,female,depth); IB_MEMO.set(_k,_r); return _r;
+}
+function calcInbreedingPair0(male, female, depth=5){
   // Simuliere ein hypothetisches Nachkomme-Objekt
   const fake = { pigeonid: '__tmp__', fatherid: male.pigeonid, motherid: female.pigeonid };
   const origFind = (id) => S.pigeons.find(p=>p.pigeonid===id);
@@ -2069,8 +2092,8 @@ function calcInbreedingPair(male, female, depth=5){
     if(gen>0){ if(!res[b.pigeonid])res[b.pigeonid]=[]; res[b.pigeonid].push(gen); }
     const fid = b===fake ? male.pigeonid : (b.fatherid||null);
     const mid = b===fake ? female.pigeonid : (b.motherid||null);
-    const fb  = fid ? (S.pigeons.find(p=>p.pigeonid===fid)||null) : null;
-    const mb  = mid ? (S.pigeons.find(p=>p.pigeonid===mid)||null) : null;
+    const fb  = fid ? (pIdx().byId.get(fid)||null) : null;
+    const mb  = mid ? (pIdx().byId.get(mid)||null) : null;
     const fa=anc(fb,gen+1), ma=anc(mb,gen+1);
     for(const [id,g] of Object.entries(fa)){ if(!res[id])res[id]=[]; res[id].push(...g); }
     for(const [id,g] of Object.entries(ma)){ if(!res[id])res[id]=[]; res[id].push(...g); }
@@ -8705,7 +8728,7 @@ async function loadPigeonTrips(pigeonid){
         pigeonsset_rv:t.pigeonsset_rv||null, pigeonsset_rv_calc:t.pigeonsset_rv_calc||null, pigeonsset_reggr:t.pigeonsset_reggr||null, pigeonsset_reg:t.pigeonsset_reg||null,
         distance:t.averagedistance3!=null?Number(t.averagedistance3):null};
     });
-    PT_CACHE[pigeonid]=enriched;
+    PT_CACHE[pigeonid]=enriched; ptBump();
     return enriched;
   } catch(e){ PT_CACHE[pigeonid]=[]; return []; }
 }
@@ -8730,7 +8753,7 @@ async function loadPigeonTripsBatch(pigeonids){
       if(!byPigeon[r.pigeonid]) byPigeon[r.pigeonid]=[];
       byPigeon[r.pigeonid].push(enriched);
     });
-    missing.forEach(id=>{ PT_CACHE[id]=byPigeon[id]||[]; });
+    missing.forEach(id=>{ PT_CACHE[id]=byPigeon[id]||[]; }); ptBump();
   }catch(e){ missing.forEach(id=>{ if(!PT_CACHE[id]) PT_CACHE[id]=[]; }); }
 }
 // Wie loadPigeonTripsBatch, aber in Häppchen (z.B. für CSV/PDF-Export über
@@ -9215,6 +9238,7 @@ function renderVererberRanking(){
 // computeErfolgsScore) sowie den eigenen Flugkennzahlen — als breite,
 // vollständige Tabelle zum Sortieren, Filtern (nur Elite) und CSV-Export.
 let ESLIST = { loading:false, error:null, results:null, onlyElite:false, sortKey:'score', sortDir:'desc', expanded:false };
+function ptBump(){ try{ ESLIST.results=null; PAIR_REC.results=null; }catch(e){} }
 function invalidateESList(){ ESLIST.results=null; ESLIST.error=null; }
 function setESListSort(key){
   if(ESLIST.sortKey===key) ESLIST.sortDir = ESLIST.sortDir==='desc'?'asc':'desc';
@@ -9233,12 +9257,7 @@ function renderErfolgsScoreListe(){
       +'<button class="btn btn-sm" style="margin-top:10px" onclick="ESLIST.error=null;render()">Erneut versuchen</button></div>';
   }
   var neededIds={};
-  var addWithDesc=function(q){ if(!q||q._virtual) return; neededIds[q.pigeonid]=true; getVererbungDescendants(q.pigeonid).forEach(function(d){ neededIds[d.pigeonid]=true; }); };
-  cand.forEach(function(p){
-    addWithDesc(p);
-    // für den Abstammungswert: Eltern und Großeltern samt deren Nachkommen (= Geschwister, Halbgeschwister)
-    [findFather(p),findMother(p)].forEach(function(par){ if(!par) return; addWithDesc(par); [findFather(par),findMother(par)].forEach(addWithDesc); });
-  });
+  cand.forEach(function(p){ scoreNeedIds(p, neededIds); });
   var idList=Object.keys(neededIds);
   var missing=idList.filter(function(id){ return !PT_CACHE[id]; });
   if(missing.length){
@@ -9345,7 +9364,7 @@ function renderErfolgsScoreListe(){
     +'<div class="m-intro" onclick="this.classList.toggle(\'open\')" style="font-size:12px;color:var(--text3);margin:6px 0 10px">Jede Bestandstaube mit individuellem Erfolgs-Score (Leistung, Vererbung und Abstammung nach Sicherheit gewichtet, einstellbar über ⚙) und eigenen Flugkennzahlen. Spalten anklicken zum Sortieren, Zeile anklicken öffnet die Taube. ⭐ Elite = eigene Preise/Preisquote/Top-AS erfüllen die Elite-Kriterien (mind. '+VERERBER_ELITE_MIN_PREISE+' Preise, ≥'+VERERBER_ELITE_MIN_PREISQUOTE+'% Preisquote, mind. '+VERERBER_ELITE_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS-Punkten, ohne Status).</div>'
     +(list.length>ESLIST_OVERVIEW_LIMIT && !ESLIST.expanded ? '<div style="font-size:12px;color:var(--text3);margin-bottom:4px">Top '+ESLIST_OVERVIEW_LIMIT+' von '+list.length+' (aktuelle Sortierung). Komplette Liste über "Alle anzeigen" oder CSV-Export.</div>' : '')
     +(list.length?'<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-      +'<thead><tr>'+th('Ring','ring')+th('Name','name')+th('Jg.','jahrgang')+th('Score','score')+th('Leistung','own')+th('Vererbung','ver')+th('Abstammung','abst')+th('Sicherheit','sich')+th('Familie','fam')+th('Erfolgsq.','erfolgsquote')+th('Flüge','gesetzt')+th('Preisq.','preisquote')+th('Top&gt;90','topas90')+th('Top&gt;80','topas80')+'<th>⭐</th></tr></thead>'
+      +'<thead><tr>'+th('Ring','ring')+th('Name','name')+th('Jg.','jahrgang')+th('Score','score')+th('Leistung','own')+th('Vererbung','ver')+th('Abstammung','abst')+th('Sicherheit','sich')+th('Familie (erfolgr./geprüft)','fam')+th('Erfolgsq.','erfolgsquote')+th('Flüge','gesetzt')+th('Preisq.','preisquote')+th('Top&gt;90','topas90')+th('Top&gt;80','topas80')+'<th>⭐</th></tr></thead>'
       +'<tbody>'+rows+'</tbody></table></div>'
       +(list.length>ESLIST_OVERVIEW_LIMIT ? '<div style="text-align:center;padding:8px 0 2px">'
         +'<button class="btn btn-outline btn-sm" onclick="ESLIST.expanded='+(!ESLIST.expanded)+';render()">'
@@ -9568,8 +9587,19 @@ const REL_K_VER = 4;       // (gewichtete) geflogene Nachkommen für 50 % Sicher
 const REL_K_SIB = 6;       // (gewichtete) Geschwister für 50 % Sicherheit des Geschwisteranteils
 const REL_MAX_ABST = 0.5;  // die Abstammung allein ist nie sicherer als 50 %
 const ABST_GEWICHT_DEF = 0.5; // Abstammung zählt bei gleicher Sicherheit nur halb so stark wie eigene Flüge/Nachkommen
+// Alle Tauben, deren Flugdaten für den Erfolgs-Score einer Taube gebraucht werden (eine Quelle für alle Listen)
+function scoreNeedIds(p, set){
+  if(!p || p._virtual) return;
+  const own=q=>{ if(q && !q._virtual) set[q.pigeonid]=true; };
+  const withDesc=q=>{ if(!q || q._virtual) return; set[q.pigeonid]=true; getVererbungDescendants(q.pigeonid).forEach(d=>{ set[d.pigeonid]=true; }); };
+  withDesc(p);
+  [findFather(p), findMother(p)].forEach(par=>{
+    if(!par || par._virtual) return; withDesc(par);
+    [findFather(par), findMother(par)].forEach(g=>{ if(!g || g._virtual) return; own(g); [findFather(g), findMother(g)].forEach(own); });
+  });
+}
 const SCORE_MEMO = new Map(), KERN_MEMO = new Map();
-function scoreMemoClear(){ SCORE_MEMO.clear(); KERN_MEMO.clear(); if(typeof ZP_PROF!=='undefined') ZP_PROF.clear(); }
+function scoreMemoClear(){ pIdxReset(); SCORE_MEMO.clear(); KERN_MEMO.clear(); if(typeof ZP_PROF!=='undefined') ZP_PROF.clear(); }
 function ownTripsEnsure(pid){
   if(PT_CACHE[pid] || OWN_TRIPS_LOADING.has(pid)) return;
   OWN_TRIPS_LOADING.add(pid);
@@ -9715,10 +9745,15 @@ function infoOf(p){
 }
 // Kernwert: Leistung + Vererbung einer Taube (ohne Abstammung → keine Rekursion über Generationen)
 function computeKernwert(pid, noLoad){
-  if(KERN_MEMO.has(pid)) return KERN_MEMO.get(pid);
+  if(noLoad!=='desc' && KERN_MEMO.has(pid)) return KERN_MEMO.get(pid);
   // noLoad: true = nichts nachladen · 'desc' = nur die eigenen Flüge laden, nicht die aller Nachkommen
+  const MK = noLoad==='desc' ? 'd:'+pid : pid;
+  if(noLoad==='desc' && KERN_MEMO.has(MK)) return KERN_MEMO.get(MK);
   const own=computeEigenleistung(pid); if(!own.ready && noLoad!==true) ownTripsEnsure(pid);
-  const ver=computeVererbungsstaerke(pid); if(!ver.ready && !noLoad) ensureVererbungLoaded(pid);
+  // Vorfahren (Großeltern aufwärts) zählen nur mit eigenen Flügen und Infotext – nie mit Nachkommen.
+  // So hängt der Wert nicht davon ab, welche Daten zufällig schon geladen sind.
+  const ver = noLoad==='desc' ? {ready:true, noDescendants:true} : computeVererbungsstaerke(pid);
+  if(!ver.ready && !noLoad) ensureVererbungLoaded(pid);
   if(ver.ready && ver.perDescendant && !ver._breite) ver._breite=vererbBreite(pid, ver);
   let rL=relOwn(own), rV=relVer(ver);
   let valL=rL>0?own.score:null, valV=rV>0?ver.score:null, srcL=rL>0?'Flüge':null, srcV=rV>0?'Nachkommen':null;
@@ -9731,7 +9766,7 @@ function computeKernwert(pid, noLoad){
   if(rL>0 && gL>0){ num+=gL*rL*valL; den+=gL*rL; }
   if(rV>0 && gV>0){ num+=gV*rV*valV; den+=gV*rV; }
   const k={ready:own.ready && ver.ready, own, ver, rL, rV, valL, valV, srcL, srcV, inf, val: den>0 ? num/den : null, rel: 1-(1-(gL>0?rL:0))*(1-(gV>0?rV:0))};
-  if(k.ready) KERN_MEMO.set(pid,k);
+  if(k.ready) KERN_MEMO.set(MK,k);
   return k;
 }
 function siblingsOf(p){
@@ -9755,7 +9790,7 @@ function computeAbstammung(pid){
   // (bis zu den Urgroßeltern des Probanden, jede Stufe mit halber Aussagekraft)
   const anc=(par, depth)=>{
     if(!par || par._virtual) return {val:50, rel:0, z:50, r:0, src:'unbekannt'};
-    const k=computeKernwert(par.pigeonid, depth>0?'desc':false); if(!k.ready && depth===0) ready=false;
+    const k=computeKernwert(par.pigeonid, depth>0?'desc':false); if(!k.ready) ready=false;
     let num=0, den=0, pi=null;
     if(k.val!=null){ num+=k.rel*k.val; den+=k.rel; }
     if(depth<2){
@@ -10456,7 +10491,7 @@ function zpLineSearch(q){
   const hits=S.pigeons.filter(p=>!p._virtual && !z.lines.includes(p.pigeonid) && ((p.name||'').toLowerCase().includes(q) || ring(p).toLowerCase().includes(q) || String(p.ringnumber||'').toLowerCase().endsWith(q))).slice(0,15);
   box.innerHTML = hits.length ? hits.map(p=>`<button type="button" class="btn btn-outline btn-sm" onclick="zpLineAdd('${p.pigeonid}')">+ ${escH(p.name?p.name+' · ':'')}${escH(ring(p))}</button>`).join(' ') : '<span style="font-size:12px;color:var(--text3)">Keine Taube gefunden.</span>';
 }
-function zpOpenCheck(mid,fid){ S.paarungM=findById(mid); S.paarungF=findById(fid); showTab('paarung'); window.scrollTo(0,0); }
+function zpOpenCheck(mid,fid){ S.paarungM=findById(mid); S.paarungF=findById(fid); PV.fix='M'; showTab('paarung'); window.scrollTo(0,0); }
 async function zpSaveAll(){
   const A=zpState().assign; if(!A||!A.pairs.length) return;
   await mlEnsureLoaded(); const T=mlTarget();
@@ -10531,6 +10566,7 @@ var GLOSS=[
   ['Vererbungsstärke','Reine Nachkommen-Wertung: Wie gut fliegen die Kinder und Enkel dieser Taube? Die Eigenleistung der Taube selbst zählt hier nicht mit.'],
   ['Beständigkeit (B) / Schnelligkeit (S)','B = wie oft eine Taube in den Preisen fliegt (Preisquote). S = wie oft sie dabei sehr hohe AS-Punkte erreicht.'],
   ['Inzucht','Inzuchtgrad der möglichen Nachzucht. Grün unter 3 %, orange bis 6,5 %, darüber rot.'],
+  ['Familie (z. B. 5/5)','Geschwister und eigene Kinder einer Taube, die schon <b>geprüft</b> sind (mind. 15 Flüge). „5/5“ heißt: alle 5 geprüften Familienmitglieder waren erfolgreich (mind. 50 % Preise und 2 Flüge über 90 AS). Es ist nur eine Zusatzinfo und rechnet nicht in den Score ein.'],
   ['★ Erfolgspaar','Ein Elternpaar, das bereits erfolgreiche Nachkommen gebracht hat. Im Zuchtplan gibt es dafür einen Bonus.']
 ];
 function glossHtml(){
@@ -10586,16 +10622,16 @@ function renderPlanen(){
   const v=['rang','bewaehrt'].includes(S.planView)?S.planView:'zuordnung', z=zpState();
   const btn=(k,l)=>`<button type="button" class="${v===k?'on':''}" onclick="planSwitch('${k}')">${l}</button>`;
   const intro = v==='rang'
-    ? 'Rangliste aller möglichen Paare deines Bestands nach erwartetem Erfolg – nur mit Tauben, die selbst geflogen sind oder geflogene Nachkommen haben.'
+    ? 'Einzelne Top-Paare: Rangliste aller möglichen Paare deines Bestands nach erwartetem Erfolg – nur mit Tauben, die selbst geflogen sind oder geflogene Nachkommen haben.'
     : v==='bewaehrt'
     ? 'Rückschau: Welche Elternpaare haben bereits erfolgreiche Nachkommen gebracht (★ Erfolgspaare) – und welche Reisetauben gehören in den Zuchtschlag?'
-    : 'Verteilt alle Zuchttauben so auf Paare, dass die Summe aller Paare möglichst gut ist – jeder Vogel bekommt höchstens ein Weibchen.';
+    : 'Komplette Verpaarung: Verteilt alle Zuchttauben so auf Paare, dass die Summe aller Paare möglichst gut ist – jeder Vogel bekommt höchstens ein Weibchen.';
   const top=`<div class="card" style="padding:12px 14px">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="pv-ctl-l" style="margin:0">Vorschläge</span>
-      <div class="pf-seg">${btn('bewaehrt','★ Bewährte Paare')}${btn('zuordnung','🧬 Beste Zuordnung (ganzer Schlag)')}${btn('rang','🏆 Beste Einzelpaare')}</div>
+      <div class="pf-seg">${btn('bewaehrt','★ Bewährte Paare')}${btn('zuordnung','🧬 Komplette Verpaarung')}${btn('rang','🏆 Einzelne Top-Paare')}</div>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);cursor:pointer;margin-left:auto"><input type="checkbox" ${z.inclReise?'checked':''} onchange="planReise(this.checked)"> Reisetauben einbeziehen</label></div>
     <div style="font-size:12px;color:var(--text3);margin-top:8px">${intro} Gute Paare mit 💾 in die Paarungsliste übernehmen, mit „Prüfen“ im Detail ansehen. Welche Reisetauben sich für die Zucht eignen, zeigt „★ Bewährte Paare“ im Abschnitt Zuchtschlag.</div></div>`;
-  return top + renderPlanBasis() + (v==='rang' ? renderPairingRecommendations() : v==='bewaehrt' ? renderZuchtAuswertung() : renderZuchtplan());
+  return top + (v==='rang' ? renderPairingRecommendations() : v==='bewaehrt' ? renderZuchtAuswertung() : renderZuchtplan()) + renderPlanBasis();
 }
 function showAuswertung(){ S.tab='zucht'; S.selected=null; S.planView='bewaehrt'; setActiveNav('zucht'); render(); window.scrollTo(0,0); }
 function renderZuchtplan(){
@@ -10730,7 +10766,7 @@ function renderZuchtAuswertung(){
       ${ps.map(e=>`<tr style="cursor:default"><td>${pd(e.F)}</td><td>${pd(e.M)}</td><td style="text-align:center">${e.kids.length}</td><td style="text-align:center">${e.geprueft}</td>
         <td style="text-align:center;font-weight:600;color:var(--green)">${e.erf}</td><td style="text-align:center">${e.geprueft?Math.round(e.erf/e.geprueft*100)+' %':'—'}</td>
         <td style="text-align:center;color:#f0c419">${e.elite||''}</td><td style="text-align:center;font-size:12px">${[...e.years].sort().join(', ')}</td>
-        <td style="text-align:right"><button class="btn btn-outline btn-sm" title="Paar im Paarungscheck öffnen" onclick="zpOpenCheck('${e.F.pigeonid}','${e.M.pigeonid}')">👁</button></td></tr>`).join('')}
+        <td style="text-align:right"><button class="btn btn-outline btn-sm" title="Paar im Paarungscheck öffnen" onclick="zpOpenCheck('${e.F.pigeonid}','${e.M.pigeonid}')">Prüfen ›</button> <button class="btn btn-outline btn-sm" title="In die Paarungsliste (Schritt ③) übernehmen" onclick="savePairingToList('${e.F.pigeonid}','${e.M.pigeonid}')">💾 In Liste</button></td></tr>`).join('')}
       </tbody></table></div>` : `<div class="card" style="color:var(--text3)">Noch keine Elternpaare mit erfolgreichen Nachkommen gefunden.</div>`;
   return head
     +sectNav([['za_schlag','🏅 Zuchtschlag'],['za_paare','💞 Erfolgspaare']])
@@ -10792,10 +10828,7 @@ function renderPairingRecommendations(){
   // Nachkommen für die Vererbungsstärke) einmalig gebündelt nachladen.
   var all = cand.males.concat(cand.females);
   var neededIds = {};
-  all.forEach(function(p){
-    neededIds[p.pigeonid]=true;
-    getVererbungDescendants(p.pigeonid).forEach(function(d){ neededIds[d.pigeonid]=true; });
-  });
+  all.forEach(function(p){ scoreNeedIds(p, neededIds); });
   var idList = Object.keys(neededIds);
   var missing = idList.filter(function(id){ return !PT_CACHE[id]; });
 
@@ -10827,7 +10860,7 @@ function renderPairingRecommendations(){
         // kombinierte Score wäre dann de facto nur die Bewertung einer Seite.
         if(pp.sF==null || pp.sM==null) return;
         if(!S.pairRecAllowAbst && (!scoreEvid(pp.ef) || !scoreEvid(pp.em))){ PAIR_REC.hidden++; return; }
-        var ib = calcInbreedingPair(m,f);
+        var ib = undefined;   // Inzucht erst bei Bedarf (nur für die angezeigten Zeilen)
         // Empfehlung = Prognose Nachzucht (Ø Score, bei dünner Datenbasis zur Mitte gezogen,
         // verrechnet mit der Bilanz des Paares – siehe computePaarungsprognose)
         var rank=pp.empf;
@@ -10840,11 +10873,14 @@ function renderPairingRecommendations(){
 
   var maxInzucht = S.pairRecMaxInzucht/100;
   var minScore = S.pairRecMinScore||0;
-  var filtered = PAIR_REC.results.filter(function(r){
-    return (r.ib==null || r.ib<=maxInzucht) && r.rank>=minScore;
-  });
-  var excluded = PAIR_REC.results.length - filtered.length;
-  var shown = filtered.slice(0, S.pairRecTopN);
+  var shown = [], excluded = 0, restFrom = -1;
+  for(var qi=0; qi<PAIR_REC.results.length; qi++){
+    var rr = PAIR_REC.results[qi];
+    if(rr.rank<minScore){ excluded += PAIR_REC.results.length-qi; break; }
+    if(rr.ib===undefined) rr.ib = calcInbreedingPair(rr.m, rr.f);
+    if(rr.ib==null || rr.ib<=maxInzucht){ shown.push(rr); if(shown.length>=S.pairRecTopN){ restFrom=qi+1; break; } }
+    else excluded++;
+  }
 
   var rows = shown.map(function(r,i){
     var c = r.rank>=60?'var(--green)':r.rank>=35?'var(--orange)':'#e07070';
@@ -10859,8 +10895,8 @@ function renderPairingRecommendations(){
       +'<td style="text-align:center;font-size:12px;color:'+sichBand(Math.min(r.pp.ef.sicherheit,r.pp.em.sicherheit)).c+'" title="Sicherheit = schwächeres Glied der beiden Eltern">'+Math.min(r.pp.ef.sicherheit,r.pp.em.sicherheit)+' %</td>'
       +'<td style="text-align:center;color:'+ibColor+'">'+ibPct+'</td>'
       +'<td style="text-align:center;white-space:nowrap">'
-      +'<button class="btn btn-outline btn-sm" title="In den Paarungsrechner laden" onclick="S.paarungM=findById(\''+r.m.pigeonid+'\');S.paarungF=findById(\''+r.f.pigeonid+'\');render();window.scrollTo(0,0)">👁</button> '
-      +'<button class="btn btn-outline btn-sm" title="In der Paarungsliste speichern" onclick="savePairingToList(\''+r.m.pigeonid+'\',\''+r.f.pigeonid+'\')">💾</button></td>'
+      +'<button class="btn btn-outline btn-sm" title="Paar im Schritt ② Prüfen öffnen" onclick="zpOpenCheck(\''+r.m.pigeonid+'\',\''+r.f.pigeonid+'\')">Prüfen ›</button> '
+      +'<button class="btn btn-outline btn-sm" title="In die Paarungsliste (Schritt ③) übernehmen" onclick="savePairingToList(\''+r.m.pigeonid+'\',\''+r.f.pigeonid+'\')">💾 In Liste</button></td>'
       +'</tr>';
   }).join('');
 
@@ -16999,7 +17035,7 @@ function renderNachSearch(){
 // sich S.pigeons ändert (siehe invalidatePedigreeCache()).
 var CHILDREN_INDEX=null;      // pigeonid -> Array<pigeon>
 var DESC_CACHE=new Map();     // pigeonid -> Array<pigeon> (Kinder+Enkel, für Vererbung)
-function invalidatePedigreeCache(){ _lineIdx=null; CHILDREN_INDEX=null; DESC_CACHE.clear(); if(typeof DESC_GEN!=='undefined') DESC_GEN.clear(); if(typeof scoreMemoClear==='function') scoreMemoClear(); }
+function invalidatePedigreeCache(){ pIdxReset(); _lineIdx=null; CHILDREN_INDEX=null; DESC_CACHE.clear(); if(typeof DESC_GEN!=='undefined') DESC_GEN.clear(); if(typeof scoreMemoClear==='function') scoreMemoClear(); }
 function buildChildrenIndex(){
   var byId={}, byRing={};
   S.pigeons.forEach(function(p){ byId[p.pigeonid]=p; if(p.ringnumber) byRing[p.ringnumber]=p; });
