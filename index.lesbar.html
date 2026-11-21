@@ -527,6 +527,7 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .zs-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text2);margin-bottom:6px}.zs-lg{display:inline-flex;align-items:center;gap:5px}.zs-lg i{width:12px;height:12px;border-radius:3px;display:inline-block}.zs-lg i.zs-dotk{background:#fff;border-radius:50%}
 .ml-stb{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;background:var(--bg3);border:1px solid var(--border);color:var(--text2)}
 .ml-stb.st-abgeschlossen{color:var(--green);border-color:var(--green)}.ml-stb.st-Jungtiere{color:#4a9ede;border-color:#4a9ede}.ml-stb.st-Eier{color:#e08a3c;border-color:#e08a3c}.ml-stb.st-gepaart{color:#c9a227;border-color:#c9a227}
+.rg-chips{display:flex;gap:6px;flex-wrap:wrap}.rg-chip{display:inline-flex;gap:6px;align-items:center;padding:6px 10px;border-radius:16px;background:var(--bg2);border:1px solid var(--border);font-family:monospace;font-size:13px}.rg-chip.ok{border-color:var(--green);color:var(--green)}.rg-chip b{cursor:pointer;color:#e07070;font-family:inherit;padding:0 2px}
 .tm-fin{opacity:.6}
 .tm-mob{display:none}
 .tm-card{cursor:pointer}
@@ -10110,6 +10111,8 @@ function mlEnsureLoaded(){
     S.matings=Array.isArray(rows)?rows:[];
     try{ await apiGet('/matings?select=liste,zucht,status,note&limit=1'); S.matingsExt=true; }catch(e){ S.matingsExt=false; }
     try{ await apiGet('/matings?select=anpaarung,eiablage_ist,schlupf_ist,beringung_ist,absetzen_ist,zelle,abteil&limit=1'); S.matingsTm=true; }catch(e){ S.matingsTm=false; }
+    try{ await apiGet('/matings?select=ringe,ringe_ok&limit=1'); S.matingsRg=true; }catch(e){ S.matingsRg=false; }
+    try{ const kr=await apiGet('/ring_kontingente?order=jahr.asc,von.asc&limit=500'); S.ringKr=Array.isArray(kr)?kr:[]; S.ringMissing=false; }catch(e){ S.ringKr=[]; S.ringMissing=true; }
   }).catch(e=>{ S.matingsError=e.message; S.matings=[]; }).finally(()=>{ S.matingsLoading=false; _mlP=null; });
   return _mlP;
 }
@@ -10372,7 +10375,7 @@ function tmPlan(r){
 function tmDerive(r){
   if(!S.matingsTm) return null;
   if(r.absetzen_ist) return 'abgeschlossen';
-  if(r.schlupf_ist) return 'Jungtiere';
+  if(r.schlupf_ist||r.beringung_ist) return 'Jungtiere';
   if(r.eiablage_ist) return 'Eier';
   if(r.anpaarung && r.anpaarung<=tmToday()) return 'gepaart';
   return null;
@@ -10445,13 +10448,14 @@ function renderTermine(){
     ${L?`<div class="ml-chips"><button class="ml-chip ${st.zucht==='*'?'on':''}" onclick="mlPickZucht(-1)">Alle · ${cnt()}</button>${Z.map((z,i)=>`<button class="ml-chip ${st.zucht===z?'on':''}" onclick="mlPickZucht(${i})">${escH(z)} · ${cnt(z)}</button>`).join('')}</div>`:''}
   </div>`;
   const rows=L?tmRows():[];
-  const view=(S.tmView==='strahl')?'strahl':'plan';
+  const view=(S.tmView==='strahl'||S.tmView==='jung')?S.tmView:'plan';
   const search=`<div class="card"><div class="card-title" style="margin-bottom:6px">🔎 Taube suchen</div>
     <input type="search" id="tm-q" class="tm-in" inputmode="numeric" placeholder="Endnummer der Taube, z. B. 373" oninput="tmSearch(this.value)" autocomplete="off">
     <div id="tm-hits" style="margin-top:6px"></div>
     <div style="font-size:12px;color:var(--text3);margin-top:6px">Bei genau einem Treffer öffnet sich sofort die Erfassungsmaske des Paares. Gesucht wird in der gewählten Liste – auch nach Zellennummer oder Name.</div></div>`;
-  const seg=`<div class="pf-seg" style="max-width:360px;margin-bottom:12px"><button type="button" class="${view==='plan'?'on':''}" onclick="S.tmView='plan';render()">📅 Zeitplan</button><button type="button" class="${view==='strahl'?'on':''}" onclick="S.tmView='strahl';render()">📈 Zeitstrahl</button></div>`;
+  const seg=`<div class="pf-seg" style="max-width:520px;margin-bottom:12px"><button type="button" class="${view==='plan'?'on':''}" onclick="S.tmView='plan';render()">📅 Zeitplan</button><button type="button" class="${view==='strahl'?'on':''}" onclick="S.tmView='strahl';render()">📈 Zeitstrahl</button><button type="button" class="${view==='jung'?'on':''}" onclick="S.tmView='jung';render()">🐣 Jungtauben</button></div>`;
   if(L && rows.length && view==='strahl') return bar+seg+renderZeitstrahl();
+  if(L && rows.length && view==='jung') return bar+seg+renderJungtauben();
   if(!L||!rows.length) return bar+`<div class="card" style="color:var(--text3);font-size:13px">In dieser Auswahl sind noch keine Paare – erst in ③ Paarungsliste anlegen.</div>`;
   const plans=new Map(rows.map(r=>[r.id,tmPlan(r)]));
   // Anstehend
@@ -10470,12 +10474,13 @@ function renderTermine(){
         <label>Schlupf → Beringen <input type="number" class="tm-n" min="0" max="120" value="${c.ring}" onchange="tmCfgSet('ring',this.value)"></label>
         <label>Schlupf → Absetzen <input type="number" class="tm-n" min="0" max="120" value="${c.absetz}" onchange="tmCfgSet('absetz',this.value)"></label></div></details></div>`;
   const table=`<div class="card tm-desk"><div class="card-title" style="margin-bottom:8px">📅 Zeitplan <span style="color:var(--text3);font-weight:400">(${rows.length} Paare) – ✓ = tatsächlicher Termin, sonst geplant</span></div>
-    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Abteil / Zelle</th><th>Paar</th>${TM_STEPS.map(([k,ic,l])=>`<th>${ic} ${l}</th>`).join('')}<th></th></tr></thead><tbody>
-    ${rows.map(r=>{ const p=plans.get(r.id); return `<tr class="${p.finished?'tm-fin':''}"><td style="font-weight:700">${tmPos(r)?escH(tmPos(r,true)):'<span style="color:var(--text3)">—</span>'}</td><td style="font-family:monospace;font-size:12px">${tmPairHtml(r)}</td>${TM_STEPS.map(([k])=>`<td>${tmCell(p[k],k)}</td>`).join('')}<td style="text-align:right"><button class="btn btn-outline btn-sm" onclick="tmMask('${r.id}')">Erfassen ›</button></td></tr>`; }).join('')}
+    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Abteil / Zelle</th><th>Paar</th>${TM_STEPS.map(([k,ic,l])=>`<th>${ic} ${l}</th>`).join('')}${rgOk()?'<th>💍 Ringe</th>':''}<th></th></tr></thead><tbody>
+    ${rows.map(r=>{ const p=plans.get(r.id); return `<tr class="${p.finished?'tm-fin':''}"><td style="font-weight:700">${tmPos(r)?escH(tmPos(r,true)):'<span style="color:var(--text3)">—</span>'}</td><td style="font-family:monospace;font-size:12px">${tmPairHtml(r)}</td>${TM_STEPS.map(([k])=>`<td>${tmCell(p[k],k)}</td>`).join('')}${rgOk()?`<td style="font-size:12px">${rgChipsShort(r)}</td>`:''}<td style="text-align:right"><button class="btn btn-outline btn-sm" onclick="tmMask('${r.id}')">Erfassen ›</button></td></tr>`; }).join('')}
     </tbody></table></div></div>`;
   const cards=`<div class="tm-mob">${rows.map(r=>{ const p=plans.get(r.id); return `<div class="card tm-card ${p.finished?'tm-fin':''}" onclick="tmMask('${r.id}')">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div style="font-family:monospace;font-size:13px">${tmPos(r)?'<b style="font-family:inherit;font-size:15px">'+escH(tmPos(r))+'</b><br>':''}${tmPairHtml(r)}</div><button class="btn btn-sm">Erfassen ›</button></div>
       <div class="tm-steps">${TM_STEPS.map(([k,ic,l])=>{ const x=p[k]; return `<div class="tm-st ${x.done?'done':x.late?'late':''}"><span>${ic} ${l}</span><b>${x.date?tmFmt(x.date):'—'}</b></div>`; }).join('')}</div>
+      ${rgOk()&&rgListOf(r).length?`<div style="font-size:12px;margin-top:6px;color:var(--text2)">💍 ${rgChipsShort(r)}</div>`:''}
       ${p.next?`<div style="font-size:12px;margin-top:6px;color:${p.next.late?'#e07070':'var(--text2)'}">Nächster Schritt: ${p.next.ic} ${p.next.lbl} ${tmFmt(p.next.date)}${p.next.late?' – überfällig':''}</div>`:p.finished?'<div style="font-size:12px;margin-top:6px;color:var(--green)">✓ abgeschlossen</div>':''}</div>`; }).join('')}</div>`;
   return bar+seg+search+setCard+upHtml+table+cards;
 }
@@ -10515,6 +10520,197 @@ function renderZeitstrahl(){
     <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Alle Zuchten auf einer Zeitachse. Jeder Balken reicht vom frühesten Start bis zum spätesten Ende der Phase über alle Paare der Zucht; „Einzelne Paare“ zeigt jedes Paar für sich. Nach links und rechts wischen, wenn der Strahl breiter als der Bildschirm ist.</div>
     <div class="zs-legend">${legend}</div><div class="zs-wrap"><div class="zs-in">${rowsHtml}</div></div></div>`;
 }
+
+// ══ RINGE: zentrales Kontingent, Zuordnung je Paar, Bestätigung beim Beringen, Jungtaubenliste ══
+const RG_SQL=`create table if not exists public.ring_kontingente (
+  id uuid primary key default gen_random_uuid(),
+  jahr integer,
+  prefix text not null,          -- z. B. DE-06559-27
+  von integer not null,
+  bis integer not null,
+  created_at timestamptz not null default now()
+);
+alter table public.ring_kontingente enable row level security;
+drop policy if exists "ring_kontingente_authenticated_all" on public.ring_kontingente;
+create policy "ring_kontingente_authenticated_all" on public.ring_kontingente
+  for all to authenticated using (true) with check (true);
+alter table public.matings
+  add column if not exists ringe text,
+  add column if not exists ringe_ok boolean default false;
+notify pgrst, 'reload schema';`;
+function rgOk(){ return !!(S.matingsTm && S.matingsRg && !S.ringMissing); }
+function rgCfg(){ let c={}; try{ c=JSON.parse(localStorage.getItem('pigman_rg')||'{}')||{}; }catch(e){} return Object.assign({n:2},c); }
+function rgCfgN(v){ v=parseInt(v,10); if(!(v>=1&&v<=6)) return; try{ localStorage.setItem('pigman_rg',JSON.stringify({n:v})); }catch(e){} render(); }
+const rgListOf=r=>String(r.ringe||'').split(',').map(x=>x.trim()).filter(Boolean);
+const rgNum=rg=>{ const m=String(rg).match(/(\d+)\s*$/); return m?parseInt(m[1],10):null; };
+const rgKr=()=>(S.ringKr||[]).slice().sort((a,b)=>String(a.prefix).localeCompare(String(b.prefix))||a.von-b.von);
+const rgFmt=(prefix,n)=>fmtRingnumber(prefix+'-'+n)||(prefix+'-'+n);
+function rgChipsShort(r){
+  const l=rgListOf(r); if(!l.length) return '<span style="color:var(--text3)">—</span>';
+  return (r.ringe_ok?'<span style="color:var(--green)">✓ </span>':'')+l.map(x=>escH(String(rgNum(x)))).join(', ');
+}
+function rgUsed(excludeId){
+  const set=new Set();
+  (S.matings||[]).forEach(m=>{ if(String(m.id)!==String(excludeId)) rgListOf(m).forEach(x=>set.add(x)); });
+  S.pigeons.forEach(p=>{ if(p.ringnumber) set.add(p.ringnumber); });
+  return set;
+}
+// freie Endnummern aus dem Kontingent (aufsteigend), ohne bereits vergebene
+function rgFree(count, used){
+  const out=[];
+  for(const k of rgKr()){ for(let n=k.von;n<=k.bis && out.length<count;n++){ const r=rgFmt(k.prefix,n); if(!used.has(r)){ out.push(r); used.add(r); } } if(out.length>=count) break; }
+  return out;
+}
+function rgFreeCount(){ const used=rgUsed(null); let c=0; rgKr().forEach(k=>{ for(let n=k.von;n<=k.bis;n++) if(!used.has(rgFmt(k.prefix,n))) c++; }); return c; }
+// Eingabe "261 262, 270-272" → volle Ringnummern anhand des Kontingents
+function rgParseInput(txt, used){
+  const rings=[], warn=[]; const kr=rgKr();
+  if(!kr.length) return {rings, warn:['Bitte zuerst ein Ringkontingent anlegen.']};
+  const nums=[]; String(txt).split(/[,;\s]+/).filter(Boolean).forEach(t=>{
+    const m=t.match(/^(\d+)[-–](\d+)$/); if(m){ const a=+m[1], b=+m[2]; if(b>=a && b-a<=60) for(let i=a;i<=b;i++) nums.push(i); else warn.push(t+': ungültiger Bereich'); return; }
+    const full=tmEnd(t); if(/^\d+$/.test(t)||full) nums.push(parseInt(/^\d+$/.test(t)?t:full,10)); else warn.push(t+': nicht lesbar'); });
+  nums.forEach(n=>{
+    const k=kr.find(x=>n>=x.von&&n<=x.bis); let r;
+    if(k) r=rgFmt(k.prefix,n); else { r=rgFmt(kr[kr.length-1].prefix,n); warn.push(n+': liegt außerhalb deines Kontingents'); }
+    if(used.has(r)){ warn.push(n+': ist schon vergeben'); return; }
+    used.add(r); rings.push(r);
+  });
+  return {rings, warn};
+}
+function rgMaskHtml(r){
+  if(!rgOk()) return `<div class="tm-f"><div class="tm-fl"><span>💍 Ringe</span><small>Einmalige Einrichtung nötig (Reiter „🐣 Jungtauben“)</small></div></div>`;
+  const l=rgListOf(r), ok=!!r.ringe_ok;
+  const chips=l.length?l.map(x=>`<span class="rg-chip ${ok?'ok':''}">${ok?'✓ ':''}${escH(x)}${ok?'':`<b onclick="rgRemove('${r.id}','${escH(x)}')" title="Ring entfernen">✕</b>`}</span>`).join(''):'<span style="color:var(--text3);font-size:13px">noch keine Ringe zugeordnet</span>';
+  const free=rgFreeCount();
+  return `<div class="tm-f ${ok?'done':''}"><div class="tm-fl"><span>💍 Ringe der Jungtauben</span><small>Endnummern aus deinem Kontingent (${free} frei) – manuell oder automatisch</small></div>
+    <div class="rg-chips">${chips}</div>
+    ${ok?`<div class="tm-fp" style="color:var(--green)">✓ Beringen bestätigt – die Jungtauben sind im Bestand angelegt.</div>`:`
+    <div class="tm-fr" style="margin-top:8px"><input type="text" id="rg-in" class="tm-in" inputmode="numeric" placeholder="Endnummer(n), z. B. 273 274 oder 273-275" onkeydown="if(event.key==='Enter'){event.preventDefault();rgAdd('${r.id}');}"><button class="btn btn-outline tm-b" onclick="rgAdd('${r.id}')">＋ Zuordnen</button></div>
+    <div class="tm-fr" style="margin-top:8px"><button class="btn btn-outline tm-b" style="flex:1" onclick="rgAuto('${r.id}')">⚡ Automatisch (${rgCfg().n} je Paar)</button>
+      ${l.length?`<button class="btn tm-b" style="flex:1" onclick="rgConfirm('${r.id}')">✓ Beringen bestätigen</button>`:''}</div>
+    <div class="tm-fp">Erst mit „Beringen bestätigen“ werden die Jungtauben mit ihren Eltern im Bestand angelegt.</div>`}</div>`;
+}
+function rgAdd(id){
+  const r=(S.matings||[]).find(x=>String(x.id)===String(id)); const el=document.getElementById('rg-in'); if(!r||!el) return;
+  const v=el.value.trim(); if(!v) return;
+  const {rings,warn}=rgParseInput(v,rgUsed(id)); const cur=rgListOf(r);
+  if(warn.length) alert(warn.join('\n'));
+  if(!rings.length) return;
+  tmPatch(id,{ringe:cur.concat(rings).join(',')});
+}
+function rgRemove(id,ring){
+  const r=(S.matings||[]).find(x=>String(x.id)===String(id)); if(!r||r.ringe_ok) return;
+  const l=rgListOf(r).filter(x=>x!==ring); tmPatch(id,{ringe:l.length?l.join(','):null});
+}
+function rgAuto(id){
+  const r=(S.matings||[]).find(x=>String(x.id)===String(id)); if(!r) return;
+  const cur=rgListOf(r), need=Math.max(rgCfg().n-cur.length,1), got=rgFree(need,rgUsed(id));
+  if(!got.length){ alert('Im Kontingent ist kein freier Ring mehr.'); return; }
+  if(got.length<need) alert('Nur '+got.length+' freie Ringe im Kontingent übrig.');
+  tmPatch(id,{ringe:cur.concat(got).join(',')});
+}
+// alle Paare ohne Ringe der Reihe nach (Abteil/Zelle) mit Ringen belegen
+async function rgAutoAll(){
+  const rows=tmRows().filter(r=>!r.ringe_ok && !rgListOf(r).length); if(!rows.length){ alert('Alle Paare dieser Auswahl haben schon Ringe.'); return; }
+  const n=rgCfg().n, used=rgUsed(null);
+  if(!await appConfirm('Ringe automatisch zuordnen', rows.length+' Paare bekommen je '+n+' Ringe aus dem Kontingent, in der Reihenfolge von Abteil und Zelle. Die Zuordnung kannst du danach noch ändern. Bestätigt wird erst beim Beringen.','Zuordnen')) return;
+  try{
+    let c=0;
+    for(const r of rows){ const got=rgFree(n,used); if(!got.length) break; await apiPatchBy('matings','id=eq.'+r.id,{ringe:got.join(',')}); r.ringe=got.join(','); c++; }
+    if(c<rows.length) alert('Das Kontingent reichte nur für '+c+' von '+rows.length+' Paaren.');
+  }catch(e){ alert('Speichern fehlgeschlagen: '+e.message); }
+  render();
+}
+// kleines Bestätigungsfenster in der App (ohne Browser-Hinweis)
+function appConfirm(title,html,okLabel,extraHtml){
+  return new Promise(res=>{
+    const w=document.createElement('div'); w.className='aa-ov'; w.style.zIndex=10001;
+    w.innerHTML='<div class="aa-box"><div class="aa-head"><div class="serif" style="font-size:18px">'+escH(title)+'</div><button type="button" class="btn btn-outline btn-sm" data-c>✕</button></div>'
+      +'<div style="font-size:13px;color:var(--text2);margin:8px 0">'+html+'</div>'+(extraHtml||'')
+      +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn btn-outline" data-c>Abbrechen</button><button class="btn" data-ok>'+escH(okLabel||'OK')+'</button></div></div>';
+    const done=v=>{ w.remove(); res(v); };
+    w.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>done(false)); w.querySelector('[data-ok]').onclick=()=>done(true);
+    w.onclick=e=>{ if(e.target===w) done(false); }; document.body.appendChild(w);
+  });
+}
+async function rgConfirm(id){
+  const r=(S.matings||[]).find(x=>String(x.id)===String(id)); if(!r||r.ringe_ok) return;
+  const f=findById(r.fatherid), m=findById(r.motherid), rings=rgListOf(r);
+  if(!rings.length){ alert('Bitte zuerst Ringe zuordnen.'); return; }
+  const exist=rings.filter(x=>pIdx().byRing.get(x));
+  const dateHtml='<label style="font-size:12px;color:var(--text3)">Beringt am</label><input type="date" id="rg-date" class="tm-in" value="'+escH(r.beringung_ist||tmToday())+'">';
+  const html='Paar <b>'+escH(r.father_ring||'')+' × '+escH(r.mother_ring||'')+'</b><br>Jungtauben, die jetzt im Bestand angelegt werden:<div class="rg-chips" style="margin-top:6px">'+rings.map(x=>'<span class="rg-chip">'+escH(x)+(exist.includes(x)?' (gibt es schon)':'')+'</span>').join('')+'</div>'
+    +(f&&m?'':'<div style="color:#e0a030;margin-top:6px">⚠ Vater oder Mutter nicht in der Datenbank gefunden – die Jungtauben bekommen die Eltern dann nur als Ringnummer.</div>');
+  if(!await appConfirm('Beringen bestätigen',html,'✓ Beringt',dateHtml)) return;
+  const date=(document.getElementById('rg-date')||{}).value||tmToday();
+  const yr=r.schlupf_ist||null;
+  try{
+    const rows=rings.filter(x=>!exist.includes(x)).map(x=>{ const pc=parseRingComponents(x)||{};
+      const row={pigeonid:crypto.randomUUID(), deleted:false, ringnumber:pc.ringnumber||x, countrycode:pc.countrycode||null, associationno:pc.associationno||null, date_year:pc.date_year||(tmDay(date)?new Date(tmDay(date)).getUTCFullYear():null), instock:true};
+      if(yr) row.birthday=yr;
+      if(f){ row.fatherid=f.pigeonid; row.ringnumberfather=ring(f); } else if(r.father_ring) row.ringnumberfather=r.father_ring;
+      if(m){ row.motherid=m.pigeonid; row.ringnumbermother=ring(m); } else if(r.mother_ring) row.ringnumbermother=r.mother_ring;
+      return row; });
+    if(rows.length){
+      await apiPost('pigeons', rows);
+      rows.forEach(x=>{ S.pigeons.push(x); LOADED_PIGEON_IDS.add(x.pigeonid); });
+      pIdxReset(); try{ invalidatePedigreeCache(); }catch(e){} try{ updateHeaderStats(); }catch(e){}
+    }
+    await tmPatch(id,{beringung_ist:date, ringe_ok:true});
+  }catch(e){ alert('Beringen konnte nicht gespeichert werden: '+e.message); }
+}
+// ── Kontingent verwalten ──
+async function rgKrAdd(){
+  const last=rgKr().slice(-1)[0];
+  const def=last?String(last.prefix).replace(/^DE-/,'')+'-'+(last.bis+1)+'-':'';
+  const v=await appAsk('Ringkontingent anlegen','Vereinsnr.-Jahr-von-bis, z. B. 06559-27-261-300 (Land optional davor: DE-…):',def); if(!v) return;
+  const m=v.trim().match(/^(?:([A-Za-z]{2})[-\s])?(\d{3,6})[-\s](\d{2,4})[-\s]+(\d+)\s*[-–]\s*(\d+)$/);
+  if(!m){ alert('Format nicht erkannt. Beispiel: 06559-27-261-300'); return; }
+  const von=+m[4], bis=+m[5]; if(bis<von){ alert('Das Ende muss größer als der Anfang sein.'); return; }
+  const yy=String(m[3]).slice(-2), prefix=(m[1]||'DE').toUpperCase()+'-'+m[2]+'-'+yy;
+  const row={id:crypto.randomUUID(), jahr:yearFromYY(yy), prefix, von, bis};
+  try{ await apiPost('ring_kontingente',row); (S.ringKr=S.ringKr||[]).push(row); render(); }catch(e){ alert('Speichern fehlgeschlagen: '+e.message); }
+}
+async function rgKrDel(id){
+  const k=(S.ringKr||[]).find(x=>x.id===id); if(!k) return;
+  if(!await appConfirm('Kontingent löschen','Kontingent '+escH(k.prefix)+' '+k.von+'–'+k.bis+' löschen? Bereits zugeordnete Ringe bleiben bei den Paaren erhalten.','Löschen')) return;
+  try{ await apiDeleteBy('ring_kontingente','id=eq.'+encodeURIComponent(id)); S.ringKr=S.ringKr.filter(x=>x.id!==id); render(); }catch(e){ alert('Löschen fehlgeschlagen: '+e.message); }
+}
+function renderJungtauben(){
+  const L=mlCurListe();
+  if(S.ringMissing||!S.matingsRg) return `<div class="card" style="border-color:var(--amber)"><div class="card-title">🛠 Einmalige Einrichtung für die Ringverwaltung</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:8px">Für Ringkontingent, Ringzuordnung und Jungtaubenliste einmal dieses SQL im Supabase-SQL-Editor ausführen, danach die App neu laden.</div>
+    <pre class="ml-sql" id="rg-sql">${escH(RG_SQL)}</pre>
+    <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('rg-sql').textContent).then(()=>alert('SQL kopiert.'))">📋 SQL kopieren</button></div>`;
+  const kr=rgKr(), used=rgUsed(null);
+  const krHtml=`<div class="card"><div class="card-title" style="margin-bottom:6px">💍 Ringkontingent</div>
+    ${kr.length?kr.map(k=>{ let u=0; for(let n=k.von;n<=k.bis;n++) if(used.has(rgFmt(k.prefix,n))) u++; const tot=k.bis-k.von+1;
+      return `<div class="tm-up-r"><span class="tm-up-d" style="min-width:150px;font-family:monospace">${escH(k.prefix)}-${k.von}…${k.bis}</span><span>${u} von ${tot} vergeben · <b>${tot-u} frei</b></span><span style="flex:1"></span><button class="btn btn-outline btn-sm" onclick="rgKrDel('${k.id}')">🗑</button></div>`; }).join(''):'<div style="font-size:13px;color:var(--text3)">Noch kein Kontingent. Lege deine verfügbaren Ringe einmal an, z. B. 06559-27-261-300.</div>'}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px"><button class="btn btn-outline" onclick="rgKrAdd()">＋ Kontingent anlegen</button>
+      <label style="font-size:12px;color:var(--text2)">Jungtauben je Paar <input type="number" class="tm-n" min="1" max="6" value="${rgCfg().n}" onchange="rgCfgN(this.value)"></label>
+      ${kr.length?`<button class="btn" onclick="rgAutoAll()">⚡ Ringe für alle Paare automatisch zuordnen</button>`:''}</div>
+    <div style="font-size:12px;color:var(--text3);margin-top:8px">Die automatische Zuordnung folgt der Reihenfolge von Abteil und Zelle und nimmt die nächsten freien Ringe. Einzelne Ringe ordnest du in der Erfassungsmaske eines Paares zu.</div></div>`;
+  // Jungtaubenliste
+  const items=[]; (S.matings||[]).filter(r=>mlListOf(r)===L).forEach(r=>rgListOf(r).forEach(x=>items.push({r,ring:x,pigeon:pIdx().byRing.get(x)||null})));
+  items.sort((a,b)=>String(a.ring).localeCompare(String(b.ring),'de',{numeric:true}));
+  const yrs={}; items.forEach(x=>{ const y=(parseRingComponents(x.ring)||{}).date_year; if(y) yrs[y]=(yrs[y]||0)+1; });
+  const year=Object.keys(yrs).sort((a,b)=>yrs[b]-yrs[a])[0]||'';
+  const done=items.filter(x=>x.r.ringe_ok).length;
+  const list=!items.length?`<div class="card" style="color:var(--text3);font-size:13px">Noch keine Ringe zugeordnet. Lege oben ein Kontingent an und ordne den Paaren Ringe zu.</div>`
+   :`<div class="card"><div class="card-title" style="margin-bottom:2px">🐣 Jungtaubenliste ${escH(String(year))} <span style="color:var(--text3);font-weight:400">(${items.length} Ringe · ${done} beringt · ${items.length-done} geplant)</span></div>
+    <div style="margin:6px 0 10px"><button class="btn btn-outline btn-sm" onclick="rgCsv()">CSV</button></div>
+    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Ring</th><th>♂ Vater</th><th>♀ Mutter</th><th>Zucht</th><th>Abteil / Zelle</th><th>Geschlüpft</th><th>Status</th></tr></thead><tbody>
+    ${items.map(x=>`<tr><td style="font-family:monospace;font-weight:600">${x.pigeon?`<a style="cursor:pointer;color:var(--green)" onclick="selectPigeon('${x.pigeon.pigeonid}')">${escH(x.ring)}</a>`:escH(x.ring)}</td><td style="font-family:monospace;font-size:12px">${escH(x.r.father_ring||'')}</td><td style="font-family:monospace;font-size:12px">${escH(x.r.mother_ring||'')}</td><td>${escH(mlZuchtOf(x.r))}</td><td>${tmPos(x.r,true)?escH(tmPos(x.r,true)):'—'}</td><td>${x.r.schlupf_ist?tmFmt(x.r.schlupf_ist):'—'}</td>
+      <td>${x.r.ringe_ok?'<span style="color:var(--green)">✓ beringt</span>':`<span style="color:var(--text3)">geplant</span> <button class="btn btn-outline btn-sm" onclick="tmMask('${x.r.id}')">Beringen ›</button>`}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  return krHtml+list;
+}
+function rgCsv(){
+  const L=mlCurListe(), rows=[]; (S.matings||[]).filter(r=>mlListOf(r)===L).forEach(r=>rgListOf(r).forEach(x=>rows.push([x,r.father_ring||'',r.mother_ring||'',mlZuchtOf(r),r.abteil||'',r.zelle||'',r.schlupf_ist||'',r.ringe_ok?'beringt':'geplant'])));
+  if(!rows.length){ alert('Keine Ringe zum Exportieren.'); return; }
+  rows.sort((a,b)=>String(a[0]).localeCompare(String(b[0]),'de',{numeric:true}));
+  mlDownload('jungtauben_'+String(L).toLowerCase().replace(/[^a-z0-9äöüß]+/g,'_')+'.csv','﻿'+[['Ring','Vater','Mutter','Zucht','Abteil','Zelle','Geschlüpft','Status'],...rows].map(r=>r.map(mlCsvCell).join(';')).join('\n'),'text/csv');
+}
 // ── Große Erfassungsmaske (Vollbild, große Felder – auch fürs Smartphone im Schlag) ──
 function tmMask(id,keep){
   const rows=tmRows(); const r=(S.matings||[]).find(x=>String(x.id)===String(id)); if(!r) return;
@@ -10542,6 +10738,7 @@ function tmMask(id,keep){
       ${field('eiablage','🥚','Eiablage (tatsächlich)','eiablage_ist','plant '+c.eier+' Tage nach Anpaarung')}
       ${field('schlupf','🐣','Schlupf (tatsächlich)','schlupf_ist','plant '+c.brut+' Tage nach Eiablage')}
       ${field('beringung','💍','Beringen der Jungtauben','beringung_ist','plant '+c.ring+' Tage nach Schlupf')}
+      ${rgMaskHtml(r)}
       ${field('absetzen','✂️','Absetzen der Jungtauben','absetzen_ist','plant '+c.absetz+' Tage nach Schlupf')}
       <div style="font-size:12px;color:var(--text3);margin:4px 2px 0">Status: <b>${escH(tmEff(r))}</b> – wird mit den Terminen automatisch weitergesetzt. Alle Folgetermine rechnen ab dem tatsächlichen Datum neu.</div></div>
     <div class="tm-foot"><button class="btn btn-outline tm-b" ${i<=0?'disabled':''} onclick="tmMask('${i>0?rows[i-1].id:id}')">‹ Vorheriges Paar</button><span style="color:var(--text3);font-size:12px">${i+1} / ${rows.length}</span><button class="btn tm-b" ${i>=rows.length-1?'disabled':''} onclick="tmMask('${i<rows.length-1?rows[i+1].id:id}')">Nächstes Paar ›</button></div></div>`;
@@ -10563,7 +10760,7 @@ function mlExportJson(all){
     mutter_ring:r.mother_ring||null, mutter_name:r.mother_name||null, mutter_id:r.motherid||null,
     inzucht:r.inzucht??null, score_vater:r.score_father??null, score_mutter:r.score_mother??null, score:r.score_combined??null,
     status:tmEff(r), notiz:r.note||null, erstellt:r.created_at||null,
-    termine:{anpaarung:r.anpaarung||null, eiablage_ist:r.eiablage_ist||null, schlupf_ist:r.schlupf_ist||null, beringung_ist:r.beringung_ist||null, absetzen_ist:r.absetzen_ist||null, zelle:r.zelle||null, abteil:r.abteil||null} })) })) }));
+    termine:{anpaarung:r.anpaarung||null, eiablage_ist:r.eiablage_ist||null, schlupf_ist:r.schlupf_ist||null, beringung_ist:r.beringung_ist||null, absetzen_ist:r.absetzen_ist||null, zelle:r.zelle||null, abteil:r.abteil||null, ringe:r.ringe||null, ringe_ok:!!r.ringe_ok} })) })) }));
   const d=new Date().toISOString().slice(0,10), slug=(all?'alle':String(names[0]).toLowerCase().replace(/[^a-z0-9äöüß]+/g,'_').replace(/^_|_$/g,''))||'liste';
   mlDownload('paarungsliste_'+slug+'_'+d+'.json', JSON.stringify({format:'pigman-paarungsliste', version:1, exportiert:new Date().toISOString(), listen}, null, 1), 'application/json');
 }
@@ -10592,7 +10789,7 @@ async function mlImportText(txt){
     const ib=calcInbreedingPair(f,m), pp=computePaarungsprognose(f,m);
     rows.push(Object.assign({fatherid:f.pigeonid, motherid:m.pigeonid, father_ring:ring(f), father_name:f.name||null, mother_ring:ring(m), mother_name:m.name||null,
       inzucht: ib!=null?Math.round(ib*10000)/100:(p.inzucht??null), score_father:pp.sF, score_mother:pp.sM, score_combined:pp.combined,
-      liste:String(l.name||mlDefaultListe()), zucht:String(z.name||'1. Zucht'), status:ML_STATUS.includes(p.status)?p.status:'geplant', note:p.notiz||null}, (S.matingsTm&&p.termine)?TM_FIELDS.reduce((o,k)=>{ if(p.termine[k]) o[k]=p.termine[k]; return o; },{}):{}));
+      liste:String(l.name||mlDefaultListe()), zucht:String(z.name||'1. Zucht'), status:ML_STATUS.includes(p.status)?p.status:'geplant', note:p.notiz||null}, (S.matingsTm&&p.termine)?TM_FIELDS.reduce((o,k)=>{ if(p.termine[k]) o[k]=p.termine[k]; return o; },{}):{}, (S.matingsRg&&p.termine&&p.termine.ringe)?{ringe:p.termine.ringe, ringe_ok:!!p.termine.ringe_ok}:{}));
   }); }); });
   if(!rows.length){ alert('Nichts zu importieren: '+total+' Paare in der Datei, '+dup+' schon vorhanden'+(missing.length?', '+missing.length+' Tauben nicht gefunden ('+missing.slice(0,8).join(', ')+(missing.length>8?' …':'')+')':'')+'.'); return; }
   if(!confirm(rows.length+' Paare importieren'+(dup?' ('+dup+' schon vorhanden, werden übersprungen)':'')+(missing.length?'\n'+missing.length+' Paare werden ausgelassen, weil Tauben fehlen: '+missing.slice(0,8).join(', ')+(missing.length>8?' …':''):'')+'\n\nScores und Inzucht werden mit dem aktuellen Stand neu berechnet.')) return;
