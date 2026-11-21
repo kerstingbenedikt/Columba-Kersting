@@ -202,6 +202,7 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .qe-row{display:flex;align-items:center;gap:6px}
 .qe-label{font-size:12px;color:var(--text3);white-space:nowrap}
 .qe-gender.qe-m{color:#6aa8ff}.qe-gender.qe-f{color:#e68ac7}.qe-gender.qe-u{color:var(--text3)}.qe-type{max-width:none;min-width:150px}.qe-color{min-width:140px;max-width:none}
+.zp-find{margin-bottom:6px}.zp-find input{width:100%;box-sizing:border-box;padding:6px 8px}.zp-hits{display:flex;flex-direction:column;gap:2px;margin-top:4px}.zp-hit{padding:9px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer}.zp-hit:active,.zp-hit:hover{border-color:var(--green)}
 .cp-head{display:none}
 @media(max-width:760px){
   #col-picker-menu{left:8px!important;right:8px!important;top:auto!important;bottom:8px!important;width:auto!important;max-height:84vh!important;padding:14px!important;z-index:9500!important;border-radius:14px!important;box-shadow:0 -6px 40px rgba(0,0,0,.6)!important}
@@ -11067,6 +11068,18 @@ function zpCompute(){
   z.assign={M, F, ev, pairs};
   return z.assign;
 }
+// Weibchen per Nummer/Namen suchen und mit einem Tipp als Partnerin setzen (statt in der langen Auswahlliste zu blättern)
+function zpFind(mid,q){
+  const box=document.getElementById('zph-'+mid); if(!box) return;
+  q=String(q||'').trim().toLowerCase(); const z=zpState(), A=z.assign; if(!q||!A){ box.innerHTML=''; return; }
+  const i=A.M.findIndex(x=>x.pigeonid===mid); if(i<0) return;
+  const qn=q.replace(/[\s.]/g,'');
+  const hits=A.F.map((f,j)=>({f,j,e:A.ev[i][j]})).filter(o=>{ const rg=String(ring(o.f)).toLowerCase().replace(/[\s.]/g,''), en=(String(ring(o.f)).match(/(\d+)\s*$/)||[])[1]||'';
+      return rg.includes(qn)||en===q||String(o.f.name||'').toLowerCase().includes(q); }).sort((a,b)=>b.e.score-a.e.score).slice(0,8);
+  box.innerHTML=hits.length?hits.map(o=>{ const holder=A.pairs.find(p=>p.j===o.j && p.i!==i);
+    return `<div class="zp-hit" onclick="zpSwap('${mid}','${o.f.pigeonid}')"><span style="font-family:monospace">${escH(ring(o.f))}</span>${o.f.name?' <span style="color:var(--text3)">'+escH(o.f.name)+'</span>':''} <b style="color:${scoreColor(o.e.score)}">${o.e.score}</b>${o.e.ib>zpMaxIb(z)?' <span style="color:#e07070">Inzucht!</span>':''}${holder?' <span style="color:var(--text3)">(bei '+escH(ring(A.M[holder.i]))+')</span>':''}</div>`; }).join('')
+    :'<div style="font-size:12px;color:var(--text3);padding:4px 2px">Kein Weibchen mit dieser Nummer/diesem Namen in der Auswahl.</div>';
+}
 function zpInvalidate(){ if(S.zp) S.zp.assign=null; }
 function zpSet(k,v){ const z=zpState(); z[k]=v; zpSave(); zpInvalidate(); render(); }
 function zpLock(mid){ const z=zpState(), A=z.assign; const pr=A&&A.pairs.find(p=>A.M[p.i].pigeonid===mid); if(!pr) return; if(z.locked[mid]) delete z.locked[mid]; else z.locked[mid]=A.F[pr.j].pigeonid; zpSave(); render(); }
@@ -11299,7 +11312,8 @@ function renderZuchtplan(){
   const ibCol=ib=>ib<0.0625?'var(--green)':ib<0.125?'var(--orange)':'#e07070';
   const sel=r=>{
     const opts=A.F.map((f,j)=>({f,j,e:A.ev[r.i][j]})).sort((a,b)=>b.e.score-a.e.score);
-    return `<select class="fc-in zp-sel" style="padding:4px 6px" onchange="zpSwap('${r.m.pigeonid}',this.value)">
+    return `<div class="zp-find"><input type="search" class="fc-in" id="zpf-${r.m.pigeonid}" placeholder="🔎 Weibchen suchen: Nr. oder Name" oninput="zpFind('${r.m.pigeonid}',this.value)" autocomplete="off"><div class="zp-hits" id="zph-${r.m.pigeonid}"></div></div>
+    <select class="fc-in zp-sel" style="padding:4px 6px" onchange="zpSwap('${r.m.pigeonid}',this.value)">
       <option value="">— ohne Partnerin —</option>
       ${opts.map(o=>{ const holder=A.pairs.find(p=>p.j===o.j && p.i!==r.i); return `<option value="${o.f.pigeonid}" ${r.f&&r.f.pigeonid===o.f.pigeonid?'selected':''} ${o.e.ib>zpMaxIb(z)?'style="color:#e07070"':''}>${escH(ring(o.f))}${o.f.name?' '+escH(o.f.name):''} · ${o.e.score}${o.e.ib>zpMaxIb(z)?' · Inzucht!':''}${holder?' (bei '+escH(ring(A.M[holder.i]))+')':''}</option>`; }).join('')}
     </select>`;
