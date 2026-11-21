@@ -498,6 +498,30 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .pg-btn{width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:0;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;padding:0}
 .pg-tile.drop,.pg-add.drop{outline:2px dashed var(--green);outline-offset:-3px;background:var(--bg2)}
 .pg-tile[draggable=true]{cursor:grab}
+.tm-in{background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:16px;font-family:inherit;min-height:44px;width:100%;box-sizing:border-box;outline:none}
+.tm-in:focus{border-color:var(--green)}
+.tm-n{width:64px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 6px;font-size:14px}
+.tm-ov{position:fixed;inset:0;z-index:9000;background:var(--bg);display:flex;justify-content:center}
+.tm-box{width:100%;max-width:640px;display:flex;flex-direction:column;height:100%;background:var(--bg2)}
+.tm-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:14px 16px;border-bottom:1px solid var(--border)}
+.tm-body{flex:1;overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:12px;-webkit-overflow-scrolling:touch}
+.tm-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border)}
+.tm-b{min-height:44px;padding:0 16px;font-size:15px;white-space:nowrap}
+.tm-f{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px}
+.tm-f.done{border-color:var(--green)}.tm-f.late{border-color:#e07070}
+.tm-fl{display:flex;flex-direction:column;gap:2px;font-size:16px;font-weight:600;margin-bottom:8px}.tm-fl small{font-weight:400;font-size:12px;color:var(--text3)}
+.tm-fr{display:flex;gap:8px;align-items:stretch}.tm-fr .tm-in{flex:1;min-width:0}
+.tm-fp{font-size:12px;color:var(--text3);margin-top:6px}
+.tm-up-r{display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:9px 4px;border-top:1px solid var(--border);cursor:pointer;font-size:13px}
+.tm-up-r:first-child{border-top:0}.tm-up-d{min-width:92px;font-weight:600}.tm-up-p{color:var(--text3);font-family:monospace;font-size:12px}
+.tm-up-r.late .tm-up-d{color:#e07070}.tm-late{color:#e07070;font-size:11px;font-weight:600}
+.tm-fin{opacity:.6}
+.tm-mob{display:none}
+.tm-card{cursor:pointer}
+.tm-steps{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+.tm-st{display:flex;flex-direction:column;font-size:11px;color:var(--text3);background:var(--bg3);border-radius:8px;padding:6px 8px}.tm-st b{font-size:14px;color:var(--text2)}
+.tm-st.done b{color:var(--green)}.tm-st.late b{color:#e07070}
+@media(max-width:760px){.tm-desk{display:none}.tm-mob{display:block}.tm-box{max-width:none}}
 .pg-btn:hover{background:rgba(0,0,0,.85)}
 .pg-add{border:1px dashed var(--border);border-radius:var(--radius-sm);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:120px;color:var(--text3);cursor:pointer;font-size:12px;background:transparent}
 .pg-add:hover{border-color:var(--green);color:var(--green)}
@@ -3119,7 +3143,7 @@ function sortBy(col){ S.sortCol===col ? S.sortDir*=-1 : (S.sortCol=col,S.sortDir
 // 'reisen'  = alles rund um Flüge & Auswertungen (Reisen, Bestenliste, Züchter)
 const TAB_GROUP = {
   tauben:'tauben', stammbaum:'tauben', paarung:'zucht', nachkommen:'tauben',
-  zucht:'zucht', zuchtempf:'zucht', zuchtliste:'zucht', zuchtausw:'zucht',
+  zucht:'zucht', zuchtempf:'zucht', zuchtliste:'zucht', zuchttermine:'zucht', zuchtausw:'zucht',
   neu:'tauben', scan:'tauben', beurteilung:'tauben', listen:'add',
   import:'add', export:'add', backup:'add', wartung:'add', adressen:'add',
   reisen:'reisen', bestenliste:'reisen', zuechter:'reisen', contest:'reisen'
@@ -3413,6 +3437,7 @@ function render(){
   else if(S.tab==='zucht')      m.innerHTML=renderZuchtSubnav('zucht') + renderPlanen();
   else if(S.tab==='zuchtempf')  { S.tab='zucht'; S.planView='rang'; S.pairRecOpen=true; m.innerHTML=renderZuchtSubnav('zucht') + renderPlanen(); }
   else if(S.tab==='zuchtliste') m.innerHTML=renderZuchtSubnav('zuchtliste') + renderMatingsList();
+  else if(S.tab==='zuchttermine') m.innerHTML=renderZuchtSubnav('zuchttermine') + renderTermine();
   else if(S.tab==='zuchtausw')  { S.tab='zucht'; S.planView='bewaehrt'; m.innerHTML=renderZuchtSubnav('zucht') + renderPlanen(); }
   else if(S.tab==='neu')        m.innerHTML=renderNewSubnav('neu')+renderNeu();
   else if(S.tab==='scan')       m.innerHTML=renderNewSubnav('scan')+renderScan();
@@ -10072,6 +10097,7 @@ function mlEnsureLoaded(){
   _mlP=apiGet('/matings?order=created_at.desc&limit=2000').then(async rows=>{
     S.matings=Array.isArray(rows)?rows:[];
     try{ await apiGet('/matings?select=liste,zucht,status,note&limit=1'); S.matingsExt=true; }catch(e){ S.matingsExt=false; }
+    try{ await apiGet('/matings?select=anpaarung,eiablage_ist,schlupf_ist,beringung_ist,absetzen_ist&limit=1'); S.matingsTm=true; }catch(e){ S.matingsTm=false; }
   }).catch(e=>{ S.matingsError=e.message; S.matings=[]; }).finally(()=>{ S.matingsLoading=false; _mlP=null; });
   return _mlP;
 }
@@ -10272,6 +10298,153 @@ function renderMatingsList(){
     </table></div>
   </div>`;
 }
+
+// ══ ④ TERMINE: Anpaarung → Eiablage → Schlupf → Beringen → Absetzen ══════════════
+// Tabelle matings braucht fünf Datumsspalten (matings_termine.sql). Geplante Termine werden berechnet,
+// tatsächliche Termine (…_ist) trägst du ein; alles danach rechnet ab dem tatsächlichen Termin weiter.
+const TM_FIELDS=['anpaarung','eiablage_ist','schlupf_ist','beringung_ist','absetzen_ist'];
+const TM_SQL=`alter table matings
+  add column if not exists anpaarung date,
+  add column if not exists eiablage_ist date,
+  add column if not exists schlupf_ist date,
+  add column if not exists beringung_ist date,
+  add column if not exists absetzen_ist date;
+notify pgrst, 'reload schema';`;
+const TM_DEF={eier:10, brut:18, ring:6, absetz:28};
+const TM_STEPS=[['anpaarung','🕊','Anpaarung'],['eiablage','🥚','Eiablage'],['schlupf','🐣','Schlupf'],['beringung','💍','Beringen'],['absetzen','✂️','Absetzen']];
+function tmCfg(){ let c={}; try{ c=JSON.parse(localStorage.getItem('pigman_tm')||'{}')||{}; }catch(e){} return Object.assign({},TM_DEF,c); }
+function tmCfgSet(k,v){ const c=tmCfg(); v=parseInt(v,10); if(!(v>=0&&v<=120)) return; c[k]=v; try{ localStorage.setItem('pigman_tm',JSON.stringify(c)); }catch(e){} render(); if(TM.id) tmMask(TM.id,true); }
+const TM={id:null};
+const tmDay=d=>{ if(!d) return null; const m=String(d).match(/^(\d{4})-(\d\d)-(\d\d)/); return m?Date.UTC(+m[1],+m[2]-1,+m[3]):null; };
+const tmIso=t=>new Date(t).toISOString().slice(0,10);
+const tmAdd=(d,n)=>{ const t=tmDay(d); return t==null?null:tmIso(t+n*86400000); };
+const tmToday=()=>{ const n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0'); };
+function tmFmt(d,long){ const t=tmDay(d); if(t==null) return '—'; return new Date(t).toLocaleDateString('de-DE',{timeZone:'UTC',weekday:'short',day:'2-digit',month:'2-digit',year:long?'numeric':'2-digit'}); }
+// je Paar: für jeden Schritt {plan, ist, date (ist sonst plan), done, late}
+function tmPlan(r){
+  const c=tmCfg(), today=tmToday(), o={};
+  const ap=r.anpaarung||null;
+  o.anpaarung={plan:ap, ist:null, date:ap, done:!!ap&&ap<=today};
+  const ep=ap?tmAdd(ap,c.eier):null, ei=r.eiablage_ist||null, ed=ei||ep;
+  o.eiablage={plan:ep, ist:ei, date:ed, done:!!ei};
+  const sp=ed?tmAdd(ed,c.brut):null, si=r.schlupf_ist||null, sd=si||sp;
+  o.schlupf={plan:sp, ist:si, date:sd, done:!!si};
+  const bp=sd?tmAdd(sd,c.ring):null, bi=r.beringung_ist||null;
+  o.beringung={plan:bp, ist:bi, date:bi||bp, done:!!bi};
+  const ab=sd?tmAdd(sd,c.absetz):null, ai=r.absetzen_ist||null;
+  o.absetzen={plan:ab, ist:ai, date:ai||ab, done:!!ai};
+  TM_STEPS.slice(1).forEach(([k])=>{ const x=o[k]; x.late=!x.done && !!x.date && x.date<today; });
+  // nächster offener Schritt
+  o.next=null; for(const [k,ic,lbl] of TM_STEPS.slice(1)){ const x=o[k]; if(!x.done && x.date){ o.next={k,ic,lbl,date:x.date,late:x.late}; break; } }
+  o.finished=!!o.absetzen.ist;
+  return o;
+}
+function tmRows(){ return mlRows(); }
+async function tmPatch(id,f){
+  const r=(S.matings||[]).find(x=>String(x.id)===String(id)); if(!r) return;
+  const up=Object.assign({},f);
+  // Status automatisch nachziehen (nur vorwärts)
+  const rank={geplant:0,gepaart:1,Eier:2,Jungtiere:3,abgeschlossen:4}, cur=rank[r.status||'geplant']||0;
+  const m=Object.assign({},r,f); let want=null;
+  if(m.absetzen_ist) want='abgeschlossen'; else if(m.schlupf_ist) want='Jungtiere'; else if(m.eiablage_ist) want='Eier'; else if(m.anpaarung && m.anpaarung<=tmToday()) want='gepaart';
+  if(want && (rank[want]||0)>cur) up.status=want;
+  try{ await apiPatchBy('matings','id=eq.'+id,up); Object.assign(r,up); render(); if(TM.id) tmMask(TM.id,true); }
+  catch(e){ alert('Speichern fehlgeschlagen: '+e.message); }
+}
+function tmSet(id,k,v){ tmPatch(id,{[k]:v||null}); }
+async function tmApplyAll(){
+  const el=document.getElementById('tm-all'); const v=el&&el.value; if(!v){ alert('Bitte zuerst ein Datum wählen.'); return; }
+  const rows=tmRows(); if(!rows.length) return;
+  const had=rows.filter(r=>r.anpaarung).length;
+  if(!confirm('Anpaarungstermin '+tmFmt(v,true)+' für '+rows.length+' Paare setzen'+(had?' ('+had+' haben schon einen Termin, der überschrieben wird)':'')+'?')) return;
+  try{
+    for(const r of rows){ await apiPatchBy('matings','id=eq.'+r.id,{anpaarung:v}); r.anpaarung=v; }
+    render();
+  }catch(e){ alert('Speichern fehlgeschlagen: '+e.message); render(); }
+}
+function tmSqlBox(){
+  return `<div class="card" style="border-color:var(--amber)"><div class="card-title">🛠 Einmalige Einrichtung für die Termine</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:8px">Für die Terminplanung braucht die Tabelle „matings“ einmalig fünf Datumsspalten. Dieses SQL im Supabase-SQL-Editor ausführen, danach die App neu laden.</div>
+    <pre class="ml-sql" id="tm-sql">${escH(TM_SQL)}</pre>
+    <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('tm-sql').textContent).then(()=>alert('SQL kopiert.'))">📋 SQL kopieren</button></div>`;
+}
+function tmPairHtml(r){ return '♂ '+escH(r.father_ring||'')+(r.father_name?' <span style="color:var(--text3)">'+escH(r.father_name)+'</span>':'')+'<br>♀ '+escH(r.mother_ring||'')+(r.mother_name?' <span style="color:var(--text3)">'+escH(r.mother_name)+'</span>':''); }
+function tmCell(x,k){
+  if(!x.date) return '<span style="color:var(--text3)">—</span>';
+  const c=x.done?'var(--green)':x.late?'#e07070':'var(--text2)';
+  return `<div style="color:${c};font-weight:${x.done?700:500}">${x.done?'✓ ':''}${tmFmt(x.date)}</div>`+(x.done&&x.plan&&x.ist&&x.ist!==x.plan?`<div style="font-size:11px;color:var(--text3)">geplant ${tmFmt(x.plan)}</div>`:x.late?'<div style="font-size:11px;color:#e07070">überfällig</div>':!x.done&&k!=='anpaarung'?'<div style="font-size:11px;color:var(--text3)">geplant</div>':'');
+}
+function renderTermine(){
+  loadMatingsIfNeeded();
+  if(S.matingsError) return `<div class="card" style="color:#e07070;font-size:13px">Paarungsliste konnte nicht geladen werden: ${escH(S.matingsError)}</div>`;
+  if(S.matingsLoading || S.matings===null) return `<div class="loading"><div class="spinner"></div>Lade Paarungsliste…</div>`;
+  if(!S.matingsExt) return `<div class="card" style="font-size:13px;color:var(--text2)">Zuerst in ③ Paarungsliste die Einrichtung für Listen und Zuchten ausführen.</div>`;
+  if(!S.matingsTm) return tmSqlBox();
+  const st=mlState(), Ls=mlLists(), L=mlCurListe(), Z=L?mlZuchten(L):[], c=tmCfg();
+  const cnt=z=>(S.matings||[]).filter(r=>mlListOf(r)===L && (z==null||mlZuchtOf(r)===z)).length;
+  const bar=`<div class="card">
+    <div class="ml-bar"><span class="pv-ctl-l" style="margin:0">Liste</span>
+      <select onchange="mlPickListe(this.value)" style="min-width:200px">${Ls.map((x,i)=>`<option value="${i}" ${x===L?'selected':''}>${escH(x)}</option>`).join('')||'<option>– noch keine –</option>'}</select></div>
+    ${L?`<div class="ml-chips"><button class="ml-chip ${st.zucht==='*'?'on':''}" onclick="mlPickZucht(-1)">Alle · ${cnt()}</button>${Z.map((z,i)=>`<button class="ml-chip ${st.zucht===z?'on':''}" onclick="mlPickZucht(${i})">${escH(z)} · ${cnt(z)}</button>`).join('')}</div>`:''}
+  </div>`;
+  const rows=L?tmRows():[];
+  if(!L||!rows.length) return bar+`<div class="card" style="color:var(--text3);font-size:13px">In dieser Auswahl sind noch keine Paare – erst in ③ Paarungsliste anlegen.</div>`;
+  const plans=new Map(rows.map(r=>[r.id,tmPlan(r)]));
+  // Anstehend
+  const up=[]; rows.forEach(r=>{ const p=plans.get(r.id); if(p.next) up.push({r,n:p.next}); });
+  up.sort((a,b)=>a.n.date.localeCompare(b.n.date));
+  const upHtml = up.length ? `<div class="card"><div class="card-title" style="margin-bottom:6px">⏰ Als Nächstes</div>
+    <div class="tm-up">${up.slice(0,8).map(u=>`<div class="tm-up-r ${u.n.late?'late':''}" onclick="tmMask('${u.r.id}')"><span class="tm-up-d">${tmFmt(u.n.date)}</span><span>${u.n.ic} ${u.n.lbl}</span><span class="tm-up-p">${escH(u.r.father_ring||'')} × ${escH(u.r.mother_ring||'')}</span>${u.n.late?'<span class="tm-late">überfällig</span>':''}</div>`).join('')}</div></div>` : '';
+  const setCard=`<div class="card"><div class="card-title" style="margin-bottom:6px">🕊 Anpaarungstermin festlegen</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><input type="date" id="tm-all" class="tm-in" style="max-width:190px" value="${escH((rows.find(r=>r.anpaarung)||{}).anpaarung||'')}">
+      <button class="btn" onclick="tmApplyAll()">Für alle ${rows.length} Paare übernehmen</button></div>
+    <div style="font-size:12px;color:var(--text3);margin-top:8px">Gilt für die gewählte Auswahl (${escH(L)}${st.zucht&&st.zucht!=='*'?' › '+escH(st.zucht):''}). Einzelne Paare kannst du danach über „Erfassen“ abweichend setzen.</div>
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--text2)">⚙️ Rechenregeln (Tage)</summary>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--text2)">
+        <label>Anpaarung → Eiablage <input type="number" class="tm-n" min="0" max="120" value="${c.eier}" onchange="tmCfgSet('eier',this.value)"></label>
+        <label>Eiablage → Schlupf <input type="number" class="tm-n" min="0" max="120" value="${c.brut}" onchange="tmCfgSet('brut',this.value)"></label>
+        <label>Schlupf → Beringen <input type="number" class="tm-n" min="0" max="120" value="${c.ring}" onchange="tmCfgSet('ring',this.value)"></label>
+        <label>Schlupf → Absetzen <input type="number" class="tm-n" min="0" max="120" value="${c.absetz}" onchange="tmCfgSet('absetz',this.value)"></label></div></details></div>`;
+  const table=`<div class="card tm-desk"><div class="card-title" style="margin-bottom:8px">📅 Zeitplan <span style="color:var(--text3);font-weight:400">(${rows.length} Paare) – ✓ = tatsächlicher Termin, sonst geplant</span></div>
+    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Paar</th>${TM_STEPS.map(([k,ic,l])=>`<th>${ic} ${l}</th>`).join('')}<th></th></tr></thead><tbody>
+    ${rows.map(r=>{ const p=plans.get(r.id); return `<tr class="${p.finished?'tm-fin':''}"><td style="font-family:monospace;font-size:12px">${tmPairHtml(r)}</td>${TM_STEPS.map(([k])=>`<td>${tmCell(p[k],k)}</td>`).join('')}<td style="text-align:right"><button class="btn btn-outline btn-sm" onclick="tmMask('${r.id}')">Erfassen ›</button></td></tr>`; }).join('')}
+    </tbody></table></div></div>`;
+  const cards=`<div class="tm-mob">${rows.map(r=>{ const p=plans.get(r.id); return `<div class="card tm-card ${p.finished?'tm-fin':''}" onclick="tmMask('${r.id}')">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div style="font-family:monospace;font-size:13px">${tmPairHtml(r)}</div><button class="btn btn-sm">Erfassen ›</button></div>
+      <div class="tm-steps">${TM_STEPS.map(([k,ic,l])=>{ const x=p[k]; return `<div class="tm-st ${x.done?'done':x.late?'late':''}"><span>${ic} ${l}</span><b>${x.date?tmFmt(x.date):'—'}</b></div>`; }).join('')}</div>
+      ${p.next?`<div style="font-size:12px;margin-top:6px;color:${p.next.late?'#e07070':'var(--text2)'}">Nächster Schritt: ${p.next.ic} ${p.next.lbl} ${tmFmt(p.next.date)}${p.next.late?' – überfällig':''}</div>`:p.finished?'<div style="font-size:12px;margin-top:6px;color:var(--green)">✓ abgeschlossen</div>':''}</div>`; }).join('')}</div>`;
+  return bar+setCard+upHtml+table+cards;
+}
+// ── Große Erfassungsmaske (Vollbild, große Felder – auch fürs Smartphone im Schlag) ──
+function tmMask(id,keep){
+  const rows=tmRows(); const r=(S.matings||[]).find(x=>String(x.id)===String(id)); if(!r) return;
+  TM.id=id; const p=tmPlan(r), i=rows.findIndex(x=>String(x.id)===String(id));
+  let w=document.getElementById('tm-mask'); const scroll=w?w.querySelector('.tm-body').scrollTop:0;
+  if(!w){ w=document.createElement('div'); w.id='tm-mask'; w.className='tm-ov'; document.body.appendChild(w); document.body.style.overflow='hidden'; }
+  const field=(k,ic,lbl,col,hint)=>{
+    const x=p[k]; const val=r[col]||'';
+    return `<div class="tm-f ${x.done?'done':x.late?'late':''}">
+      <div class="tm-fl"><span>${ic} ${lbl}</span>${hint?`<small>${hint}</small>`:''}</div>
+      <div class="tm-fr"><input type="date" class="tm-in" value="${escH(val)}" onchange="tmSet('${r.id}','${col}',this.value)">
+        <button class="btn btn-outline tm-b" onclick="tmSet('${r.id}','${col}','${tmToday()}')">Heute</button>
+        ${val?`<button class="btn btn-outline tm-b" title="Eintrag löschen" onclick="tmSet('${r.id}','${col}','')">✕</button>`:''}</div>
+      ${k!=='anpaarung'&&x.plan?`<div class="tm-fp">${val&&x.plan!==val?'geplant war':'geplant'}: ${tmFmt(x.plan,true)}${x.late?' · <b style="color:#e07070">überfällig</b>':''}</div>`:''}</div>`; };
+  const c=tmCfg();
+  w.innerHTML=`<div class="tm-box"><div class="tm-head"><div style="min-width:0"><div class="serif" style="font-size:19px">📅 Termine erfassen</div>
+      <div style="font-family:monospace;font-size:13px;margin-top:4px">${tmPairHtml(r)}</div><div style="font-size:12px;color:var(--text3);margin-top:2px">${escH(mlListOf(r))} › ${escH(mlZuchtOf(r))}</div></div>
+      <button class="btn btn-outline tm-b" onclick="tmClose()">✕ Schließen</button></div>
+    <div class="tm-body">
+      ${field('anpaarung','🕊','Anpaarung','anpaarung','Tag, an dem das Paar zusammengesetzt wird')}
+      ${field('eiablage','🥚','Eiablage (tatsächlich)','eiablage_ist','plant '+c.eier+' Tage nach Anpaarung')}
+      ${field('schlupf','🐣','Schlupf (tatsächlich)','schlupf_ist','plant '+c.brut+' Tage nach Eiablage')}
+      ${field('beringung','💍','Beringen der Jungtauben','beringung_ist','plant '+c.ring+' Tage nach Schlupf')}
+      ${field('absetzen','✂️','Absetzen der Jungtauben','absetzen_ist','plant '+c.absetz+' Tage nach Schlupf')}
+      <div style="font-size:12px;color:var(--text3);margin:4px 2px 0">Status: <b>${escH(r.status||'geplant')}</b> – wird mit den Terminen automatisch weitergesetzt. Alle Folgetermine rechnen ab dem tatsächlichen Datum neu.</div></div>
+    <div class="tm-foot"><button class="btn btn-outline tm-b" ${i<=0?'disabled':''} onclick="tmMask('${i>0?rows[i-1].id:id}')">‹ Vorheriges Paar</button><span style="color:var(--text3);font-size:12px">${i+1} / ${rows.length}</span><button class="btn tm-b" ${i>=rows.length-1?'disabled':''} onclick="tmMask('${i<rows.length-1?rows[i+1].id:id}')">Nächstes Paar ›</button></div></div>`;
+  w.querySelector('.tm-body').scrollTop = keep?scroll:0;
+}
+function tmClose(){ const w=document.getElementById('tm-mask'); if(w) w.remove(); document.body.style.overflow=''; TM.id=null; }
+
 // ── Export / Import (JSON) ──
 function mlDownload(name,text,mime){
   const url=URL.createObjectURL(new Blob([text],{type:mime}));
@@ -10285,7 +10458,8 @@ function mlExportJson(all){
     vater_ring:r.father_ring||null, vater_name:r.father_name||null, vater_id:r.fatherid||null,
     mutter_ring:r.mother_ring||null, mutter_name:r.mother_name||null, mutter_id:r.motherid||null,
     inzucht:r.inzucht??null, score_vater:r.score_father??null, score_mutter:r.score_mother??null, score:r.score_combined??null,
-    status:r.status||'geplant', notiz:r.note||null, erstellt:r.created_at||null })) })) }));
+    status:r.status||'geplant', notiz:r.note||null, erstellt:r.created_at||null,
+    termine:{anpaarung:r.anpaarung||null, eiablage_ist:r.eiablage_ist||null, schlupf_ist:r.schlupf_ist||null, beringung_ist:r.beringung_ist||null, absetzen_ist:r.absetzen_ist||null} })) })) }));
   const d=new Date().toISOString().slice(0,10), slug=(all?'alle':String(names[0]).toLowerCase().replace(/[^a-z0-9äöüß]+/g,'_').replace(/^_|_$/g,''))||'liste';
   mlDownload('paarungsliste_'+slug+'_'+d+'.json', JSON.stringify({format:'pigman-paarungsliste', version:1, exportiert:new Date().toISOString(), listen}, null, 1), 'application/json');
 }
@@ -10312,9 +10486,9 @@ async function mlImportText(txt){
     if(!f||!m){ missing.push((p.vater_ring||'?')+' × '+(p.mutter_ring||'?')); return; }
     const key=[l.name,z.name,f.pigeonid,m.pigeonid].join('|'); if(have.has(key)){ dup++; return; } have.add(key);
     const ib=calcInbreedingPair(f,m), pp=computePaarungsprognose(f,m);
-    rows.push({fatherid:f.pigeonid, motherid:m.pigeonid, father_ring:ring(f), father_name:f.name||null, mother_ring:ring(m), mother_name:m.name||null,
+    rows.push(Object.assign({fatherid:f.pigeonid, motherid:m.pigeonid, father_ring:ring(f), father_name:f.name||null, mother_ring:ring(m), mother_name:m.name||null,
       inzucht: ib!=null?Math.round(ib*10000)/100:(p.inzucht??null), score_father:pp.sF, score_mother:pp.sM, score_combined:pp.combined,
-      liste:String(l.name||mlDefaultListe()), zucht:String(z.name||'1. Zucht'), status:ML_STATUS.includes(p.status)?p.status:'geplant', note:p.notiz||null});
+      liste:String(l.name||mlDefaultListe()), zucht:String(z.name||'1. Zucht'), status:ML_STATUS.includes(p.status)?p.status:'geplant', note:p.notiz||null}, (S.matingsTm&&p.termine)?TM_FIELDS.reduce((o,k)=>{ if(p.termine[k]) o[k]=p.termine[k]; return o; },{}):{}));
   }); }); });
   if(!rows.length){ alert('Nichts zu importieren: '+total+' Paare in der Datei, '+dup+' schon vorhanden'+(missing.length?', '+missing.length+' Tauben nicht gefunden ('+missing.slice(0,8).join(', ')+(missing.length>8?' …':'')+')':'')+'.'); return; }
   if(!confirm(rows.length+' Paare importieren'+(dup?' ('+dup+' schon vorhanden, werden übersprungen)':'')+(missing.length?'\n'+missing.length+' Paare werden ausgelassen, weil Tauben fehlen: '+missing.slice(0,8).join(', ')+(missing.length>8?' …':''):'')+'\n\nScores und Inzucht werden mit dem aktuellen Stand neu berechnet.')) return;
@@ -10639,6 +10813,7 @@ function glossHtml(){
 var ZUCHT_HINT={
   zucht:['Planen','Hinweis: Tauben, die nicht im Bestand sind oder den Status „unfruchtbar“ haben, werden nicht verplant. Bewährte Paare, die so nicht mehr möglich sind, bieten „Alternativen“. Schritt 1: Alles beginnt mit dem, was sich bewährt hat (★ Bewährte Paare). Dazu lässt du dir passende Paare vorschlagen – als beste Zuordnung für den ganzen Schlag oder als Rangliste. Danach prüfen (②) und in die Paarungsliste übernehmen (③).'],
   paarung:['Prüfen','Schritt 2: Sieh dir ein bestimmtes Paar genau an (Stammbaum, Inzucht, erwarteter Erfolg) – oder blättere durch passende Partner für eine Taube.'],
+  zuchttermine:['Termine','Schritt 4: Lege den Anpaarungstermin fest (für alle Paare oder einzeln). Daraus werden Eiablage, Schlupf, Beringen und Absetzen berechnet. Die tatsächlichen Termine trägst du in der großen Erfassungsmaske ein – auch am Smartphone im Schlag.'],
   zuchtliste:['Paarungsliste','Schritt 3: Dein Ergebnis. Listen und Zuchten anlegen, Status und Notizen pflegen, als JSON sichern oder wieder einlesen.']
 };
 function zuchtHintHtml(active){
@@ -10648,7 +10823,7 @@ function zuchtHintHtml(active){
 function renderZuchtSubnav(active){
   if(active==='zuchtempf') active='zucht';
   const b=(k,l,ic)=>`<button class="subnav-btn ${active===k?'active':''}" onclick="showTab('${k}')">${ic} ${l}</button>`;
-  return `<div class="subnav">${b('zucht','① Planen','🧬')}${b('paarung','② Prüfen','💑')}${b('zuchtliste','③ Paarungsliste','📋')}</div>${zuchtHintHtml(active)}${active==='zucht'||active==='paarung'?glossHtml():''}`;
+  return `<div class="subnav">${b('zucht','① Planen','🧬')}${b('paarung','② Prüfen','💑')}${b('zuchtliste','③ Paarungsliste','📋')}${b('zuchttermine','④ Termine','📅')}</div>${zuchtHintHtml(active)}${active==='zucht'||active==='paarung'?glossHtml():''}`;
 }
 // „Planen“ bündelt Zuchtplan (beste Zuordnung für den ganzen Schlag) und Top-Empfehlungen (Rangliste der besten Einzelpaare)
 function planSwitch(v){
@@ -19061,7 +19236,7 @@ function pvTopHtml(ib, ibClass){
 function menuItems(){
   return [
    ['🐦 Tauben','tauben',[['Liste',"S.taubenView='liste';showTab('tauben')"],['Statistik',"S.taubenView='statistik';showTab('tauben')"],['+ Neue Taube',"showTab('neu')"],['Taube scannen',"showTab('scan')"]]],
-   ['🧬 Zucht','zucht',[['① Planen',"showTab('zucht')"],['② Prüfen',"showTab('paarung')"],['③ Paarungsliste',"showTab('zuchtliste')"]]],
+   ['🧬 Zucht','zucht',[['① Planen',"showTab('zucht')"],['② Prüfen',"showTab('paarung')"],['③ Paarungsliste',"showTab('zuchtliste')"],['④ Termine',"showTab('zuchttermine')"]]],
    ['🏁 Flüge','reisen',[['Reisen',"showTab('reisen')"],['Bestenliste',"showTab('bestenliste')"],['Wettbewerbe',"openContest()"],['Züchter',"showTab('zuechter')"]]],
    ['⇄ Daten','add',[['Import',"showTab('import')"],['Export',"showTab('export')"],['Sicherung',"showTab('backup')"],['Adressen',"showTab('adressen')"],['Auswahllisten',"showTab('listen')"],['Wartung',"showTab('wartung')"]]]
   ];
