@@ -201,6 +201,7 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .qe-switch input:disabled + .qe-track{opacity:.5;cursor:not-allowed}
 .qe-row{display:flex;align-items:center;gap:6px}
 .qe-label{font-size:12px;color:var(--text3);white-space:nowrap}
+.qe-gender.qe-m{color:#6aa8ff}.qe-gender.qe-f{color:#e68ac7}.qe-gender.qe-u{color:var(--text3)}.qe-type{max-width:none;min-width:150px}
 .qe-status-select{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;padding:3px 6px;max-width:140px}
 .qe-quickbar{display:flex;flex-wrap:wrap;gap:16px;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px}
 .qe-quickbar .qe-group{display:flex;flex-direction:column;gap:4px}
@@ -1570,6 +1571,9 @@ async function startApp(){
 // den Spalten-Picker weiterhin einblendbar, wirken sich hier also nicht auf
 // bestehende Nutzer mit gespeicherter Auswahl aus (s.u. localStorage-Fallback).
 const DEFAULT_COLUMNS = ['ringnumber','name','year','gender','status'];
+// Gespeicherte Listenansichten (Spalten + Sortierung) und ein eigener Standard – pro Gerät im Browser gespeichert, im Datensicherungs-Export enthalten
+function viewsLoad(){ try{ const v=JSON.parse(localStorage.getItem('taubenViews')||'null'); if(v&&Array.isArray(v.list)) return {list:v.list, def:v.def||null}; }catch(e){} return {list:[], def:null}; }
+function viewsStore(v){ try{ localStorage.setItem('taubenViews',JSON.stringify(v)); }catch(e){} }
 
 const S = {
   tab: 'tauben', pigeons: [], filtered: [],
@@ -1599,6 +1603,7 @@ const S = {
   bulkMode: false, bulkSelected: new Set(), bulkField: 'gender', bulkValue: '1',
   columns: (() => {
     try {
+      const dv = viewsLoad().def; if(dv && Array.isArray(dv.columns) && dv.columns.length) return [...dv.columns];
       const saved = JSON.parse(localStorage.getItem('taubenCols')||'null');
       if(Array.isArray(saved) && saved.length){
         // Neue Spalte "Endnummer" automatisch für Bestandsnutzer ergänzen
@@ -1614,6 +1619,7 @@ const S = {
     return [...DEFAULT_COLUMNS];
   })()
 };
+(function(){ const dv=viewsLoad().def; if(dv && dv.sortCol){ S.sortCol=dv.sortCol; S.sortDir=dv.sortDir||1; } })();
 
 // ── Feldhelfer ─────────────────────────────────────────────────
 
@@ -1777,7 +1783,7 @@ const COLUMN_DEFS = [
     cell:p=>p.date_year||'—' },
   { key:'gender', get label(){return t('fld_gender');}, sortKey:'gender',
     val:p=>sex_(p)==='M'?t('cock'):sex_(p)==='F'?t('hen'):'',
-    cell:p=>{const sx=sex_(p); return sx==='M'?'<span class="badge badge-m">♂</span>':sx==='F'?'<span class="badge badge-f">♀</span>':'<span class="badge badge-u">?</span>';} },
+    cell:p=>qeGenderSelectHtml(p) },
   { key:'color', get label(){return t('fld_color');}, sortKey:'color',
     val:p=>tColor(p.color)||'', cell:p=>escH(tColor(p.color))||'—' },
   { key:'strain', get label(){return t('fld_strain');}, sortKey:'strain',
@@ -1790,13 +1796,7 @@ const COLUMN_DEFS = [
   { key:'status', get label(){return t('fld_status');}, sortKey:'status',
     val:p=>tStatus(pigeonStateName(p)), cell:p=>qeStatusSelectHtml(p) },
   { key:'pigeontype', get label(){return t('fld_pigeontype');}, sortKey:'pigeontype',
-    val:p=>p.pigeontype||'', cell:p=>{
-      const pt=p.pigeontype;
-      const extra = pt==='Zuchttaube' ? `<span class="badge" style="background:rgba(201,127,212,.12);color:#c97fd4;border:1px solid rgba(201,127,212,.25);margin-left:6px">🥚 ${t('type_breeding')}</span>`
-        : pt==='Heimtaube' ? `<span class="badge badge-u" style="margin-left:6px">🏠 ${t('type_home')}</span>`
-        : pt==='Verkauf' ? `<span class="badge" style="background:rgba(224,160,80,.12);color:#e0a050;border:1px solid rgba(224,160,80,.3);margin-left:6px">💰 ${t('type_sale')}</span>` : '';
-      return qeReiseSwitchHtml(p) + extra;
-    } },
+    val:p=>p.pigeontype||'', cell:p=>qeTypeSelectHtml(p) },
   { key:'instock', get label(){return t('fld_instock');}, sortKey:'instock',
     val:p=>p.instock!=null?(p.instock?t('yes_word'):t('no_word')):'', sortVal:p=>p.instock?1:0,
     cell:p=>qeInstockSwitchHtml(p) },
@@ -1885,7 +1885,32 @@ function moveColumn(key, dir){
   applyFilter();
   refreshColumnMenu();
 }
+function viewSnapshot(){ return {columns:[...S.columns], sortCol:S.sortCol||null, sortDir:S.sortDir||1}; }
+function viewApply(v){
+  if(!v) return;
+  const cols=(v.columns||[]).filter(k=>COLUMN_BY_KEY[k]); S.columns = cols.length?cols:[...DEFAULT_COLUMNS];
+  if(v.sortCol){ S.sortCol=v.sortCol; S.sortDir=v.sortDir||1; }
+  try{ localStorage.setItem('taubenCols', JSON.stringify(S.columns)); }catch(e){}
+  applyFilter(); refreshColumnMenu();
+}
+function viewPick(i){ S.viewSel = i===''?null:parseInt(i,10); const V=viewsLoad(); if(S.viewSel!=null && V.list[S.viewSel]) viewApply(V.list[S.viewSel]); else refreshColumnMenu(); }
+async function viewSaveNew(){
+  const V=viewsLoad(), cur=S.viewSel!=null&&V.list[S.viewSel]?V.list[S.viewSel].name:'';
+  const n=await appAsk('Ansicht speichern','Name für diese Spaltenauswahl (z. B. „Jungtauben pflegen“):',cur); if(!n) return;
+  const v=Object.assign({name:n},viewSnapshot()), i=V.list.findIndex(x=>x.name===n);
+  if(i>=0){ if(!await appConfirm('Ansicht überschreiben','Die Ansicht „'+escH(n)+'“ gibt es schon. Mit der aktuellen Spaltenauswahl überschreiben?','Überschreiben')) return; V.list[i]=v; S.viewSel=i; }
+  else { V.list.push(v); S.viewSel=V.list.length-1; }
+  viewsStore(V); refreshColumnMenu();
+}
+function viewSetDefault(){ const V=viewsLoad(); V.def=viewSnapshot(); viewsStore(V); refreshColumnMenu(); }
+function viewClearDefault(){ const V=viewsLoad(); V.def=null; viewsStore(V); refreshColumnMenu(); }
+async function viewDelete(){
+  const V=viewsLoad(), i=S.viewSel; if(i==null||!V.list[i]) return;
+  if(!await appConfirm('Ansicht löschen','Ansicht „'+escH(V.list[i].name)+'“ löschen?','Löschen')) return;
+  V.list.splice(i,1); S.viewSel=null; viewsStore(V); refreshColumnMenu();
+}
 function resetColumns(){
+  const dv=viewsLoad().def; if(dv){ viewApply(dv); return; }
   S.columns = [...DEFAULT_COLUMNS];
   try{ localStorage.setItem('taubenCols', JSON.stringify(S.columns)); }catch(e){}
   applyFilter();
@@ -1897,7 +1922,20 @@ function refreshColumnMenu(){
   if(m) m.innerHTML = columnPickerMenuHTML();
   if(m && btn && m.style.display==='block') positionColumnMenu(btn, m);
 }
-function columnPickerMenuHTML(){
+function viewsBoxHtml(){
+  const V=viewsLoad(), sel=(S.viewSel!=null&&V.list[S.viewSel])?S.viewSel:null;
+  return `<div style="border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:8px">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:4px">Ansichten</div>
+      <select style="width:100%;font-size:13px;padding:5px" onchange="viewPick(this.value)"><option value="">– gespeicherte Ansicht wählen –</option>${V.list.map((v,i)=>`<option value="${i}"${sel===i?' selected':''}>${escH(v.name)}</option>`).join('')}</select>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        <button type="button" class="btn btn-outline btn-sm" onclick="viewSaveNew()">💾 Ansicht speichern</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="viewSetDefault()" title="Diese Spalten und Sortierung gelten künftig beim Start der Liste">★ Als Standard</button>
+        ${sel!=null?'<button type="button" class="btn btn-outline btn-sm" onclick="viewDelete()">🗑 Löschen</button>':''}
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">${V.def?'★ Eigener Standard aktiv. <a style="cursor:pointer;color:var(--green)" onclick="viewClearDefault()">Zurück zur Werkseinstellung</a>':'Standard: Werkseinstellung'}</div></div>`;
+}
+function columnPickerMenuHTML(){ return viewsBoxHtml()+columnPickerMenuCore(); }
+function columnPickerMenuCore(){
   const activeDefs = S.columns.map(k=>COLUMN_BY_KEY[k]).filter(Boolean);
   const inactiveDefs = COLUMN_DEFS.filter(c=>!S.columns.includes(c.key));
   const row = (c,i,arr,isActive) => `
@@ -2320,6 +2358,15 @@ function qeSaleSwitchHtml(p){
   </div>`;
 }
 
+// Geschlecht und Taubentyp: Auswahlfelder direkt im Raster (speichern sofort)
+function qeGenderSelectHtml(p){
+  const sx=sex_(p), o=(v,l,on)=>`<option value="${v}"${on?' selected':''}>${l}</option>`;
+  return `<select class="qe-status-select qe-gender ${sx==='M'?'qe-m':sx==='F'?'qe-f':'qe-u'}" onclick="event.stopPropagation()" onchange="quickEditPigeonField('${p.pigeonid}','gender',this.value||null,event)">${o('','? –',sx==='?')}${o('1','♂ Vogel',sx==='M')}${o('2','♀ Weibchen',sx==='F')}</select>`;
+}
+function qeTypeSelectHtml(p){
+  const pt=p.pigeontype||'', o=(v,l)=>`<option value="${v}"${pt===v?' selected':''}>${l}</option>`;
+  return `<select class="qe-status-select qe-type" onclick="event.stopPropagation()" onchange="quickEditPigeonField('${p.pigeonid}','pigeontype',this.value||null,event)">${o('','– kein Typ –')}${o('Reisetaube','✈ '+t('type_racing'))}${o('Zuchttaube','🥚 '+t('type_breeding'))}${o('Heimtaube','🏠 '+t('type_home'))}${o('Verkauf','💰 '+t('type_sale'))}</select>`;
+}
 // Status-Auswahl (pigeonstateid) als Dropdown — sofort speichernd.
 function qeStatusSelectHtml(p){
   const opts = `<option value=""${!p.pigeonstateid?' selected':''}>${t('status_none')}</option>`
@@ -2821,13 +2868,13 @@ async function exportPDF(){
   // Aktive Filter als Text
   const filterInfo = [
     S.search?'Suche: "'+S.search+'"':null,
-    S.sexFilter!=='all'?(S.sexFilter==='M'?'♂ Vogel':'♀ Weibchen'):null,
+    S.sexFilter!=='all'?(S.sexFilter==='M'?'♂ Vogel':S.sexFilter==='?'?'Geschlecht fehlt':'♀ Weibchen'):null,
     S.yearFilter!=='all'?'Jg. '+S.yearFilter:null,
     S.colorFilter!=='all'?t('filter_chip_color')+': '+tColor(S.colorFilter):null,
     S.stateFilter!=='all'?t('filter_chip_status')+': '+tStatus(S.stateFilter):null,
     S.standortFilter!=='all'?'Standort: '+S.standortFilter:null,
     S.inStockFilter==='yes'?'Im Bestand':S.inStockFilter==='no'?'Nicht im Bestand':null,
-    S.typeFilter!=='all'?'Typ: '+S.typeFilter:null,
+    S.typeFilter!=='all'?'Typ: '+(S.typeFilter==='__none'?'kein Typ':S.typeFilter):null,
   ].filter(Boolean).join(' · ');
   const today = new Date().toLocaleDateString('de-DE');
   const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
@@ -3007,7 +3054,8 @@ function applyFilter(){
   if(S.colorFilter!=='all') arr=arr.filter(p=>colorMatchesKeyword(p.color,S.colorFilter));
   if(S.stateFilter!=='all') arr=arr.filter(p=>pigeonStateName(p)===S.stateFilter);
   if(S.standortFilter!=='all') arr=arr.filter(p=>(p.standort||'')===S.standortFilter);
-  if(S.typeFilter!=='all') arr=arr.filter(p=>p.pigeontype===S.typeFilter);
+  if(S.typeFilter==='__none') arr=arr.filter(p=>!p.pigeontype);
+  else if(S.typeFilter!=='all') arr=arr.filter(p=>p.pigeontype===S.typeFilter);
 
   // Bestands-Filter:
   // - Ohne Suchtext: normales Browsen, der Bestands-Filter aus dem Filter-Panel
@@ -3741,6 +3789,7 @@ function renderList(){
               <option value="all" ${S.sexFilter==='all'?'selected':''}>${t('filter_all')}</option>
               <option value="M" ${S.sexFilter==='M'?'selected':''}>${t('filter_sex_m')}</option>
               <option value="F" ${S.sexFilter==='F'?'selected':''}>${t('filter_sex_f')}</option>
+              <option value="?" ${S.sexFilter==='?'?'selected':''}>? Geschlecht fehlt</option>
             </select>
             <select id="year-filter" onchange="S.yearFilter=this.value;applyFilter()">
               <option value="all">${t('filter_all_years')}</option>
@@ -3757,6 +3806,7 @@ function renderList(){
             </select>
             <select id="type-filter" onchange="S.typeFilter=this.value;S.page=0;applyFilter()">
               <option value="all">${t('filter_type_all')}</option>
+              <option value="__none"${S.typeFilter==='__none'?' selected':''}>– kein Typ gesetzt –</option>
               <option value="Reisetaube"${S.typeFilter==='Reisetaube'?' selected':''}>✈ ${t('type_racing')}</option>
               <option value="Zuchttaube"${S.typeFilter==='Zuchttaube'?' selected':''}>🥚 ${t('type_breeding')}</option>
               <option value="Heimtaube"${S.typeFilter==='Heimtaube'?' selected':''}>🏠 ${t('type_home')}</option>
@@ -11994,6 +12044,7 @@ async function collectBackupData(onProgress){
     settings:{
       rven: RVEN,
       taubenCols: JSON.parse(localStorage.getItem('taubenCols')||'null'),
+      taubenViews: JSON.parse(localStorage.getItem('taubenViews')||'null'),
       bestenlisteCols: JSON.parse(localStorage.getItem('bestenlisteCols')||'null'),
       lang: LANG
     }
@@ -12148,6 +12199,7 @@ async function runRestore(){
           RVEN.forEach(v=>syncRVToServer(v));
         }
         if(data.settings.taubenCols) localStorage.setItem('taubenCols', JSON.stringify(data.settings.taubenCols));
+        if(data.settings.taubenViews) localStorage.setItem('taubenViews', JSON.stringify(data.settings.taubenViews));
         if(data.settings.bestenlisteCols) localStorage.setItem('bestenlisteCols', JSON.stringify(data.settings.bestenlisteCols));
       }catch(e){ log('⚠ Einstellungen: '+e.message); }
     }
