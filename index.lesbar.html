@@ -496,6 +496,8 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .pg-cap:hover{color:var(--green)}
 .pg-actions{position:absolute;top:4px;right:4px;display:flex;gap:4px}
 .pg-btn{width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:0;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;padding:0}
+.pg-tile.drop,.pg-add.drop{outline:2px dashed var(--green);outline-offset:-3px;background:var(--bg2)}
+.pg-tile[draggable=true]{cursor:grab}
 .pg-btn:hover{background:rgba(0,0,0,.85)}
 .pg-add{border:1px dashed var(--border);border-radius:var(--radius-sm);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:120px;color:var(--text3);cursor:pointer;font-size:12px;background:transparent}
 .pg-add:hover{border-color:var(--green);color:var(--green)}
@@ -6988,7 +6990,8 @@ function pgGalleryHtml(p){
   const picker = (inputId, icon, title) => `<label class="pg-btn" for="${inputId}" title="${escH(title)}">${icon}</label>`;
   const view = 'openPhotoLightbox(this.querySelector(\'img\').src)';
 
-  const cover = `<div class="pg-tile">
+  const dz = (t_) => ` ondragover="pgDragOver(event)" ondragleave="pgDragLeave(event)" ondrop="pgDrop(event,'${id}','${t_}')"`;
+  const cover = `<div class="pg-tile"${dz('cover')}>
       <div class="pg-label">${t('pg_cover')}</div>
       <div class="pg-img" onclick="${view}"><img${phAttr(p)} src="${escH(pigeonThumbSrc(p))}" alt="" onerror="this.onerror=null;this.src=PIGEON_COLOR_THUMBS.leer"></div>
       <div class="pg-actions">${picker('pg-in-cover','📷',t('pg_replace'))}${p.photo?btn('🗑',t('pg_remove'),`pgRemoveCover('${id}')`):''}</div>
@@ -7001,24 +7004,25 @@ function pgGalleryHtml(p){
         <a style="cursor:pointer;color:var(--green)" onclick="pgReload('${id}')">↻</a></div>`;
 
   const eyeTile = eye
-    ? `<div class="pg-tile">
+    ? `<div class="pg-tile"${dz('eye')} draggable="true" ondragstart="pgDragStart(event,'${eye.id}')">
         <div class="pg-label">${t('pg_eye')}</div>
         <div class="pg-img" onclick="${view}"><img src="${escH(eye.data)}" alt=""></div>
-        <div class="pg-actions">${picker('pg-in-eye','📷',t('pg_replace'))}${btn('🗑',t('pg_remove'),`pgDelete('${id}','${eye.id}')`)}</div>
+        <div class="pg-actions">${btn('⭐','Als Titelbild verwenden (tauscht mit dem aktuellen)',`pgMakeCover('${id}','${eye.id}')`)}${picker('pg-in-eye','📷',t('pg_replace'))}${btn('🗑',t('pg_remove'),`pgDelete('${id}','${eye.id}')`)}</div>
       </div>`
-    : `<label class="pg-add" for="pg-in-eye"><b>＋</b>${t('pg_add_eye')}</label>`;
+    : `<label class="pg-add" for="pg-in-eye"${dz('eye')}><b>＋</b>${t('pg_add_eye')}</label>`;
 
-  const otherTiles = others.map(r=>`<div class="pg-tile">
+  const otherTiles = others.map(r=>`<div class="pg-tile" draggable="true" ondragstart="pgDragStart(event,'${r.id}')">
       <div class="pg-label">${t('pg_other')}</div>
       <div class="pg-img" onclick="${view}"><img src="${escH(r.data)}" alt="${escH(r.caption||'')}"></div>
       <div class="pg-cap ${r.caption?'':'empty'}" onclick="pgCaption('${id}','${r.id}')" title="${escH(r.caption||'')}">${r.caption?escH(r.caption):t('pg_caption_ph')}</div>
-      <div class="pg-actions">${btn('🗑',t('pg_remove'),`pgDelete('${id}','${r.id}')`)}</div>
+      <div class="pg-actions">${btn('⭐','Als Titelbild verwenden (tauscht mit dem aktuellen)',`pgMakeCover('${id}','${r.id}')`)}${btn('🗑',t('pg_remove'),`pgDelete('${id}','${r.id}')`)}</div>
     </div>`).join('');
 
   return `<div class="pg-grid">
       ${cover}${eyeTile}${otherTiles}
-      <label class="pg-add" for="pg-in-other"><b>＋</b>${t('pg_add_other')}</label>
+      <label class="pg-add" for="pg-in-other"${dz('other')}><b>＋</b>${t('pg_add_other')}<small style="display:block;font-weight:400;font-size:11px;color:var(--text3)">oder Bilder hierher ziehen</small></label>
     </div>
+    <div class="pf-hint" style="margin-top:8px">Bilder per Drag &amp; Drop ablegen (Datei auf eine Kachel) oder ein vorhandenes Bild auf das <b>Titelbild</b> ziehen bzw. ⭐ klicken – das bisherige Titelbild rückt dann an seine Stelle.</div>
     <input type="file" id="pg-in-eye" accept="image/*" style="display:none" onchange="pgUpload('${id}','eye',this.files);this.value=''">
     <input type="file" id="pg-in-other" accept="image/*" multiple style="display:none" onchange="pgUpload('${id}','other',this.files);this.value=''">`;
 }
@@ -7038,6 +7042,52 @@ async function pgInitGallery(){
 }
 async function pgReload(id){ PHOTO_CACHE.delete(id); pgRerender(id); await loadPigeonPhotos(id,true); pgRerender(id); }
 
+// Titelbild aus bereits vorhandenen Bilddaten setzen (Data-URL, auf 480 px verkleinert) – nutzt dieselbe Speicherung wie der Foto-Upload
+async function pgSetCoverData(id, dataUrl){
+  await apiPatch('pigeons', id, {photo: dataUrl});
+  const p = findById(id);
+  if(p){ p.photo = dataUrl; if(PG_HAS_LEN) p.photo_len = dataUrl.length; }
+  if(PHOTO_IDS) PHOTO_IDS.add(id);
+  PhDB.put(id, dataUrl, PG_HAS_LEN?dataUrl.length:null);
+  const imgEl = document.getElementById('detail-photo-img'); if(imgEl){ imgEl.removeAttribute('data-ph'); imgEl.src=dataUrl; }
+  if(document.getElementById('table-wrap')) renderTableOnly();
+}
+async function pgDataToFile(dataUrl){ const b = await (await fetch(dataUrl)).blob(); return new File([b],'bild.jpg',{type:b.type||'image/jpeg'}); }
+// Ein Zusatzbild (oder das Augenfoto) wird Titelbild; das bisherige Titelbild rückt an dessen Stelle (Tausch, nichts geht verloren)
+async function pgMakeCover(id, photoId){
+  const st = PHOTO_CACHE.get(id), row = st && st.rows.find(r=>r.id===photoId), p = findById(id);
+  if(!row || !p) return;
+  const say = x => { const el=document.getElementById('pg-status'); if(el) el.textContent=x; };
+  try{
+    say('Tausche Titelbild…');
+    const old = p.photo || null;
+    const cover = await compressImageFile(await pgDataToFile(row.data), 480, .82);
+    if(old){
+      await apiPatchBy('pigeon_photos','id=eq.'+encodeURIComponent(photoId),{data:old});   // erst sichern …
+      row.data = old;
+    }
+    await pgSetCoverData(id, cover);                                                       // … dann Titelbild setzen
+    if(!old){
+      await apiDeleteBy('pigeon_photos','id=eq.'+encodeURIComponent(photoId));
+      st.rows = st.rows.filter(r=>r.id!==photoId);
+    }
+  }catch(e){ alert('Tausch fehlgeschlagen: '+e.message); }
+  say(''); pgRerender(id);
+}
+function pgDragStart(ev, photoId){ try{ ev.dataTransfer.setData('text/pg-photo', photoId); ev.dataTransfer.effectAllowed='move'; }catch(e){} }
+function pgDragOver(ev){ ev.preventDefault(); ev.currentTarget.classList.add('drop'); }
+function pgDragLeave(ev){ ev.currentTarget.classList.remove('drop'); }
+// Ablegen: Datei → Titelbild/Augenfoto/weiteres Bild · vorhandenes Bild auf „Titelbild“ → Tausch
+async function pgDrop(ev, id, target){
+  ev.preventDefault(); ev.currentTarget.classList.remove('drop');
+  const dt = ev.dataTransfer; if(!dt) return;
+  const pid = dt.getData('text/pg-photo');
+  if(pid){ if(target==='cover') await pgMakeCover(id, pid); return; }
+  const files = [...(dt.files||[])].filter(f=>/^image\//.test(f.type));
+  if(!files.length) return;
+  if(target==='cover') await pgUploadCover(id, files[0]);
+  else await pgUpload(id, target==='eye'?'eye':'other', files);
+}
 async function pgUploadCover(id, file){
   if(!file) return;
   await uploadPigeonPhoto(id, file);   // bestehende Funktion (Kompression, Speichern in pigeons.photo, Fehlerhinweis)
