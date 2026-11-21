@@ -10107,7 +10107,7 @@ function mlEnsureLoaded(){
   _mlP=apiGet('/matings?order=created_at.desc&limit=2000').then(async rows=>{
     S.matings=Array.isArray(rows)?rows:[];
     try{ await apiGet('/matings?select=liste,zucht,status,note&limit=1'); S.matingsExt=true; }catch(e){ S.matingsExt=false; }
-    try{ await apiGet('/matings?select=anpaarung,eiablage_ist,schlupf_ist,beringung_ist,absetzen_ist,zelle&limit=1'); S.matingsTm=true; }catch(e){ S.matingsTm=false; }
+    try{ await apiGet('/matings?select=anpaarung,eiablage_ist,schlupf_ist,beringung_ist,absetzen_ist,zelle,abteil&limit=1'); S.matingsTm=true; }catch(e){ S.matingsTm=false; }
   }).catch(e=>{ S.matingsError=e.message; S.matings=[]; }).finally(()=>{ S.matingsLoading=false; _mlP=null; });
   return _mlP;
 }
@@ -10312,14 +10312,15 @@ function renderMatingsList(){
 // ══ ④ TERMINE: Anpaarung → Eiablage → Schlupf → Beringen → Absetzen ══════════════
 // Tabelle matings braucht fünf Datumsspalten (matings_termine.sql). Geplante Termine werden berechnet,
 // tatsächliche Termine (…_ist) trägst du ein; alles danach rechnet ab dem tatsächlichen Termin weiter.
-const TM_FIELDS=['anpaarung','eiablage_ist','schlupf_ist','beringung_ist','absetzen_ist','zelle'];
+const TM_FIELDS=['anpaarung','eiablage_ist','schlupf_ist','beringung_ist','absetzen_ist','zelle','abteil'];
 const TM_SQL=`alter table matings
   add column if not exists anpaarung date,
   add column if not exists eiablage_ist date,
   add column if not exists schlupf_ist date,
   add column if not exists beringung_ist date,
   add column if not exists absetzen_ist date,
-  add column if not exists zelle text;
+  add column if not exists zelle text,
+  add column if not exists abteil text;
 notify pgrst, 'reload schema';`;
 const TM_DEF={eier:10, brut:18, ring:6, absetz:28};
 const TM_STEPS=[['anpaarung','🕊','Anpaarung'],['eiablage','🥚','Eiablage'],['schlupf','🐣','Schlupf'],['beringung','💍','Beringen'],['absetzen','✂️','Absetzen']];
@@ -10352,20 +10353,27 @@ function tmPlan(r){
 }
 // Reihenfolge: Paare mit Zellennummer zuerst (natürlich sortiert: 2 vor 10), danach die ohne
 function tmRows(){
-  const rows=mlRows(), z=r=>String(r.zelle||'').trim();
-  return rows.map((r,i)=>({r,i})).sort((a,b)=>{ const x=z(a.r), y=z(b.r); if(x&&y) return mlNat(x,y)||a.i-b.i; if(x) return -1; if(y) return 1; return a.i-b.i; }).map(o=>o.r);
+  const rows=mlRows(), z=r=>String(r.zelle||'').trim(), ab=r=>String(r.abteil||'').trim();
+  const cmp=(f,a,b)=>{ const x=f(a), y=f(b); if(x&&y) return mlNat(x,y); return x?-1:y?1:0; };   // gefüllt vor leer
+  return rows.map((r,i)=>({r,i})).sort((a,b)=>cmp(ab,a.r,b.r)||cmp(z,a.r,b.r)||a.i-b.i).map(o=>o.r);
 }
 // Endnummer eines Rings: letzter Block (z. B. DE-07216-16-373 → 373)
+const tmPos=(r,short)=>[r.abteil?(short?'':'Abteil ')+r.abteil:'', r.zelle?(short?'Z ':'Zelle ')+r.zelle:''].filter(Boolean).join(' · ');
+function tmAbteile(){ const set=new Set(); (S.matings||[]).filter(r=>mlListOf(r)===mlCurListe()).forEach(r=>{ if(r.abteil) set.add(r.abteil); }); return [...set].sort(mlNat); }
+async function tmAbteilPick(id,sel){
+  const v=sel.value; if(v==='__new'){ const n=await appAsk('Neues Abteil','Name des Abteils (z. B. A, 1, links):',''); if(!n){ sel.value=(S.matings.find(x=>String(x.id)===String(id))||{}).abteil||''; return; } tmSet(id,'abteil',n); return; }
+  tmSet(id,'abteil',v);
+}
 const tmEnd=rg=>{ const m=String(rg||'').trim().match(/(\d+)\s*$/); return m?m[1]:''; };
 function tmSearch(q){
   q=String(q||'').trim(); const box=document.getElementById('tm-hits'); if(!box) return;
   if(!q){ box.innerHTML=''; return; }
   const ql=q.toLowerCase(), all=(S.matings||[]).filter(r=>mlListOf(r)===mlCurListe());
   let hits=all.filter(r=>tmEnd(r.father_ring)===q||tmEnd(r.mother_ring)===q);
-  if(!hits.length) hits=all.filter(r=>String(r.zelle||'').toLowerCase()===ql);
+  if(!hits.length) hits=all.filter(r=>String(r.zelle||'').toLowerCase()===ql||String(r.abteil||'').toLowerCase()===ql);
   if(!hits.length) hits=all.filter(r=>tmEnd(r.father_ring).endsWith(q)||tmEnd(r.mother_ring).endsWith(q)||String(r.father_name||'').toLowerCase().includes(ql)||String(r.mother_name||'').toLowerCase().includes(ql));
   if(hits.length===1){ box.innerHTML=''; const el=document.getElementById('tm-q'); if(el) el.blur(); tmMask(hits[0].id); return; }
-  box.innerHTML = hits.length ? hits.map(r=>`<div class="tm-up-r" onclick="tmMask('${r.id}')"><span class="tm-up-d">${r.zelle?'Zelle '+escH(r.zelle):'—'}</span><span style="font-family:monospace;font-size:12px">${tmPairHtml(r).replace('<br>',' · ')}</span></div>`).join('') : '<div style="font-size:13px;color:var(--text3);padding:6px 2px">Kein Paar mit dieser Nummer in dieser Liste.</div>';
+  box.innerHTML = hits.length ? hits.map(r=>`<div class="tm-up-r" onclick="tmMask('${r.id}')"><span class="tm-up-d">${tmPos(r)?escH(tmPos(r,true)):'—'}</span><span style="font-family:monospace;font-size:12px">${tmPairHtml(r).replace('<br>',' · ')}</span></div>`).join('') : '<div style="font-size:13px;color:var(--text3);padding:6px 2px">Kein Paar mit dieser Nummer in dieser Liste.</div>';
 }
 async function tmPatch(id,f){
   const r=(S.matings||[]).find(x=>String(x.id)===String(id)); if(!r) return;
@@ -10440,11 +10448,11 @@ function renderTermine(){
         <label>Schlupf → Beringen <input type="number" class="tm-n" min="0" max="120" value="${c.ring}" onchange="tmCfgSet('ring',this.value)"></label>
         <label>Schlupf → Absetzen <input type="number" class="tm-n" min="0" max="120" value="${c.absetz}" onchange="tmCfgSet('absetz',this.value)"></label></div></details></div>`;
   const table=`<div class="card tm-desk"><div class="card-title" style="margin-bottom:8px">📅 Zeitplan <span style="color:var(--text3);font-weight:400">(${rows.length} Paare) – ✓ = tatsächlicher Termin, sonst geplant</span></div>
-    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Zelle</th><th>Paar</th>${TM_STEPS.map(([k,ic,l])=>`<th>${ic} ${l}</th>`).join('')}<th></th></tr></thead><tbody>
-    ${rows.map(r=>{ const p=plans.get(r.id); return `<tr class="${p.finished?'tm-fin':''}"><td style="font-weight:700">${r.zelle?escH(r.zelle):'<span style="color:var(--text3)">—</span>'}</td><td style="font-family:monospace;font-size:12px">${tmPairHtml(r)}</td>${TM_STEPS.map(([k])=>`<td>${tmCell(p[k],k)}</td>`).join('')}<td style="text-align:right"><button class="btn btn-outline btn-sm" onclick="tmMask('${r.id}')">Erfassen ›</button></td></tr>`; }).join('')}
+    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Abteil / Zelle</th><th>Paar</th>${TM_STEPS.map(([k,ic,l])=>`<th>${ic} ${l}</th>`).join('')}<th></th></tr></thead><tbody>
+    ${rows.map(r=>{ const p=plans.get(r.id); return `<tr class="${p.finished?'tm-fin':''}"><td style="font-weight:700">${tmPos(r)?escH(tmPos(r,true)):'<span style="color:var(--text3)">—</span>'}</td><td style="font-family:monospace;font-size:12px">${tmPairHtml(r)}</td>${TM_STEPS.map(([k])=>`<td>${tmCell(p[k],k)}</td>`).join('')}<td style="text-align:right"><button class="btn btn-outline btn-sm" onclick="tmMask('${r.id}')">Erfassen ›</button></td></tr>`; }).join('')}
     </tbody></table></div></div>`;
   const cards=`<div class="tm-mob">${rows.map(r=>{ const p=plans.get(r.id); return `<div class="card tm-card ${p.finished?'tm-fin':''}" onclick="tmMask('${r.id}')">
-      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div style="font-family:monospace;font-size:13px">${r.zelle?'<b style="font-family:inherit;font-size:15px">Zelle '+escH(r.zelle)+'</b><br>':''}${tmPairHtml(r)}</div><button class="btn btn-sm">Erfassen ›</button></div>
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div style="font-family:monospace;font-size:13px">${tmPos(r)?'<b style="font-family:inherit;font-size:15px">'+escH(tmPos(r))+'</b><br>':''}${tmPairHtml(r)}</div><button class="btn btn-sm">Erfassen ›</button></div>
       <div class="tm-steps">${TM_STEPS.map(([k,ic,l])=>{ const x=p[k]; return `<div class="tm-st ${x.done?'done':x.late?'late':''}"><span>${ic} ${l}</span><b>${x.date?tmFmt(x.date):'—'}</b></div>`; }).join('')}</div>
       ${p.next?`<div style="font-size:12px;margin-top:6px;color:${p.next.late?'#e07070':'var(--text2)'}">Nächster Schritt: ${p.next.ic} ${p.next.lbl} ${tmFmt(p.next.date)}${p.next.late?' – überfällig':''}</div>`:p.finished?'<div style="font-size:12px;margin-top:6px;color:var(--green)">✓ abgeschlossen</div>':''}</div>`; }).join('')}</div>`;
   return bar+seg+search+setCard+upHtml+table+cards;
@@ -10477,7 +10485,7 @@ function renderZeitstrahl(){
   };
   const rowsHtml=Zs.map(z=>{
     const xs=byZ.get(z), dayRange=()=>'';
-    const pairs=xs.slice().sort((a,b)=>{ const x=String(a.r.zelle||''),y=String(b.r.zelle||''); return x&&y?mlNat(x,y):x?-1:y?1:0; }).map(x=>lane((x.r.zelle?'Zelle '+escH(x.r.zelle)+' · ':'')+escH(x.r.father_ring||'').split('-').pop()+' × '+escH(x.r.mother_ring||'').split('-').pop(), x.p.next?x.p.next.ic+' '+tmFmt(x.p.next.date):'✓ fertig',[x],true)).join('');
+    const _o=tmRows().map(r=>r.id), pairs=xs.slice().sort((a,b)=>_o.indexOf(a.r.id)-_o.indexOf(b.r.id)).map(x=>lane((tmPos(x.r,true)?escH(tmPos(x.r,true))+' · ':'')+escH(x.r.father_ring||'').split('-').pop()+' × '+escH(x.r.mother_ring||'').split('-').pop(), x.p.next?x.p.next.ic+' '+tmFmt(x.p.next.date):'✓ fertig',[x],true)).join('');
     return lane(escH(z), xs.length+' Paare', xs, false)+`<details class="zs-det"><summary>Einzelne Paare</summary>${pairs}</details>`;
   }).join('');
   const legend=TM_PH.map(([k,l,c])=>`<span class="zs-lg"><i style="background:${c}"></i>${l}</span>`).join('')+'<span class="zs-lg"><i class="zs-dotk"></i>tatsächlicher Termin</span>';
@@ -10501,10 +10509,12 @@ function tmMask(id,keep){
       ${k!=='anpaarung'&&x.plan?`<div class="tm-fp">${val&&x.plan!==val?'geplant war':'geplant'}: ${tmFmt(x.plan,true)}${x.late?' · <b style="color:#e07070">überfällig</b>':''}</div>`:''}</div>`; };
   const c=tmCfg();
   w.innerHTML=`<div class="tm-box"><div class="tm-head"><div style="min-width:0"><div class="serif" style="font-size:19px">📅 Termine erfassen</div>
-      <div style="font-family:monospace;font-size:13px;margin-top:4px">${r.zelle?'<b style="font-family:inherit;font-size:15px">Zelle '+escH(r.zelle)+'</b><br>':''}${tmPairHtml(r)}</div><div style="font-size:12px;color:var(--text3);margin-top:2px">${escH(mlListOf(r))} › ${escH(mlZuchtOf(r))}</div></div>
+      <div style="font-family:monospace;font-size:13px;margin-top:4px">${tmPos(r)?'<b style="font-family:inherit;font-size:15px">'+escH(tmPos(r))+'</b><br>':''}${tmPairHtml(r)}</div><div style="font-size:12px;color:var(--text3);margin-top:2px">${escH(mlListOf(r))} › ${escH(mlZuchtOf(r))}</div></div>
       <button class="btn btn-outline tm-b" onclick="tmClose()">✕ Schließen</button></div>
     <div class="tm-body">
-      <div class="tm-f"><div class="tm-fl"><span>🔢 Zellennummer</span><small>optional – bestimmt die Reihenfolge beim Durchgehen</small></div>
+      <div class="tm-f"><div class="tm-fl"><span>🗄 Abteil</span><small>optional – zuerst wählen, danach die Zellennummer</small></div>
+        <div class="tm-fr"><select class="tm-in" onchange="tmAbteilPick('${r.id}',this)"><option value="">— kein Abteil —</option>${tmAbteile().concat(r.abteil&&!tmAbteile().includes(r.abteil)?[r.abteil]:[]).map(a=>`<option value="${escH(a)}" ${r.abteil===a?'selected':''}>${escH(a)}</option>`).join('')}<option value="__new">＋ Neues Abteil…</option></select></div></div>
+      <div class="tm-f"><div class="tm-fl"><span>🔢 Zellennummer</span><small>optional – Reihenfolge beim Durchgehen: erst Abteil, dann Zelle</small></div>
         <div class="tm-fr"><input type="text" class="tm-in" inputmode="text" value="${escH(r.zelle||'')}" placeholder="z. B. 12" onchange="tmSet('${r.id}','zelle',this.value)"></div></div>
       ${field('anpaarung','🕊','Anpaarung','anpaarung','Tag, an dem das Paar zusammengesetzt wird')}
       ${field('eiablage','🥚','Eiablage (tatsächlich)','eiablage_ist','plant '+c.eier+' Tage nach Anpaarung')}
@@ -10531,7 +10541,7 @@ function mlExportJson(all){
     mutter_ring:r.mother_ring||null, mutter_name:r.mother_name||null, mutter_id:r.motherid||null,
     inzucht:r.inzucht??null, score_vater:r.score_father??null, score_mutter:r.score_mother??null, score:r.score_combined??null,
     status:r.status||'geplant', notiz:r.note||null, erstellt:r.created_at||null,
-    termine:{anpaarung:r.anpaarung||null, eiablage_ist:r.eiablage_ist||null, schlupf_ist:r.schlupf_ist||null, beringung_ist:r.beringung_ist||null, absetzen_ist:r.absetzen_ist||null, zelle:r.zelle||null} })) })) }));
+    termine:{anpaarung:r.anpaarung||null, eiablage_ist:r.eiablage_ist||null, schlupf_ist:r.schlupf_ist||null, beringung_ist:r.beringung_ist||null, absetzen_ist:r.absetzen_ist||null, zelle:r.zelle||null, abteil:r.abteil||null} })) })) }));
   const d=new Date().toISOString().slice(0,10), slug=(all?'alle':String(names[0]).toLowerCase().replace(/[^a-z0-9äöüß]+/g,'_').replace(/^_|_$/g,''))||'liste';
   mlDownload('paarungsliste_'+slug+'_'+d+'.json', JSON.stringify({format:'pigman-paarungsliste', version:1, exportiert:new Date().toISOString(), listen}, null, 1), 'application/json');
 }
