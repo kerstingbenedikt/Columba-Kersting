@@ -201,7 +201,17 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .qe-switch input:disabled + .qe-track{opacity:.5;cursor:not-allowed}
 .qe-row{display:flex;align-items:center;gap:6px}
 .qe-label{font-size:12px;color:var(--text3);white-space:nowrap}
-.qe-gender.qe-m{color:#6aa8ff}.qe-gender.qe-f{color:#e68ac7}.qe-gender.qe-u{color:var(--text3)}.qe-type{max-width:none;min-width:150px}
+.qe-gender.qe-m{color:#6aa8ff}.qe-gender.qe-f{color:#e68ac7}.qe-gender.qe-u{color:var(--text3)}.qe-type{max-width:none;min-width:150px}.qe-color{min-width:140px;max-width:none}
+.cp-head{display:none}
+@media(max-width:760px){
+  #col-picker-menu{left:8px!important;right:8px!important;top:auto!important;bottom:8px!important;width:auto!important;max-height:84vh!important;padding:14px!important;z-index:9500!important;border-radius:14px!important;box-shadow:0 -6px 40px rgba(0,0,0,.6)!important}
+  #col-picker-menu .cp-head{display:flex;justify-content:space-between;align-items:center;gap:10px;position:sticky;top:-14px;background:var(--bg2);margin:-14px -14px 10px;padding:12px 14px;border-bottom:1px solid var(--border);font-size:16px;z-index:2}
+  #col-picker-menu input[type=checkbox]{width:22px;height:22px}
+  #col-picker-menu label span{font-size:16px!important}
+  #col-picker-menu .btn{min-height:44px;font-size:15px;padding:6px 14px!important}
+  #col-picker-menu select{min-height:44px;font-size:16px!important}
+  #col-picker-menu div[style*="padding:4px 2px"]{padding:8px 2px!important}
+}
 .qe-status-select{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;padding:3px 6px;max-width:140px}
 .qe-quickbar{display:flex;flex-wrap:wrap;gap:16px;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px}
 .qe-quickbar .qe-group{display:flex;flex-direction:column;gap:4px}
@@ -1785,7 +1795,7 @@ const COLUMN_DEFS = [
     val:p=>sex_(p)==='M'?t('cock'):sex_(p)==='F'?t('hen'):'',
     cell:p=>qeGenderSelectHtml(p) },
   { key:'color', get label(){return t('fld_color');}, sortKey:'color',
-    val:p=>tColor(p.color)||'', cell:p=>escH(tColor(p.color))||'—' },
+    val:p=>tColor(p.color)||'', cell:p=>qeColorSelectHtml(p) },
   { key:'strain', get label(){return t('fld_strain');}, sortKey:'strain',
     val:p=>p.strain||'', cell:p=>escH(p.strain||'—') },
   { key:'line_derived', label:'Blutlinie (abgeleitet)',
@@ -1919,7 +1929,9 @@ function resetColumns(){
 function refreshColumnMenu(){
   const m = document.getElementById('col-picker-menu');
   const btn = document.getElementById('col-picker-btn');
+  const _sc = m ? m.scrollTop : 0;
   if(m) m.innerHTML = columnPickerMenuHTML();
+  if(m) m.scrollTop = _sc;
   if(m && btn && m.style.display==='block') positionColumnMenu(btn, m);
 }
 function viewsBoxHtml(){
@@ -1934,7 +1946,8 @@ function viewsBoxHtml(){
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:6px">${V.def?'★ Eigener Standard aktiv. <a style="cursor:pointer;color:var(--green)" onclick="viewClearDefault()">Zurück zur Werkseinstellung</a>':'Standard: Werkseinstellung'}</div></div>`;
 }
-function columnPickerMenuHTML(){ return viewsBoxHtml()+columnPickerMenuCore(); }
+function closeColumnMenu(){ const m=document.getElementById('col-picker-menu'); if(m) m.style.display='none'; }
+function columnPickerMenuHTML(){ return `<div class="cp-head"><b>Spalten &amp; Ansichten</b><button type="button" class="btn" onclick="closeColumnMenu()">✓ Fertig</button></div>`+viewsBoxHtml()+columnPickerMenuCore(); }
 function columnPickerMenuCore(){
   const activeDefs = S.columns.map(k=>COLUMN_BY_KEY[k]).filter(Boolean);
   const inactiveDefs = COLUMN_DEFS.filter(c=>!S.columns.includes(c.key));
@@ -2366,6 +2379,26 @@ function qeGenderSelectHtml(p){
 function qeTypeSelectHtml(p){
   const pt=p.pigeontype||'', o=(v,l)=>`<option value="${v}"${pt===v?' selected':''}>${l}</option>`;
   return `<select class="qe-status-select qe-type" onclick="event.stopPropagation()" onchange="quickEditPigeonField('${p.pigeonid}','pigeontype',this.value||null,event)">${o('','– kein Typ –')}${o('Reisetaube','✈ '+t('type_racing'))}${o('Zuchttaube','🥚 '+t('type_breeding'))}${o('Heimtaube','🏠 '+t('type_home'))}${o('Verkauf','💰 '+t('type_sale'))}</select>`;
+}
+// Farbe als Auswahl: eigene Farbliste (Einstellungen) sonst die häufigsten Farben aus dem Bestand; „andere Farbe…“ erlaubt Freitext
+let _colOpt=null;
+function qeColorOptions(){
+  const own=(typeof colorList==='function')?colorList():[];
+  if(own.length) return own;
+  if(_colOpt && _colOpt.n===S.pigeons.length) return _colOpt.l;
+  const cnt=new Map(); S.pigeons.forEach(p=>{ const c=String(p.color||'').trim(); if(c) cnt.set(c,(cnt.get(c)||0)+1); });
+  const l=[...cnt.entries()].sort((a,b)=>b[1]-a[1]).slice(0,24).map(x=>x[0]).sort((a,b)=>a.localeCompare(b,'de'));
+  _colOpt={n:S.pigeons.length,l}; return l;
+}
+function qeColorSelectHtml(p){
+  const cur=String(p.color||'').trim(), l=qeColorOptions().slice();
+  if(cur && !l.some(x=>x.toLowerCase()===cur.toLowerCase())) l.unshift(cur);
+  return `<select class="qe-status-select qe-color" onclick="event.stopPropagation()" onchange="qeColorChange('${p.pigeonid}',this)"><option value=""${!cur?' selected':''}>– keine Farbe –</option>${l.map(x=>`<option value="${escH(x)}"${x.toLowerCase()===cur.toLowerCase()?' selected':''}>${escH(tColor(x)||x)}</option>`).join('')}<option value="__other">✎ andere Farbe…</option></select>`;
+}
+async function qeColorChange(id,sel){
+  let v=sel.value;
+  if(v==='__other'){ v=await appAsk('Farbe','Farbe eingeben:',''); if(!v){ qeRefresh(id); return; } }
+  quickEditPigeonField(id,'color',v||null);
 }
 // Status-Auswahl (pigeonstateid) als Dropdown — sofort speichernd.
 function qeStatusSelectHtml(p){
@@ -3786,7 +3819,7 @@ function renderList(){
         <div class="filter-panel-body">
           <div class="toolbar">
             <select id="sex-filter" onchange="S.sexFilter=this.value;applyFilter()">
-              <option value="all" ${S.sexFilter==='all'?'selected':''}>${t('filter_all')}</option>
+              <option value="all" ${S.sexFilter==='all'?'selected':''}>⚥ Geschlecht: alle</option>
               <option value="M" ${S.sexFilter==='M'?'selected':''}>${t('filter_sex_m')}</option>
               <option value="F" ${S.sexFilter==='F'?'selected':''}>${t('filter_sex_f')}</option>
               <option value="?" ${S.sexFilter==='?'?'selected':''}>? Geschlecht fehlt</option>
@@ -3815,10 +3848,6 @@ function renderList(){
             <select id="standort-filter" onchange="S.standortFilter=this.value;S.page=0;applyFilter()">
               <option value="all">${t('filter_all_locations')}</option>
               ${[...new Set(S.pigeons.map(p=>p.standort).filter(Boolean))].sort().map(s=>`<option value="${escH(s)}"${S.standortFilter===s?' selected':''}>${escH(s)}</option>`).join('')}
-            </select>
-            <select id="color-filter" onchange="S.colorFilter=this.value;S.page=0;applyFilter()">
-              <option value="all">${t('filter_all_colors')}</option>
-              ${COLOR_FILTER_KEYWORDS.filter(k=>S.pigeons.some(p=>colorMatchesKeyword(p.color,k))).map(k=>`<option value="${escH(k)}"${S.colorFilter===k?' selected':''}>${escH(tColor(k))}</option>`).join('')}
             </select>
             <button class="btn btn-outline btn-sm" onclick="resetTaubenFilter()">${t('filter_reset')}</button>
           </div>
