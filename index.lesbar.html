@@ -344,13 +344,14 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .ppb-how{margin:12px 0 0;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;color:var(--text2);line-height:1.5}
 .ppb-how summary{cursor:pointer;font-weight:600;color:var(--text)}
 .ppb-how ol{margin:8px 0 2px;padding-left:20px}.ppb-how li{margin-bottom:6px}
-.ppb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
-.ppb{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px}
+.ppb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:12px}
+.ppb{min-width:0;overflow:hidden;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px}
 .ppb-h{margin-bottom:6px}
 .ppb-t{width:100%;border-collapse:collapse;font-size:12px}
-.ppb-t td{padding:4px 6px 4px 0;vertical-align:top;border-top:1px solid var(--border);color:var(--text2)}
+.ppb-t td{padding:5px 8px 5px 0;vertical-align:top;border-top:1px solid var(--border);color:var(--text2);overflow-wrap:anywhere}
+.ppb-t td:last-child{padding-right:0}
 .ppb-k{white-space:nowrap;color:var(--text3);font-weight:600;width:82px}
-.ppb-n{text-align:right;white-space:nowrap;font-size:11px;color:var(--text3)}.ppb-n b{color:var(--text);font-size:13px}
+.ppb-n{text-align:right;white-space:normal;min-width:118px;font-size:11px;color:var(--text3)}.ppb-n b{color:var(--text);font-size:13px}
 .ppb-warn{color:var(--orange);font-weight:600}
 .dtabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
 .dtab-btn{background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:999px;padding:7px 14px;font-size:13px;font-family:inherit;cursor:pointer;min-height:34px}
@@ -1671,6 +1672,15 @@ function endNumberOf(p){
 }
 const name_  = p => p.name || '';
 const sex_   = p => { const g = String(p.gender||'').trim().toLowerCase(); if(['m','1'].includes(g))return'M'; if(['f','2','w'].includes(g))return'F'; return '?'; };
+// Wer darf in die Zuchtplanung? Nur Tauben im Bestand, nicht gelöscht und nicht mit Status „unfruchtbar“.
+function zuchtSperre(p){
+  if(!p) return 'unbekannt';
+  if(!p.instock) return 'nicht im Bestand';
+  const st=pigeonStateName(p);
+  if(/unfrucht|steril|zuchtunf|nicht zuchtf/i.test(st||'')) return 'Status „'+st+'“';
+  return '';
+}
+function zuchtOk(p){ return !!p && !p.deleted && !p._virtual && !zuchtSperre(p); }
 function pigeonStateName(p){
   if(p.pigeonstateid && S.pigeonStates && S.pigeonStates.length){
     const found = S.pigeonStates.find(s=>s.pigeonstateid===p.pigeonstateid);
@@ -10022,6 +10032,8 @@ function loadMatingsIfNeeded(){
 async function savePairingToList(fatherId, motherId){
   const f=findById(fatherId), m=findById(motherId);
   if(!f || !m) return;
+  const _bl=[f,m].filter(x=>zuchtSperre(x)).map(x=>ring(x)+' ('+zuchtSperre(x)+')');
+  if(_bl.length && !confirm('Achtung: '+_bl.join(', ')+' steht für die Zucht nicht zur Verfügung. Trotzdem in die Paarungsliste übernehmen?')) return;
   await mlEnsureLoaded(); const T=mlTarget();
   try{
     const existing = await apiGet('/matings?fatherid=eq.'+fatherId+'&motherid=eq.'+motherId+'&select=id&limit=1'+mlDupFilter(T));
@@ -10432,7 +10444,7 @@ function hungarianMax(W){
   return res;
 }
 function zpCandidates(z){
-  const ok=p=>p.instock && !p.deleted && (p.pigeontype==='Zuchttaube' || (z.inclReise && p.pigeontype==='Reisetaube'));
+  const ok=p=>zuchtOk(p) && (p.pigeontype==='Zuchttaube' || (z.inclReise && p.pigeontype==='Reisetaube'));
   return {males:S.pigeons.filter(p=>ok(p)&&sex_(p)==='M'), females:S.pigeons.filter(p=>ok(p)&&sex_(p)==='F')};
 }
 function zpCompute(){
@@ -10491,6 +10503,7 @@ function zpLineSearch(q){
   const hits=S.pigeons.filter(p=>!p._virtual && !z.lines.includes(p.pigeonid) && ((p.name||'').toLowerCase().includes(q) || ring(p).toLowerCase().includes(q) || String(p.ringnumber||'').toLowerCase().endsWith(q))).slice(0,15);
   box.innerHTML = hits.length ? hits.map(p=>`<button type="button" class="btn btn-outline btn-sm" onclick="zpLineAdd('${p.pigeonid}')">+ ${escH(p.name?p.name+' · ':'')}${escH(ring(p))}</button>`).join(' ') : '<span style="font-size:12px;color:var(--text3)">Keine Taube gefunden.</span>';
 }
+function zpOpenAlt(id){ const p=findById(id); if(!p) return; if(sex_(p)==='M'){ S.paarungM=p; S.paarungF=null; PV.fix='M'; } else { S.paarungF=p; S.paarungM=null; PV.fix='F'; } showTab('paarung'); window.scrollTo(0,0); }
 function zpOpenCheck(mid,fid){ S.paarungM=findById(mid); S.paarungF=findById(fid); PV.fix='M'; showTab('paarung'); window.scrollTo(0,0); }
 async function zpSaveAll(){
   const A=zpState().assign; if(!A||!A.pairs.length) return;
@@ -10574,7 +10587,7 @@ function glossHtml(){
     +GLOSS.map(function(g){ return '<dt>'+g[0]+'</dt><dd>'+g[1]+'</dd>'; }).join('')+'</dl></div></details>';
 }
 var ZUCHT_HINT={
-  zucht:['Planen','Schritt 1: Alles beginnt mit dem, was sich bewährt hat (★ Bewährte Paare). Dazu lässt du dir passende Paare vorschlagen – als beste Zuordnung für den ganzen Schlag oder als Rangliste. Danach prüfen (②) und in die Paarungsliste übernehmen (③).'],
+  zucht:['Planen','Hinweis: Tauben, die nicht im Bestand sind oder den Status „unfruchtbar“ haben, werden nicht verplant. Bewährte Paare, die so nicht mehr möglich sind, bieten „Alternativen“. Schritt 1: Alles beginnt mit dem, was sich bewährt hat (★ Bewährte Paare). Dazu lässt du dir passende Paare vorschlagen – als beste Zuordnung für den ganzen Schlag oder als Rangliste. Danach prüfen (②) und in die Paarungsliste übernehmen (③).'],
   paarung:['Prüfen','Schritt 2: Sieh dir ein bestimmtes Paar genau an (Stammbaum, Inzucht, erwarteter Erfolg) – oder blättere durch passende Partner für eine Taube.'],
   zuchtliste:['Paarungsliste','Schritt 3: Dein Ergebnis. Listen und Zuchten anlegen, Status und Notizen pflegen, als JSON sichern oder wieder einlesen.']
 };
@@ -10761,17 +10774,19 @@ function renderZuchtAuswertung(){
   const ps=[...pairStatsAll().values()].filter(e=>e.erf||e.elite).map(e=>Object.assign(e,{F:findById(e.f), M:findById(e.m)})).filter(e=>e.F&&e.M);
   const sp=ZA.sortP; ps.sort((a,b)=>sp==='quote'?(b.erf/(b.geprueft||1))-(a.erf/(a.geprueft||1)):sp==='elite'?b.elite-a.elite||b.erf-a.erf:b.erf-a.erf||b.elite-a.elite);
   const th2=(l,k)=>`<th style="cursor:pointer;text-align:center" onclick="ZA.sortP='${k}';render()">${l}${ZA.sortP===k?' ▾':''}</th>`;
-  const pd=q=>`<span style="font-family:monospace;cursor:pointer" onclick="selectPigeon('${q.pigeonid}')">${escH(ring(q))}</span>${q.name?` <span style="color:var(--text3)">${escH(q.name)}</span>`:''}${q.instock?'':' <span style="font-size:11px;color:var(--text3)">(nicht im Bestand)</span>'}`;
+  const pd=q=>`<span style="font-family:monospace;cursor:pointer" onclick="selectPigeon('${q.pigeonid}')">${escH(ring(q))}</span>${q.name?` <span style="color:var(--text3)">${escH(q.name)}</span>`:''}${zuchtSperre(q)?` <span style="font-size:11px;color:#e0a030">⚠ ${escH(zuchtSperre(q))}</span>`:''}`;
   const t2 = ps.length ? `<div class="table-wrap"><table style="width:100%;font-size:13px"><thead><tr><th>♂ Vogel</th><th>♀ Weibchen</th><th style="text-align:center">Kinder</th><th style="text-align:center">geprüft</th>${th2('erfolgreich','erf')}${th2('Quote','quote')}${th2('★ Elite','elite')}<th style="text-align:center">Jahrgänge</th><th></th></tr></thead><tbody>
       ${ps.map(e=>`<tr style="cursor:default"><td>${pd(e.F)}</td><td>${pd(e.M)}</td><td style="text-align:center">${e.kids.length}</td><td style="text-align:center">${e.geprueft}</td>
         <td style="text-align:center;font-weight:600;color:var(--green)">${e.erf}</td><td style="text-align:center">${e.geprueft?Math.round(e.erf/e.geprueft*100)+' %':'—'}</td>
         <td style="text-align:center;color:#f0c419">${e.elite||''}</td><td style="text-align:center;font-size:12px">${[...e.years].sort().join(', ')}</td>
-        <td style="text-align:right"><button class="btn btn-outline btn-sm" title="Paar im Paarungscheck öffnen" onclick="zpOpenCheck('${e.F.pigeonid}','${e.M.pigeonid}')">Prüfen ›</button> <button class="btn btn-outline btn-sm" title="In die Paarungsliste (Schritt ③) übernehmen" onclick="savePairingToList('${e.F.pigeonid}','${e.M.pigeonid}')">💾 In Liste</button></td></tr>`).join('')}
+        <td style="text-align:right">${(zuchtSperre(e.F)||zuchtSperre(e.M))
+          ? (zuchtOk(e.F)||zuchtOk(e.M) ? `<button class="btn btn-outline btn-sm" title="Dieses Paar ist nicht mehr möglich – passende Partner für ${zuchtOk(e.F)?'den Vogel':'das Weibchen'} ansehen" onclick="zpOpenAlt('${zuchtOk(e.F)?e.F.pigeonid:e.M.pigeonid}')">Alternativen ›</button>` : '<span style="font-size:11px;color:var(--text3)">nicht mehr möglich</span>')
+          : `<button class="btn btn-outline btn-sm" title="Paar im Paarungscheck öffnen" onclick="zpOpenCheck('${e.F.pigeonid}','${e.M.pigeonid}')">Prüfen ›</button> <button class="btn btn-outline btn-sm" title="In die Paarungsliste (Schritt ③) übernehmen" onclick="savePairingToList('${e.F.pigeonid}','${e.M.pigeonid}')">💾 In Liste</button>`}</td></tr>`).join('')}
       </tbody></table></div>` : `<div class="card" style="color:var(--text3)">Noch keine Elternpaare mit erfolgreichen Nachkommen gefunden.</div>`;
   return head
     +sectNav([['za_schlag','🏅 Zuchtschlag'],['za_paare','💞 Erfolgspaare']])
     +sectStart('za_schlag','🏅','Reisetauben für den Zuchtschlag','Erfolgreiche Reisetauben im Bestand – Zuchtwert = 60 % Leistung + 25 % Abstammung + 15 % Familie',true)+t1+sectEnd()
-    +sectStart('za_paare','💞','Erfolgspaare','Elternpaare mit erfolgreichen Nachkommen (mind. ein Elternteil im Bestand) – im Zuchtplan gibt es dafür einen Bonus',true)+t2+sectEnd();
+    +sectStart('za_paare','💞','Erfolgspaare','Elternpaare mit erfolgreichen Nachkommen (mind. ein Elternteil im Bestand) – im Zuchtplan gibt es dafür einen Bonus. Paare mit einer Taube, die nicht mehr im Bestand oder unfruchtbar ist, sind mit ⚠ markiert; dafür gibt es „Alternativen“.',true)+t2+sectEnd();
 }
 
 // ── Automatische Paarungsempfehlungen ─────────────────────────────────────
@@ -10794,7 +10809,7 @@ function pairRecCandidates(){
   // werden. Reisetauben können optional dazugenommen werden (S.pairRecIncludeReise),
   // Heimtauben und Tauben ohne Typ bleiben immer außen vor. Nur Bestandstiere.
   function relevant(p){
-    if(!p.instock) return false;
+    if(!zuchtOk(p)) return false;
     if(p.pigeontype==='Zuchttaube') return true;
     if(S.pairRecIncludeReise && p.pigeontype==='Reisetaube') return true;
     return false;
@@ -18866,7 +18881,7 @@ const PV = { goal:null, reise:false, fix:'M', open:{}, memo:null, memoKey:'' };
 function pvSuggest(p){
   const z = zpState(), goal = PV.goal || (z.goal==='linie' ? 'ausgewogen' : z.goal);
   const sx = sex_(p), want = sx==='M' ? 'F' : 'M';
-  const cand = S.pigeons.filter(q=>q && !q._virtual && q.instock && !q.deleted && sex_(q)===want && q.pigeonid!==p.pigeonid && (q.pigeontype==='Zuchttaube' || (PV.reise && q.pigeontype==='Reisetaube')));
+  const cand = S.pigeons.filter(q=>zuchtOk(q) && sex_(q)===want && q.pigeonid!==p.pigeonid && (q.pigeontype==='Zuchttaube' || (PV.reise && q.pigeontype==='Reisetaube')));
   const key = p.pigeonid+'|'+goal+'|'+PV.reise+'|'+cand.length+'|'+S.pigeons.length+'|'+(goal==='linie'?z.lines.join(','):'');
   if(PV.memoKey===key && PV.memo) return PV.memo;
   if(!ZP_PAIRS) ZP_PAIRS = pairStatsAll();
@@ -18909,7 +18924,7 @@ function pvSuggestHtml(){
   if(!M && !F) return '';
   // Flugdaten der Kandidaten nachladen (wie im Zuchtplan)
   const z = zpState(), base = M || F, want = sex_(base)==='M' ? 'F' : 'M';
-  const cand = S.pigeons.filter(q=>q && !q._virtual && q.instock && !q.deleted && (q.pigeontype==='Zuchttaube' || (PV.reise && q.pigeontype==='Reisetaube')));
+  const cand = S.pigeons.filter(q=>zuchtOk(q) && (q.pigeontype==='Zuchttaube' || (PV.reise && q.pigeontype==='Reisetaube')));
   const need={}; const add=q=>{ if(!q||q._virtual) return; need[q.pigeonid]=1; getVererbungDescendants(q.pigeonid).forEach(d=>need[d.pigeonid]=1); };
   [M,F].concat(cand).forEach(p=>{ if(!p) return; add(p); [findFather(p),findMother(p)].forEach(add); });
   const missing = Object.keys(need).filter(id=>!PT_CACHE[id]);
