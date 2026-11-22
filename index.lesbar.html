@@ -118,6 +118,19 @@ nav button:hover{color:var(--text)}
 nav button.active{color:var(--green);border-bottom-color:var(--green);font-weight:500}
 
 /* ── Subnav (Kontext-Reiter innerhalb einer Gruppe, z.B. Tauben/Stammbaum/Nachkommen/Paarungscheck) ── */
+.zp-dash{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.zp-chip{border:1px solid var(--border);background:var(--bg2);color:var(--text2);border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer}
+.zp-chip b{color:var(--c,var(--text));font-size:14px}
+.zp-chip.on{border-color:var(--c,var(--blue));box-shadow:0 0 0 1px var(--c,var(--blue)) inset}
+.zp-st{display:inline-block;border:1px solid;border-radius:999px;padding:1px 8px;font-size:11px;margin-bottom:3px}
+@media(max-width:700px){
+ .zp-tbl thead{display:none}.zp-tbl,.zp-tbl tbody{display:block;width:100%}
+ .zp-tbl tr{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:10px;background:var(--bg2)}
+ .zp-tbl td{display:block;border:0!important;padding:0!important}
+ .zp-tbl td.zp-no,.zp-tbl td.zp-hide-t{display:none}
+ .zp-tbl td.zp-m,.zp-tbl td.zp-f,.zp-tbl td.zp-act{grid-column:1/3}
+ .zp-tbl td.zp-act{text-align:left!important}
+}
 .zp-back{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--text2)}
 .zp-flash td{animation:zpf 2.5s ease-out}
 @keyframes zpf{0%,40%{background:rgba(255,200,60,.35)}100%{background:transparent}}
@@ -11199,7 +11212,7 @@ function zpFind(mid,q){
     return `<div class="zp-hit" onclick="zpSwap('${mid}','${o.f.pigeonid}')"><span style="font-family:monospace">${escH(ring(o.f))}</span>${o.f.name?' <span style="color:var(--text3)">'+escH(o.f.name)+'</span>':''} <b style="color:${scoreColor(o.e.score)}">${o.e.score}</b>${o.e.ib>zpMaxIb(z)?' <span style="color:#e07070">Inzucht!</span>':''}${holder?' <span style="color:var(--text3)">(bei '+escH(ring(A.M[holder.i]))+')</span>':''}</div>`; }).join('')
     :'<div style="font-size:12px;color:var(--text3);padding:4px 2px">Kein Weibchen mit dieser Nummer/diesem Namen in der Auswahl.</div>';
 }
-function zpInvalidate(){ if(S.zp) S.zp.assign=null; }
+function zpInvalidate(){ if(S.zp) S.zp.assign=null; S.zpOrder=null; }
 function zpSet(k,v){ const z=zpState(); z[k]=v; zpSave(); zpInvalidate(); render(); }
 function zpLock(mid){ const z=zpState(), A=z.assign; const pr=A&&A.pairs.find(p=>A.M[p.i].pigeonid===mid); if(!pr) return; if(z.locked[mid]) delete z.locked[mid]; else z.locked[mid]=A.F[pr.j].pigeonid; zpSave(); render(); }
 function zpUnlockAll(){ const z=zpState(); z.locked={}; zpSave(); zpInvalidate(); render(); }
@@ -11214,7 +11227,7 @@ function zpSwap(mid, fid){
   else if(cur && j<0){ A.pairs=A.pairs.filter(p=>p!==cur); }
   else if(cur){ cur.j=j; }
   else if(j>=0) A.pairs.push({i,j,locked:false});
-  if(z.locked[mid]){ const pr=A.pairs.find(p=>p.i===i); if(pr) z.locked[mid]=A.F[pr.j].pigeonid; else delete z.locked[mid]; }
+  { const pr=A.pairs.find(p=>p.i===i); if(pr) z.locked[mid]=A.F[pr.j].pigeonid; else delete z.locked[mid]; }
   zpSave(); render();
 }
 function zpLineAdd(pid){ const z=zpState(); if(!z.lines.includes(pid)) z.lines.push(pid); zpSave(); zpInvalidate(); render(); }
@@ -11259,7 +11272,7 @@ async function zpSaveAll(){
       ok++;
     }catch(x){ err=x.message; break; }
   }
-  S.matings=null;
+  S.matings=null; mlEnsureLoaded().then(()=>render());
   alert(err ? 'Abgebrochen nach '+ok+' Paaren: '+err+'\n\nWurde die Tabelle "matings" in Supabase angelegt?' : ok+' Paare gespeichert in „'+T.liste+' › '+T.zucht+'“'+(skip?', '+skip+' waren schon vorhanden':'')+'.');
 }
 function zpPrint(){
@@ -11274,7 +11287,9 @@ function zpPrint(){
 }
 function zpRows(A){
   const rows=A.M.map((m,i)=>{ const pr=A.pairs.find(p=>p.i===i); return {m, i, pr, f:pr?A.F[pr.j]:null, e:pr?A.ev[i][pr.j]:null}; });
-  rows.sort((a,b)=>(b.e?b.e.score:-999)-(a.e?a.e.score:-999));
+  const ord=S.zpOrder;
+  if(ord && ord.length===rows.length && rows.every(r=>ord.includes(r.m.pigeonid))){ rows.sort((a,b)=>ord.indexOf(a.m.pigeonid)-ord.indexOf(b.m.pigeonid)); }
+  else { rows.sort((a,b)=>(b.e?b.e.score:-999)-(a.e?a.e.score:-999)); S.zpOrder=rows.map(r=>r.m.pigeonid); }
   return rows;
 }
 
@@ -11443,7 +11458,19 @@ function renderZuchtplan(){
   };
   const total=rows.filter(r=>r.e).reduce((a,r)=>a+r.e.score,0), np=rows.filter(r=>r.e).length;
   const nLocked=Object.keys(z.locked).length;
-  return head+ctl+`
+  if(S.matings===null && !S._zpMl){ S._zpMl=true; mlEnsureLoaded().then(()=>{ S._zpMl=false; if(S.tab==='zucht') render(); }).catch(()=>{ S._zpMl=false; }); }
+  const T=(S.matings?mlTarget():null), inList=new Set();
+  if(T) (S.matings||[]).forEach(x=>{ if(mlListOf(x)===T.liste && mlZuchtOf(x)===T.zucht) inList.add(x.fatherid+'|'+x.motherid); });
+  rows.forEach(r=>{ r.st = !r.f ? 'offen' : (inList.has(r.m.pigeonid+'|'+r.f.pigeonid) ? 'plan' : (z.locked[r.m.pigeonid]===r.f.pigeonid ? 'fix' : 'vor')); });
+  const cntSt=k=>rows.filter(r=>r.st===k).length;
+  const flt=S.zpFilter||'all';
+  const vis=flt==='all'?rows:rows.filter(r=>r.st===flt);
+  const stInfo={plan:['📋','eingeplant','var(--green)'],fix:['🔒','fest','var(--blue)'],vor:['💡','Vorschlag','var(--text3)'],offen:['⚠','kein Partner','var(--orange)']};
+  const stBadge=r=>{ const i=stInfo[r.st]; return `<span class="zp-st" style="color:${i[2]};border-color:${i[2]}">${i[0]} ${i[1]}${r.st==='plan'&&T?' · '+escH(T.zucht):''}</span>`; };
+  const chip=(k,l,n,c)=>`<button type="button" class="zp-chip ${flt===k?'on':''}" style="${c?'--c:'+c:''}" onclick="S.zpFilter='${k}';render()"><b>${n}</b> ${l}</button>`;
+  const dash=`<div class="zp-dash">${chip('all','Alle Vögel',rows.length)}${chip('plan','📋 in Paarungsliste'+(T?' ('+escH(T.zucht)+')':''),cntSt('plan'),'var(--green)')}${chip('fix','🔒 fest',cntSt('fix'),'var(--blue)')}${chip('vor','💡 Vorschlag',cntSt('vor'),'var(--text3)')}${chip('offen','⚠ ohne Partner',cntSt('offen'),'var(--orange)')}</div>
+    <div class="m-intro" onclick="this.classList.toggle('open')" style="font-size:12px;color:var(--text3);line-height:1.45;margin-bottom:10px"><b>So arbeitest du:</b> 1) Vorschlag ansehen. 2) Paare, die du so willst, festlegen: Weibchen selbst wählen/suchen (wird automatisch 🔒 fest) oder 🔓 antippen. 3) „↻ Neu optimieren“ rechnet nur die <u>nicht</u> festen Paare neu – feste bleiben. 4) „In Paarungsliste übernehmen“ speichert alle Paare in die gewählte Zucht, danach steht oben 📋 eingeplant. Übrig bleiben ⚠ ohne Partner (Vögel) und freie Weibchen (unten).</div>`;
+  return head+ctl+dash+`
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:13px;color:var(--text2)">
       <span>${A.M.length} Vögel × ${A.F.length} Weibchen · ${np} Paare · Ø Score <b>${np?Math.round(total/np):'—'}</b></span>
       <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
@@ -11451,20 +11478,20 @@ function renderZuchtplan(){
         ${nLocked?`<button class="btn btn-outline btn-sm" onclick="zpUnlockAll()">🔓 ${nLocked} Fixierungen lösen</button>`:''}
         <button class="btn btn-outline btn-sm" onclick="zpPrint()">🖨 Drucken</button>
         <button class="btn btn-sm" onclick="zpSaveAll()">💾 In Paarungsliste übernehmen</button></span></div>
-    <div class="table-wrap"><table style="width:100%;font-size:13px">
+    <div class="table-wrap"><table class="zp-tbl" style="width:100%;font-size:13px">
       <thead><tr><th>#</th><th>♂ Vogel</th><th>♀ Weibchen</th><th style="text-align:center">Score</th>${isLine?'<th style="text-align:center">Linienanteil</th>':''}<th class="zp-hide-t" style="text-align:center">Nachzucht B / S</th><th style="text-align:center">Inzucht</th><th class="zp-hide-t" style="text-align:center" title="Wie belastbar der Score ist: viele Flüge/Nachkommen = hoch, nur Abstammung = niedrig">Sicherheit</th><th></th></tr></thead>
-      <tbody>${rows.map((r,k)=>`<tr data-zpm="${r.m.pigeonid}" style="cursor:default">
-        <td style="color:var(--text3)">${r.e?k+1:'–'}</td>
-        <td><span class="zp-mring" style="font-family:monospace;font-size:12px;cursor:pointer" onclick="selectPigeon('${r.m.pigeonid}')">♂ ${escH(ring(r.m))}</span>${r.m.name?` <span class="zp-mname" style="color:var(--text3)">${escH(r.m.name)}</span>`:''}${prof(r.m)}</td>
-        <td>${sel(r)}${r.f?prof(r.f):''}</td>
+      <tbody>${vis.map((r,k)=>`<tr data-zpm="${r.m.pigeonid}" style="cursor:default">
+        <td class="zp-no" style="color:var(--text3)">${r.e?rows.indexOf(r)+1:'–'}</td>
+        <td class="zp-m">${stBadge(r)}<br><span class="zp-mring" style="font-family:monospace;font-size:12px;cursor:pointer" onclick="selectPigeon('${r.m.pigeonid}')">♂ ${escH(ring(r.m))}</span>${r.m.name?` <span class="zp-mname" style="color:var(--text3)">${escH(r.m.name)}</span>`:''}${prof(r.m)}</td>
+        <td class="zp-f">${sel(r)}${r.f?prof(r.f):''}</td>
         <td style="text-align:center;font-weight:700;color:${r.e?scoreColor(r.e.score):'var(--text3)'}">${r.e?r.e.score:'—'}${r.e&&r.e.proven?`<div style="font-size:10px;font-weight:400;color:var(--green)" title="Diese Kombination brachte schon ${r.e.proven.erf} erfolgreiche Nachkommen">★ Erfolgspaar</div>`:''}${r.e?`<div class="zp-sub">B ${Math.round(r.e.b)} · S ${Math.round(r.e.s)}<br>Sicherheit ${Math.round(r.e.rel*100)} %</div>`:''}</td>
         ${isLine?`<td style="text-align:center;font-weight:600;color:var(--green)">${r.e&&r.e.share!=null?(r.e.share*100).toFixed(1)+' %':'—'}</td>`:''}
         <td class="zp-hide-t" style="text-align:center;font-size:12px">${r.e?Math.round(r.e.b)+' / '+Math.round(r.e.s):'—'}</td>
         <td style="text-align:center;color:${r.e?(isLine&&r.e.ib-r.e.ibLine<0.0625?'var(--green)':ibCol(r.e.ib)):'var(--text3)'}">${r.e?(r.e.ib*100).toFixed(2)+' %'+(isLine&&r.e.ib>0?`<div style="font-size:11px;color:var(--text3)">davon Linie ${(r.e.ibLine*100).toFixed(2)} %</div>`:''):'—'}</td>
         <td class="zp-hide-t" style="text-align:center;color:var(--text3);font-size:12px">${r.e?Math.round(r.e.rel*100)+' %':''}</td>
-        <td style="white-space:nowrap;text-align:right">${r.f?`<button class="btn btn-outline btn-sm" title="${z.locked[r.m.pigeonid]?'Fixierung lösen':'Paar beim Neuoptimieren behalten'}" onclick="zpLock('${r.m.pigeonid}')">${z.locked[r.m.pigeonid]?'🔒':'🔓'}</button> <button class="btn btn-outline btn-sm" title="Im Paarungscheck öffnen" onclick="zpOpenCheck('${r.m.pigeonid}','${r.f.pigeonid}')">👁</button>`:''}</td></tr>`).join('')}
+        <td class="zp-act" style="white-space:nowrap;text-align:right">${r.f?`<button class="btn btn-outline btn-sm" title="${z.locked[r.m.pigeonid]?'Fixierung lösen':'Paar beim Neuoptimieren behalten'}" onclick="zpLock('${r.m.pigeonid}')">${z.locked[r.m.pigeonid]?'🔒':'🔓'}</button> <button class="btn btn-outline btn-sm" title="Im Paarungscheck öffnen" onclick="zpOpenCheck('${r.m.pigeonid}','${r.f.pigeonid}')">👁</button>`:''}</td></tr>`).join('')}
       </tbody></table></div>
-    ${freeF.length?`<div style="font-size:12px;color:var(--text3);margin-top:8px">Ohne Partner: ${freeF.map(f=>escH(ring(f))).join(', ')}</div>`:''}
+    ${vis.length?'':'<div style="color:var(--text3);font-size:13px;margin-top:8px">Keine Vögel in dieser Auswahl.</div>'}${freeF.length?`<div class="card" style="margin-top:10px;font-size:13px"><b>♀ Noch ohne Partner (${freeF.length}):</b> <span style="color:var(--text2)">${freeF.map(f=>escH(ring(f))+(f.name?' '+escH(f.name):'')).join(' · ')}</span></div>`:''}
     <div class="m-intro" onclick="this.classList.toggle('open')" style="font-size:12px;color:var(--text3);margin-top:10px;line-height:1.5">B = Beständigkeit (Preisquote, Anzahl Preise), S = Schnelligkeit (Flüge über 90 AS, Ø und Summe AS) – je Taube aus eigenen Flügen und Nachkommen, ersatzweise aus den Eltern; „?“ = kaum Daten.
       Nachzucht B / S = erwartetes Mittel der Eltern, Werte mit wenig Daten zur Mitte (50) gezogen. Score je Ziel: Schnelligkeit 70 % S + 30 % B · Beständigkeit 70 % B + 30 % S · Ausgewogen Mittel aus B und S mit Abzug für Einseitigkeit und kleinem Bonus, wenn sich die Partner ergänzen · Bewährte Erfolgspaare (schon erfolgreiche Nachkommen) bekommen bis zu 10 Punkte Bonus · Linie stärken 50 % Blutanteil der Stammtauben im Nachkommen (25 % Anteil = 50 Punkte, 50 % = 100) + 20 % gezielte Inzucht auf die Stammtauben (12,5 % = volle Punkte) + 30 % Ausgewogen.
       Inzucht über 6,25 % wird abgezogen – bei Linienzucht nur der Teil über andere Ahnen; über der eingestellten Grenze wird nicht automatisch gepaart (manuell möglich, rot markiert).</div>`;
