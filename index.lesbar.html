@@ -10516,16 +10516,24 @@ function renderMatingsList(){
   if(!L || !rows.length) return setup+bar+`<div class="card"><div style="color:var(--text3);font-size:13px">${L?'In dieser Auswahl sind noch keine Paarungen – im Zuchtplan „In Paarungsliste übernehmen“ oder im Paarungscheck „💾 Paarung speichern“ nutzen.':'Noch keine Paarungen gespeichert – im Paarungscheck auf „💾 Paarung speichern“ klicken oder eine JSON-Datei importieren.'}</div></div>`;
   const cColor = v => v==null?'var(--text3)':v>=60?'var(--green)':v>=35?'var(--orange)':'#e07070';
   const sc = v => v==null?'—':v;
+  // Scores aktuell berechnen (gespeicherte Werte sind nur der Stand beim Speichern)
+  const need={}; rows.forEach(r=>{ scoreNeedIds(findById(r.fatherid),need); scoreNeedIds(findById(r.motherid),need); });
+  const miss=Object.keys(need).filter(id=>!PT_CACHE[id]);
+  let live=true;
+  if(miss.length){ live=false; if(!S._mlLoad){ S._mlLoad=true; withTimeout(loadPigeonTripsBatchChunked(miss),60000).then(()=>{ S._mlLoad=false; scoreMemoClear(); if(S.tab==='zuchtliste') render(); }).catch(()=>{ S._mlLoad=false; }); } }
+  const lv=r=>{ if(!live) return null; const f=findById(r.fatherid), m=findById(r.motherid); if(!f||!m) return null; try{ const pp=computePaarungsprognose(f,m); return pp.stillLoading?null:pp; }catch(e){ return null; } };
   const body = rows.map(r=>{
+    const LP=lv(r); const vF=LP?LP.sF:r.score_father, vM=LP?LP.sM:r.score_mother, vC=LP?LP.combined:r.score_combined;
+    const snap='Gespeichert am '+(r.created_at?new Date(r.created_at).toLocaleDateString('de'):'?')+': Vater '+sc(r.score_father)+' · Mutter '+sc(r.score_mother)+' · Ø '+sc(r.score_combined);
     const zopts=Z.filter(z=>z!==ML_NOZ).map(z=>`<option value="${escH(z)}" ${mlZuchtOf(r)===z?'selected':''}>${escH(z)}</option>`).join('');
     return `<tr>
       ${ext?`<td><select onchange="mlMoveZucht('${r.id}',this)" style="padding:4px 6px;font-size:12.5px">${mlZuchtOf(r)===ML_NOZ?'<option value="">Ohne Zucht</option>':''}${zopts}<option value="__new">＋ Neue Zucht…</option></select></td>`:''}
       <td style="cursor:pointer;font-family:monospace;font-size:12px" onclick="loadMatingIntoCheck('${r.fatherid}','${r.motherid}')">♂ ${escH(r.father_ring||'')}${r.father_name?'<br><span style="color:var(--text3)">'+escH(r.father_name)+'</span>':''}</td>
       <td style="cursor:pointer;font-family:monospace;font-size:12px" onclick="loadMatingIntoCheck('${r.fatherid}','${r.motherid}')">♀ ${escH(r.mother_ring||'')}${r.mother_name?'<br><span style="color:var(--text3)">'+escH(r.mother_name)+'</span>':''}</td>
       <td style="text-align:center">${r.inzucht!=null?Number(r.inzucht).toFixed(2)+' %':'—'}</td>
-      <td style="text-align:center;color:${cColor(r.score_father)}">${sc(r.score_father)}</td>
-      <td style="text-align:center;color:${cColor(r.score_mother)}">${sc(r.score_mother)}</td>
-      <td style="text-align:center;font-weight:700;color:${cColor(r.score_combined)}">${sc(r.score_combined)}</td>
+      <td style="text-align:center;color:${cColor(vF)}" title="${escH(snap)}">${sc(vF)}</td>
+      <td style="text-align:center;color:${cColor(vM)}" title="${escH(snap)}">${sc(vM)}</td>
+      <td style="text-align:center;font-weight:700;color:${cColor(vC)}" title="${escH(snap)}">${sc(vC)}${LP?'':'<div style="font-size:10px;font-weight:400;color:var(--text3)">gespeichert</div>'}</td>
       ${ext?`<td>${tmDerive(r)?`<span class="ml-stb st-${escH(tmDerive(r))}" title="Der Status folgt den Terminen (Schritt ④). Zum Ändern die Termine anpassen.">${escH(tmDerive(r))}</span><div style="font-size:11px;color:var(--text3);margin-top:2px;cursor:pointer" onclick="tmMask('${r.id}')">📅 ${(()=>{ const n=tmPlan(r).next; return n?escH(n.lbl)+' '+tmFmt(n.date):'Termine ›'; })()}</div>`:`<select onchange="mlSetStatus('${r.id}',this.value)" style="padding:4px 6px;font-size:12.5px">${ML_STATUS.map(x=>`<option ${(r.status||'geplant')===x?'selected':''}>${x}</option>`).join('')}</select>`}</td>
       <td class="ml-note" onclick="mlEditNote('${r.id}')" title="Notiz bearbeiten">${r.note?escH(r.note):'<span style="color:var(--text3)">＋ Notiz</span>'}</td>`:''}
       <td style="text-align:center">${r.created_at?new Date(r.created_at).toLocaleDateString('de'):''}</td>
