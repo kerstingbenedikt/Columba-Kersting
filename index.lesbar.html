@@ -118,6 +118,9 @@ nav button:hover{color:var(--text)}
 nav button.active{color:var(--green);border-bottom-color:var(--green);font-weight:500}
 
 /* ── Subnav (Kontext-Reiter innerhalb einer Gruppe, z.B. Tauben/Stammbaum/Nachkommen/Paarungscheck) ── */
+.zp-back{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--text2)}
+.zp-flash td{animation:zpf 2.5s ease-out}
+@keyframes zpf{0%,40%{background:rgba(255,200,60,.35)}100%{background:transparent}}
 .subnav{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 10px;margin-bottom:14px;-webkit-overflow-scrolling:touch;scrollbar-width:none;border-bottom:1px solid var(--border)}
 .subnav::-webkit-scrollbar{display:none}
 .zb-wrap{display:flex;flex-wrap:wrap;gap:5px;align-items:center;min-height:38px;padding:4px 6px;background:var(--bg3,var(--bg2));border:1px solid var(--border);border-radius:var(--radius-sm,8px);cursor:text}
@@ -3345,10 +3348,15 @@ function setActiveNav(tab){
 function showTab(t){
   if(t==='zuchtempf'){ t='zucht'; S.planView='rang'; S.pairRecOpen=true; PAIR_REC.results=null; }
   if(t==='zuchtausw'){ showAuswertung(); return; }
+  if(ZG.includes(S.tab)) TAB_Y[S.tab]=window.scrollY;
   S.tab=t; S.selected=null; if(t!=='paarung') S.splitPaarung=false;
   setActiveNav(t);
   render();
+  if(ZG.includes(t) && TAB_Y[t]!=null) zRestoreY(TAB_Y[t]);
 }
+const ZG=['zucht','paarung','zuchtliste','zuchttermine'], TAB_Y={};
+let _lastRenderTab=null;
+function zRestoreY(y){ window.scrollTo(0,y); requestAnimationFrame(()=>{ window.scrollTo(0,y); setTimeout(()=>window.scrollTo(0,y),120); }); }
 // Merkt den aktuellen Tab auf dem navStack, wenn man von AUSSERHALB der
 // Tauben-Themengruppe (z.B. Bestenliste, Züchter, Reisen) zu einer Taube
 // springt. Springt man dagegen innerhalb der Tauben-Themengruppe selbst um
@@ -3599,6 +3607,12 @@ window.addEventListener('resize', ()=>{
 
 // ── RENDER ─────────────────────────────────────────────────────
 function render(){
+  const _y=window.scrollY, _same=(S.tab===_lastRenderTab);
+  render0();
+  _lastRenderTab=S.tab;
+  if(_same && ZG.includes(S.tab) && _y>0) zRestoreY(_y);
+}
+function render0(){
   if(typeof scoreMemoClear==='function') scoreMemoClear();
   const _edSnap=edSnapshot(), _pedSnap=(typeof pedSnapshot==='function')?pedSnapshot():null;
   if(S.tab==='paarung' && splitOn() && window.innerWidth>=768){ S.tab='tauben'; S.taubenView='liste'; S.splitTab='paarung'; S.splitPaarung=true; setActiveNav('tauben'); }
@@ -11225,8 +11239,10 @@ function zpLineSearch(q){
   const hits=S.pigeons.filter(p=>!p._virtual && !z.lines.includes(p.pigeonid) && ((p.name||'').toLowerCase().includes(q) || ring(p).toLowerCase().includes(q) || String(p.ringnumber||'').toLowerCase().endsWith(q))).slice(0,15);
   box.innerHTML = hits.length ? hits.map(p=>`<button type="button" class="btn btn-outline btn-sm" onclick="zpLineAdd('${p.pigeonid}')">+ ${escH(p.name?p.name+' · ':'')}${escH(ring(p))}</button>`).join(' ') : '<span style="font-size:12px;color:var(--text3)">Keine Taube gefunden.</span>';
 }
-function zpOpenAlt(id){ const p=findById(id); if(!p) return; if(sex_(p)==='M'){ S.paarungM=p; S.paarungF=null; PV.fix='M'; } else { S.paarungF=p; S.paarungM=null; PV.fix='F'; } showTab('paarung'); window.scrollTo(0,0); }
-function zpOpenCheck(mid,fid){ S.paarungM=findById(mid); S.paarungF=findById(fid); PV.fix='M'; showTab('paarung'); window.scrollTo(0,0); }
+function zpMarkBack(mid){ if(S.tab==='zucht'){ const m=findById(mid); S.zpBack={y:window.scrollY, view:S.planView, mid, label:m?(m.name||m.ringnumber||''):''}; } }
+function zpBackGo(){ const b=S.zpBack; if(!b){ showTab('zucht'); return; } S.zpBack=null; S.planView=b.view||S.planView; TAB_Y.zucht=b.y; showTab('zucht'); setTimeout(()=>{ const r=document.querySelector('[data-zpm="'+b.mid+'"]'); if(r){ r.classList.add('zp-flash'); setTimeout(()=>r.classList.remove('zp-flash'),2500); } },200); }
+function zpOpenAlt(id){ zpMarkBack(id); const p=findById(id); if(!p) return; if(sex_(p)==='M'){ S.paarungM=p; S.paarungF=null; PV.fix='M'; } else { S.paarungF=p; S.paarungM=null; PV.fix='F'; } showTab('paarung'); window.scrollTo(0,0); TAB_Y.paarung=0; }
+function zpOpenCheck(mid,fid){ zpMarkBack(mid); S.paarungM=findById(mid); S.paarungF=findById(fid); PV.fix='M'; TAB_Y.paarung=0; showTab('paarung'); window.scrollTo(0,0); }
 async function zpSaveAll(){
   const A=zpState().assign; if(!A||!A.pairs.length) return;
   await mlEnsureLoaded(); const T=mlTarget();
@@ -11320,8 +11336,10 @@ function zuchtHintHtml(active){
 }
 function renderZuchtSubnav(active){
   if(active==='zuchtempf') active='zucht';
-  const b=(k,l,ic)=>`<button class="subnav-btn ${active===k?'active':''}" onclick="showTab('${k}')">${ic} ${l}</button>`;
-  return `<div class="subnav">${b('zucht','① Planen','🧬')}${b('paarung','② Prüfen','💑')}${b('zuchtliste','③ Paarungsliste','📋')}${b('zuchttermine','④ Termine','📅')}</div>${zuchtHintHtml(active)}${active==='zucht'||active==='paarung'?glossHtml():''}`;
+  const bk=S.zpBack;
+  const b=(k,l,ic)=>`<button class="subnav-btn ${active===k?'active':''}" onclick="${k==='zucht'&&bk?'zpBackGo()':`showTab('${k}')`}">${ic} ${l}</button>`;
+  const back=bk&&active!=='zucht'?`<div class="zp-back"><button class="btn btn-sm" onclick="zpBackGo()">↩ Zurück zur Planung</button><span>Du hast ${bk.label?'<b>'+escH(bk.label)+'</b> ':'ein Paar '}aus der ${bk.view==='rang'?'Top-Paar-Liste':'Komplettverpaarung'} geöffnet – dort geht es an derselben Stelle weiter.</span></div>`:'';
+  return back+`<div class="subnav">${b('zucht','① Planen','🧬')}${b('paarung','② Prüfen','💑')}${b('zuchtliste','③ Paarungsliste','📋')}${b('zuchttermine','④ Termine','📅')}</div>${zuchtHintHtml(active)}${active==='zucht'||active==='paarung'?glossHtml():''}`;
 }
 // „Planen“ bündelt Zuchtplan (beste Zuordnung für den ganzen Schlag) und Top-Empfehlungen (Rangliste der besten Einzelpaare)
 function planSwitch(v){
@@ -11329,7 +11347,7 @@ function planSwitch(v){
   if(v==='rang'){ S.pairRecIncludeReise=!!z.inclReise; PAIR_REC.results=null; S.pairRecOpen=true; }
   else if(!!z.inclReise!==!!S.pairRecIncludeReise){ z.inclReise=!!S.pairRecIncludeReise; zpSave(); zpInvalidate(); }
   S.planView=v; try{ localStorage.setItem('pigman_planview',v); }catch(e){}
-  render();
+  render(); window.scrollTo(0,0);
 }
 function planReise(on){
   const z=zpState(); z.inclReise=!!on; S.pairRecIncludeReise=!!on; PAIR_REC.results=null; zpSave(); zpInvalidate(); render();
@@ -11435,7 +11453,7 @@ function renderZuchtplan(){
         <button class="btn btn-sm" onclick="zpSaveAll()">💾 In Paarungsliste übernehmen</button></span></div>
     <div class="table-wrap"><table style="width:100%;font-size:13px">
       <thead><tr><th>#</th><th>♂ Vogel</th><th>♀ Weibchen</th><th style="text-align:center">Score</th>${isLine?'<th style="text-align:center">Linienanteil</th>':''}<th class="zp-hide-t" style="text-align:center">Nachzucht B / S</th><th style="text-align:center">Inzucht</th><th class="zp-hide-t" style="text-align:center" title="Wie belastbar der Score ist: viele Flüge/Nachkommen = hoch, nur Abstammung = niedrig">Sicherheit</th><th></th></tr></thead>
-      <tbody>${rows.map((r,k)=>`<tr style="cursor:default">
+      <tbody>${rows.map((r,k)=>`<tr data-zpm="${r.m.pigeonid}" style="cursor:default">
         <td style="color:var(--text3)">${r.e?k+1:'–'}</td>
         <td><span class="zp-mring" style="font-family:monospace;font-size:12px;cursor:pointer" onclick="selectPigeon('${r.m.pigeonid}')">♂ ${escH(ring(r.m))}</span>${r.m.name?` <span class="zp-mname" style="color:var(--text3)">${escH(r.m.name)}</span>`:''}${prof(r.m)}</td>
         <td>${sel(r)}${r.f?prof(r.f):''}</td>
