@@ -118,6 +118,8 @@ nav button:hover{color:var(--text)}
 nav button.active{color:var(--green);border-bottom-color:var(--green);font-weight:500}
 
 /* ── Subnav (Kontext-Reiter innerhalb einer Gruppe, z.B. Tauben/Stammbaum/Nachkommen/Paarungscheck) ── */
+.zp-round{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}.zp-rl{font-weight:700;font-size:13px}.zp-round select{padding:6px 8px;font-size:14px}.zp-rs,.zp-note{font-size:12px;color:var(--text3)}.zp-note{margin-bottom:8px}
+.zp-done{margin-bottom:8px;font-size:12px;color:var(--text2)}.zp-done summary{cursor:pointer;color:var(--green)}.zp-done div div{padding:2px 0 2px 14px}
 .zp-dash{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .zp-chip{border:1px solid var(--border);background:var(--bg2);color:var(--text2);border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer}
 .zp-chip b{color:var(--c,var(--text));font-size:14px}
@@ -11180,21 +11182,32 @@ function hungarianMax(W){
   for(let j=1;j<=N;j++) if(p[j]>=1 && p[j]<=n && j<=mcols && W[p[j]-1][j-1]!=null) res[p[j]-1]=j-1;
   return res;
 }
-function zpCandidates(z){
-  const ok=p=>zuchtOk(p) && (p.pigeontype==='Zuchttaube' || (z.inclReise && p.pigeontype==='Reisetaube'));
-  return {males:S.pigeons.filter(p=>ok(p)&&sex_(p)==='M'), females:S.pigeons.filter(p=>ok(p)&&sex_(p)==='F')};
+// Planungsrunde: Paare der gewählten Zucht (Paarungsliste) sind „erledigt“; Paare aus anderen Zuchten derselben Liste werden als Alternative gemieden
+function zpCtx(){
+  if(!S.matings) return {sig:'x',T:null,dm:new Set(),df:new Set(),pairs:[],avoid:new Set()};
+  const T=mlTarget(), dm=new Set(), df=new Set(), pairs=[], avoid=new Set();
+  S.matings.forEach(x=>{ if(mlListOf(x)!==T.liste || !x.fatherid || !x.motherid) return; if(mlZuchtOf(x)===T.zucht){ dm.add(x.fatherid); df.add(x.motherid); pairs.push(x); } else avoid.add(x.fatherid+'|'+x.motherid); });
+  return {sig:T.liste+'|'+T.zucht+'|'+[...dm].sort().join(',')+'|'+[...df].sort().join(',')+'|'+avoid.size, T, dm, df, pairs, avoid};
 }
+function zpCandidates(z,raw){
+  const ok=p=>zuchtOk(p) && (p.pigeontype==='Zuchttaube' || (z.inclReise && p.pigeontype==='Reisetaube'));
+  const cx=raw?null:zpCtx();
+  return {males:S.pigeons.filter(p=>ok(p)&&sex_(p)==='M'&&!(cx&&cx.dm.has(p.pigeonid))), females:S.pigeons.filter(p=>ok(p)&&sex_(p)==='F'&&!(cx&&cx.df.has(p.pigeonid)))};
+}
+function zpSetZucht(v){ if(v==='__new'){ zpNewZucht(); return; } const st=mlState(); st.zucht=v; mlSave(); zpInvalidate(); render(); }
+async function zpNewZucht(){ await mlNewZucht(); zpInvalidate(); render(); }
+function zpNextZucht(){ const T=mlTarget(), Z=mlZuchten(T.liste).filter(z=>z!==ML_NOZ), i=Z.indexOf(T.zucht); if(i>=0 && i<Z.length-1) zpSetZucht(Z[i+1]); else zpNewZucht(); }
 function zpCompute(){
   const z=zpState(), c=zpCandidates(z), idx=new Map(S.pigeons.map(p=>[p.pigeonid,p]));
   ZP_PROF.clear(); ZP_ANC.clear(); ZP_SHARE.clear(); ZP_PAIRS=pairStatsAll();
   const maxIb=zpMaxIb(z);
   const M=c.males, F=c.females;
-  const ev=M.map(m=>F.map(f=>zpEval(m,f,z.goal,idx)));
+  const ev=M.map(m=>F.map(f=>zpEval(m,f,z.goal,idx))); const AV=zpCtx().avoid;
   // gesperrte (fixierte) Paare zuerst, Rest optimal
   const fixedM=new Set(), fixedF=new Set(), pairs=[];
   Object.entries(z.locked).forEach(([mid,fid])=>{ const i=M.findIndex(x=>x.pigeonid===mid), j=F.findIndex(x=>x.pigeonid===fid); if(i>=0&&j>=0&&!fixedF.has(j)){ fixedM.add(i); fixedF.add(j); pairs.push({i,j,locked:true}); } else delete z.locked[mid]; });
   const freeM=M.map((_,i)=>i).filter(i=>!fixedM.has(i)), freeF=F.map((_,j)=>j).filter(j=>!fixedF.has(j));
-  const W=freeM.map(i=>freeF.map(j=>{ const e=ev[i][j]; return e.ib>maxIb ? null : e.score+1000; }));
+  const W=freeM.map(i=>freeF.map(j=>{ const e=ev[i][j]; return (e.ib>maxIb || AV.has(M[i].pigeonid+'|'+F[j].pigeonid)) ? null : e.score+1000; }));
   const asg=hungarianMax(W);
   freeM.forEach((i,k)=>{ if(asg[k]>=0) pairs.push({i, j:freeF[asg[k]], locked:false}); });
   z.assign={M, F, ev, pairs};
@@ -11257,10 +11270,10 @@ function zpBackGo(){ const b=S.zpBack; if(!b){ showTab('zucht'); return; } S.zpB
 function zpOpenAlt(id){ zpMarkBack(id); const p=findById(id); if(!p) return; if(sex_(p)==='M'){ S.paarungM=p; S.paarungF=null; PV.fix='M'; } else { S.paarungF=p; S.paarungM=null; PV.fix='F'; } showTab('paarung'); window.scrollTo(0,0); TAB_Y.paarung=0; }
 function zpOpenCheck(mid,fid){ zpMarkBack(mid); S.paarungM=findById(mid); S.paarungF=findById(fid); PV.fix='M'; TAB_Y.paarung=0; showTab('paarung'); window.scrollTo(0,0); }
 async function zpSaveAll(){
-  const A=zpState().assign; if(!A||!A.pairs.length) return;
+  const A=zpState().assign; if(!A||!A.pairs.length || S._zpSaving) return;
   await mlEnsureLoaded(); const T=mlTarget();
   if(!confirm(A.pairs.length+' Paare in „'+T.liste+' › '+T.zucht+'“ übernehmen? Bereits dort gespeicherte Paare werden übersprungen.\n(Liste und Zucht wählst du vorher in der Paarungsliste.)')) return;
-  let ok=0, skip=0, err='';
+  let ok=0, skip=0, err=''; S._zpSaving=true;
   for(const pr of A.pairs){
     const m=A.M[pr.i], f=A.F[pr.j], e=A.ev[pr.i][pr.j];
     try{
@@ -11272,7 +11285,7 @@ async function zpSaveAll(){
       ok++;
     }catch(x){ err=x.message; break; }
   }
-  S.matings=null; mlEnsureLoaded().then(()=>render());
+  S._zpSaving=false; S.matings=null; mlEnsureLoaded().then(()=>render());
   alert(err ? 'Abgebrochen nach '+ok+' Paaren: '+err+'\n\nWurde die Tabelle "matings" in Supabase angelegt?' : ok+' Paare gespeichert in „'+T.liste+' › '+T.zucht+'“'+(skip?', '+skip+' waren schon vorhanden':'')+'.');
 }
 function zpPrint(){
@@ -11404,7 +11417,15 @@ function renderPlanen(){
 }
 function showAuswertung(){ S.tab='zucht'; S.selected=null; S.planView='bewaehrt'; setActiveNav('zucht'); render(); window.scrollTo(0,0); }
 function renderZuchtplan(){
-  const z=zpState(), c=zpCandidates(z);
+  const z=zpState(), c=zpCandidates(z), cx=zpCtx(), craw=zpCandidates(z,true);
+  if(S.matings===null && !S._zpMl){ S._zpMl=true; mlEnsureLoaded().then(()=>{ S._zpMl=false; if(S.tab==='zucht') render(); }).catch(()=>{ S._zpMl=false; }); }
+  if(S.zpSig!==cx.sig){ S.zpSig=cx.sig; zpInvalidate(); }
+  const T0=cx.T, Zs=T0?mlZuchten(T0.liste).filter(x=>x!==ML_NOZ):[];
+  const round = T0 ? `<div class="zp-round"><span class="zp-rl">Planung für</span>
+      <select onchange="zpSetZucht(this.value)">${(Zs.includes(T0.zucht)?Zs:Zs.concat([T0.zucht])).map(x=>`<option ${x===T0.zucht?'selected':''}>${escH(x)}</option>`).join('')}<option value="__new">＋ weitere Zucht anlegen…</option></select>
+      <span class="zp-rs">Liste „${escH(T0.liste)}“ · ${cx.pairs.length} Paar(e) hier schon eingeplant</span></div>
+    ${cx.pairs.length?`<details class="zp-done"><summary>📋 Schon in „${escH(T0.zucht)}“ eingeplant (${cx.pairs.length}) – werden hier nicht noch einmal vorgeschlagen</summary><div>${cx.pairs.map(x=>`<div>♂ ${escH(x.father_ring||'')} ${escH(x.father_name||'')} × ♀ ${escH(x.mother_ring||'')} ${escH(x.mother_name||'')}</div>`).join('')}</div></details>`:''}
+    ${cx.avoid.size?`<div class="zp-note">Paare aus anderen Zuchten dieser Liste (${cx.avoid.size}) werden gemieden – du bekommst hier alternative Partner.</div>`:''}` : '';
   const head=`<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:10px">
       <div><div class="serif" style="font-size:20px">🧬 Zuchtplan</div>
       <div class="m-intro" onclick="this.classList.toggle('open')" style="font-size:12px;color:var(--text3);max-width:760px;line-height:1.45">Optimale Verpaarung aller Zuchttauben im Bestand für das gewählte Ziel – jeder Vogel bekommt höchstens ein Weibchen, die Summe aller Paare ist so gut wie möglich. Weibchen per Auswahl tauschen; 🔒 fixiert ein Paar beim Neuberechnen.</div></div>
@@ -11428,6 +11449,9 @@ function renderZuchtplan(){
       <div style="display:flex;flex-wrap:wrap;gap:6px">${sug.map(x=>`<button type="button" class="btn btn-outline btn-sm" onclick="zpLineAdd('${x.p.pigeonid}')" title="Ø ${(x.avg*100).toFixed(1)} % Blutanteil, in ${x.cnt} Zuchttauben">+ ${escH(x.p.name?x.p.name+' · ':'')}${escH(ring(x.p))} <span style="color:var(--text3)">${(x.avg*100).toFixed(1)} %</span></button>`).join('')}</div>`:''}
     </div>`;
   }
+  if((!c.males.length || !c.females.length) && craw.males.length && craw.females.length && cx.T){
+    const left=(!c.males.length?'Vögel':'Weibchen');
+    return head+round+ctl+`<div class="card" style="border-color:var(--green)"><div style="font-weight:700;color:var(--green);margin-bottom:6px">✅ „${escH(cx.T.zucht)}“ ist vollständig – alle ${left} sind eingeplant.</div><div style="font-size:13px;color:var(--text2);margin-bottom:10px">Als Nächstes kannst du die nächste Zucht planen. Die Paare aus ${escH(cx.T.zucht)} werden dabei gemieden, du bekommst alternative Partner.</div><button class="btn btn-sm" onclick="zpNextZucht()">→ Nächste Zucht planen</button></div>`; }
   if(!c.males.length || !c.females.length) return head+ctl+`<div class="card" style="color:var(--text3)">Für einen Zuchtplan werden mindestens ein Vogel und ein Weibchen mit Taubentyp „Zuchttaube“ im Bestand benötigt.</div>`;
   // Flugdaten: Kandidaten, Nachkommen, Eltern
   if(ZP.error) return head+ctl+`<div class="card" style="color:#e07070">Fehler beim Laden der Flugdaten: ${escH(ZP.error)} <button class="btn btn-sm" onclick="ZP.error=null;render()">Erneut</button></div>`;
@@ -11458,7 +11482,6 @@ function renderZuchtplan(){
   };
   const total=rows.filter(r=>r.e).reduce((a,r)=>a+r.e.score,0), np=rows.filter(r=>r.e).length;
   const nLocked=Object.keys(z.locked).length;
-  if(S.matings===null && !S._zpMl){ S._zpMl=true; mlEnsureLoaded().then(()=>{ S._zpMl=false; if(S.tab==='zucht') render(); }).catch(()=>{ S._zpMl=false; }); }
   const T=(S.matings?mlTarget():null), inList=new Set();
   if(T) (S.matings||[]).forEach(x=>{ if(mlListOf(x)===T.liste && mlZuchtOf(x)===T.zucht) inList.add(x.fatherid+'|'+x.motherid); });
   rows.forEach(r=>{ r.st = !r.f ? 'offen' : (inList.has(r.m.pigeonid+'|'+r.f.pigeonid) ? 'plan' : (z.locked[r.m.pigeonid]===r.f.pigeonid ? 'fix' : 'vor')); });
@@ -11468,9 +11491,9 @@ function renderZuchtplan(){
   const stInfo={plan:['📋','eingeplant','var(--green)'],fix:['🔒','fest','var(--blue)'],vor:['💡','Vorschlag','var(--text3)'],offen:['⚠','kein Partner','var(--orange)']};
   const stBadge=r=>{ const i=stInfo[r.st]; return `<span class="zp-st" style="color:${i[2]};border-color:${i[2]}">${i[0]} ${i[1]}${r.st==='plan'&&T?' · '+escH(T.zucht):''}</span>`; };
   const chip=(k,l,n,c)=>`<button type="button" class="zp-chip ${flt===k?'on':''}" style="${c?'--c:'+c:''}" onclick="S.zpFilter='${k}';render()"><b>${n}</b> ${l}</button>`;
-  const dash=`<div class="zp-dash">${chip('all','Alle Vögel',rows.length)}${chip('plan','📋 in Paarungsliste'+(T?' ('+escH(T.zucht)+')':''),cntSt('plan'),'var(--green)')}${chip('fix','🔒 fest',cntSt('fix'),'var(--blue)')}${chip('vor','💡 Vorschlag',cntSt('vor'),'var(--text3)')}${chip('offen','⚠ ohne Partner',cntSt('offen'),'var(--orange)')}</div>
-    <div class="m-intro" onclick="this.classList.toggle('open')" style="font-size:12px;color:var(--text3);line-height:1.45;margin-bottom:10px"><b>So arbeitest du:</b> 1) Vorschlag ansehen. 2) Paare, die du so willst, festlegen: Weibchen selbst wählen/suchen (wird automatisch 🔒 fest) oder 🔓 antippen. 3) „↻ Neu optimieren“ rechnet nur die <u>nicht</u> festen Paare neu – feste bleiben. 4) „In Paarungsliste übernehmen“ speichert alle Paare in die gewählte Zucht, danach steht oben 📋 eingeplant. Übrig bleiben ⚠ ohne Partner (Vögel) und freie Weibchen (unten).</div>`;
-  return head+ctl+dash+`
+  const dash=`<div class="zp-dash">${chip('all','Alle Vögel',rows.length)}${chip('fix','🔒 fest',cntSt('fix'),'var(--blue)')}${chip('vor','💡 Vorschlag',cntSt('vor'),'var(--text3)')}${chip('offen','⚠ ohne Partner',cntSt('offen'),'var(--orange)')}</div>
+    <div class="m-intro" onclick="this.classList.toggle('open')" style="font-size:12px;color:var(--text3);line-height:1.45;margin-bottom:10px"><b>So arbeitest du:</b> 1) Vorschlag ansehen. 2) Paare, die du so willst, festlegen: Weibchen selbst wählen/suchen (wird automatisch 🔒 fest) oder 🔓 antippen. 3) „↻ Neu optimieren“ rechnet nur die <u>nicht</u> festen Paare neu – feste bleiben. 4) „In Paarungsliste übernehmen“ speichert die Paare in die gewählte Zucht – sie verschwinden dann aus dem Vorschlag. 5) Sind alle Paare eingeplant, wählst du die nächste Zucht (2., 3., 4.) und bekommst alternative Partner.</div>`;
+  return head+round+ctl+dash+`
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:13px;color:var(--text2)">
       <span>${A.M.length} Vögel × ${A.F.length} Weibchen · ${np} Paare · Ø Score <b>${np?Math.round(total/np):'—'}</b></span>
       <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
