@@ -1797,6 +1797,8 @@ const COLUMN_DEFS = [
     cell:p=>qeGenderSelectHtml(p) },
   { key:'color', get label(){return t('fld_color');}, sortKey:'color',
     val:p=>tColor(p.color)||'', cell:p=>qeColorSelectHtml(p) },
+  { key:'eyecolor', label:'Augenfarbe', sortKey:'eyecolor',
+    val:p=>p.eyecolor||'', cell:p=>qeEyeSelectHtml(p) },
   { key:'strain', get label(){return t('fld_strain');}, sortKey:'strain',
     val:p=>p.strain||'', cell:p=>escH(p.strain||'—') },
   { key:'line_derived', label:'Blutlinie (abgeleitet)',
@@ -1865,6 +1867,7 @@ const BULK_FIELDS = [
   { key:'sold',    label:'Verkauft',   type:'bool' },
   { key:'died',    label:'Verstorben', type:'bool' },
   { key:'color',   label:'Farbe',      type:'text', list:'dl-colors' },
+  { key:'eyecolor', label:'Augenfarbe', type:'select', options:()=>[{v:'',l:'— leer —'}].concat(EYE_OPTS.map(x=>({v:x,l:x}))) },
   { key:'strain',  label:'Blutlinie', type:'text', list:'dl-strains' },
   { key:'race',    label:'Zuchtbasis', type:'text' },
   { key:'breeder', label:'Züchter',    type:'text' },
@@ -2381,6 +2384,25 @@ function qeTypeSelectHtml(p){
   const pt=p.pigeontype||'', o=(v,l)=>`<option value="${v}"${pt===v?' selected':''}>${l}</option>`;
   return `<select class="qe-status-select qe-type" onclick="event.stopPropagation()" onchange="quickEditPigeonField('${p.pigeonid}','pigeontype',this.value||null,event)">${o('','– kein Typ –')}${o('Reisetaube','✈ '+t('type_racing'))}${o('Zuchttaube','🥚 '+t('type_breeding'))}${o('Heimtaube','🏠 '+t('type_home'))}${o('Verkauf','💰 '+t('type_sale'))}</select>`;
 }
+
+// ══ Augenfarbe (Spalte pigeons.eyecolor – einmalig per SQL anlegen) ══
+const EYE_OPTS=['Weiß (Glas)','Gelb (Farb)','Perlauge','Orange','Rot','Bunt'];
+let _hasEye=null;
+function hasEye(){ if(_hasEye===true) return true; const a=S.pigeons; if(!a||!a.length) return false; const r=a.slice(0,60).some(p=>p&&('eyecolor' in p)); if(r) _hasEye=true; return r; }
+const EYE_SQL="alter table public.pigeons add column if not exists eyecolor text;\nnotify pgrst, 'reload schema';";
+function eyeOptionsHtml(cur){
+  const l=EYE_OPTS.slice(); if(cur && !l.some(x=>x.toLowerCase()===String(cur).toLowerCase())) l.unshift(cur);
+  return `<option value="">– keine –</option>`+l.map(x=>`<option value="${escH(x)}"${String(cur||'').toLowerCase()===x.toLowerCase()?' selected':''}>${escH(x)}</option>`).join('')+`<option value="__other">✎ andere…</option>`;
+}
+function qeEyeSelectHtml(p){
+  if(!hasEye()) return '<span style="color:var(--text3)" title="Einmalige Einrichtung nötig: Spalte eyecolor in Supabase anlegen (Datei pigeons_augenfarbe.sql)">—</span>';
+  return `<select class="qe-status-select qe-eye" onclick="event.stopPropagation()" onchange="qeEyeChange('${p.pigeonid}',this)">${eyeOptionsHtml(p.eyecolor)}</select>`;
+}
+async function qeEyeChange(id,sel){
+  let v=sel.value;
+  if(v==='__other'){ v=await appAsk('Augenfarbe','Augenfarbe eingeben:',''); if(!v){ qeRefresh(id); return; } }
+  quickEditPigeonField(id,'eyecolor',v||null);
+}
 // Farbe als Auswahl: eigene Farbliste (Einstellungen) sonst die häufigsten Farben aus dem Bestand; „andere Farbe…“ erlaubt Freitext
 let _colOpt=null;
 function qeColorOptions(){
@@ -2893,6 +2915,62 @@ async function exportCSV(){
   setTimeout(()=>URL.revokeObjectURL(url),5000);
 }
 
+
+// ══ A4-Taubenkarten: 2 Spalten × 3 Zeilen je Blatt (6 Tauben) mit Foto, Ring, Endnummer, Name, Jahrgang, Geschlecht, Eltern, Farbe, Augenfarbe ══
+async function exportKartenA4(){
+  const list=S.filtered.slice();
+  if(!list.length){ alert('Die gefilterte Liste ist leer.'); return; }
+  if(list.length>240 && !confirm(list.length+' Tauben ergeben '+Math.ceil(list.length/6)+' Seiten mit Fotos – das kann dauern und viel Speicher brauchen. Trotzdem drucken?')) return;
+  const w=window.open('','_blank'); 
+  if(w){ w.document.write('<!doctype html><meta charset="utf-8"><title>Lade…</title><body style="font-family:sans-serif;padding:20px">Taubenkarten werden vorbereitet…</body>'); }
+  try{ await ensurePhotos(list.map(p=>p.pigeonid)); }catch(e){}
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const endn=p=>p.endnumber||((String(p.ringnumber||'').match(/(\d+)\s*$/)||[])[1])||'';
+  const parent=(p,which)=>{ const q=which==='f'?findFather(p):findMother(p); if(q) return {r:ring(q), n:q.name||''}; const r=which==='f'?p.ringnumberfather:p.ringnumbermother; return {r:r||'', n:''}; };
+  const gsym=p=>{ const x=sex_(p); return x==='M'?'♂ Vogel':x==='F'?'♀ Weibchen':'—'; };
+  const card=p=>{
+    const f=parent(p,'f'), m=parent(p,'m'), eye=hasEye()?(p.eyecolor||''):'';
+    return `<div class="k"><div class="kr">${esc(ring(p))}</div>
+      <div class="km"><div class="kp">${p.photo?`<img src="${esc(p.photo)}" alt="">`:'<span>kein Foto</span>'}</div>
+        <table class="kt">
+          <tr><th>Endnummer</th><td><b>${esc(endn(p))}</b></td></tr>
+          <tr><th>Name</th><td>${esc(p.name||'')}</td></tr>
+          <tr><th>Jahrgang</th><td>${esc(p.date_year||'')}</td></tr>
+          <tr><th>Geschlecht</th><td>${gsym(p)}</td></tr>
+          <tr><th>Farbe</th><td>${esc(tColor(p.color)||p.color||'')}</td></tr>
+          <tr><th>Augenfarbe</th><td>${esc(eye)}</td></tr>
+        </table></div>
+      <table class="ke">
+        <tr><th>Vater</th><td>${esc(f.r)}${f.n?' <i>'+esc(f.n)+'</i>':''}</td></tr>
+        <tr><th>Mutter</th><td>${esc(m.r)}${m.n?' <i>'+esc(m.n)+'</i>':''}</td></tr>
+      </table></div>`;
+  };
+  let pages='';
+  for(let i=0;i<list.length;i+=6) pages+=`<section class="pg">${list.slice(i,i+6).map(card).join('')}</section>`;
+  const today=new Date().toLocaleDateString('de-DE');
+  const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Taubenkarten ${today}</title><style>
+  @page{size:A4 portrait;margin:8mm}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
+  body{color:#111;background:#fff}
+  .bar{position:sticky;top:0;background:#222;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:12px;align-items:center;z-index:5}
+  .bar button{padding:6px 14px;font-size:14px;cursor:pointer}
+  .pg{width:194mm;height:281mm;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,1fr);gap:4mm;page-break-after:always;break-after:page;margin:0 auto}
+  .pg:last-child{page-break-after:auto;break-after:auto}
+  .k{border:.3mm solid #888;border-radius:2mm;padding:3mm;display:flex;flex-direction:column;gap:2.5mm;overflow:hidden;min-height:0}
+  .kr{font-family:'Courier New',monospace;font-size:13pt;font-weight:700;white-space:nowrap;border-bottom:.3mm solid #222;padding-bottom:1.5mm}
+  .km{display:flex;gap:3mm;flex:1;min-height:0}
+  .kp{flex:0 0 40mm;width:40mm;background:#f2f2f2;border-radius:1.5mm;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#999;font-size:9pt;align-self:stretch}
+  .kp img{max-width:100%;max-height:100%;object-fit:contain}
+  table{border-collapse:collapse;font-size:9pt}
+  .kt{flex:1;align-self:flex-start}
+  th{text-align:left;font-weight:400;color:#666;padding:.9mm 2mm .9mm 0;white-space:nowrap;vertical-align:top}
+  td{padding:.9mm 0;vertical-align:top;border-bottom:.15mm solid #e4e4e4}
+  .ke{width:100%;font-size:8.5pt}.ke th{width:14mm}.ke i{color:#555;font-size:8pt}
+  @media print{.bar{display:none}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body><div class="bar"><span>${list.length} Tauben · ${Math.ceil(list.length/6)} Seiten · DIN A4 hoch, 2 Spalten × 3 Zeilen</span><button onclick="window.print()">🖨 Drucken</button></div>${pages}</body></html>`;
+  if(w){ w.document.open(); w.document.write(html); w.document.close(); }
+  else { const blob=new Blob([html],{type:'text/html;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.target='_blank'; document.body.appendChild(a); a.click(); a.remove(); }
+}
 async function exportPDF(){
   const esc = s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const cols = activeColumns();
@@ -3857,6 +3935,7 @@ function renderList(){
             <button class="btn ${S.bulkMode?'':'btn-outline'} btn-sm" onclick="toggleBulkMode()">${S.bulkMode?t('bulk_stop'):t('bulk_start')}</button>
             <button class="btn btn-outline btn-sm" onclick="exportCSV()" title="Gefilterte Liste als CSV">${t('export_csv')}</button>
             <button class="btn btn-outline btn-sm" onclick="exportPDF()" title="Gefilterte Liste drucken">${t('export_pdf')}</button>
+            <button class="btn btn-outline btn-sm" onclick="exportKartenA4()" title="Gefilterte Tauben als Karten drucken: DIN A4, 2 Spalten × 3 Zeilen, mit Foto">🖼 A4-Karten</button>
           </div>
         </div>
       </details>
@@ -4268,6 +4347,7 @@ async function saveEdit(id, opts){
   const val=id=>{const el=g(id);return el?el.value.trim():'';};
   const dupRing=val('e_ringnumber')?findInDb(val('e_ringnumber')):null;
   if(dupRing && dupRing.pigeonid!==id && !confirm('Diese Ringnummer ist bereits bei einer anderen Taube vorhanden ('+ring(dupRing)+'). Trotzdem speichern?')) return false;
+  const _eyeV=(g('e_eyecolor')||{}).value;
   const row={
     ringnumber:     fmtRingnumber(val('e_ringnumber')) || val('e_ringnumber'),
     ringnumberold:  fmtRingnumber(val('e_ringnumberold')) || val('e_ringnumberold'),
@@ -4275,6 +4355,7 @@ async function saveEdit(id, opts){
     date_year:      val('e_date_year')?Number(val('e_date_year')):null,
     gender:         val('e_gender')||null,
     color:          val('e_color'),
+    ...(hasEye()&&g('e_eyecolor')?{eyecolor:(_eyeV==='__other'?null:_eyeV)||null}:{}),
     race:           val('e_race'),
     strain:         val('e_strain'),
     breeder:        val('e_breeder'),
@@ -6845,11 +6926,11 @@ function renderNeu(){
 //              → Eltern + Stammbaum-Vorschau (2 Generationen) → Herkunft → Ring-Details → Notizen
 // Die Feld-IDs bleiben bewusst unverändert (neu_* bzw. e_*), damit submitNeu()/saveEdit() weiter funktionieren.
 const PF_IDS = {
-  e:   { ring:'e_ringnumber', ringold:'e_ringnumberold', name:'e_name', year:'e_date_year', gender:'e_gender', color:'e_color',
+  e:   { ring:'e_ringnumber', ringold:'e_ringnumberold', name:'e_name', year:'e_date_year', gender:'e_gender', color:'e_color', eye:'e_eyecolor',
          race:'e_race', strain:'e_strain', breeder:'e_breeder', owner:'e_owner', standort:'e_standort', country:'e_countrycode',
          assoc:'e_associationno', birthday:'e_birthday', died:'e_died', bought:'e_bought', sold:'e_sold', instock:'e_instock',
          type:'e_pigeontype', state:'e_pigeonstateid', info:'e_info', internal:'e_internalinfo' },
-  neu: { ring:'neu_ring', ringold:'neu_ringold', name:'neu_name', year:'neu_year', gender:'neu_gender', color:'neu_color',
+  neu: { ring:'neu_ring', ringold:'neu_ringold', name:'neu_name', year:'neu_year', gender:'neu_gender', color:'neu_color', eye:'neu_eyecolor',
          race:'neu_race', strain:'neu_strain', breeder:'neu_breeder', owner:'neu_owner', standort:'neu_standort', country:'neu_country',
          assoc:'neu_assoc', birthday:'neu_birthday', died:'neu_died', bought:'neu_bought', sold:'neu_sold', instock:'neu_instock',
          type:'neu_pigeontype', state:'neu_pigeonstateid', info:'neu_info', internal:'neu_internalinfo' }
@@ -6891,6 +6972,7 @@ function renderPigeonForm(mode, p){
           <input type="hidden" id="${I.gender}" value="${g}"></div>
         <div class="form-field"><label>${t('fld_color')}</label>
           <input id="${I.color}" list="pf-dl-color" value="${v('color')}" autocomplete="off" placeholder="${t('ph_color')}"></div>
+        ${hasEye()?`<div class="form-field"><label>Augenfarbe</label><select id="${I.eye}">${eyeOptionsHtml(v('eyecolor'))}</select></div>`:''}
       </div>
       <div id="${pfx}-ring-preview" style="margin-top:10px"></div>
     </div>
@@ -7318,6 +7400,7 @@ function renderPigeonView(p){
         ${ro(t('fld_name_short'), p.name)}
         <div class="form-field"><label>${t('fld_gender')}</label>${pfGenderSegHtml('v', g, true)}</div>
         ${ro(t('fld_color'), p.color ? tColor(p.color) : '')}
+        ${hasEye()?ro('Augenfarbe', p.eyecolor||''):''}
       </div>
     </div>
 
@@ -7440,6 +7523,7 @@ async function submitNeu(opts){
   const gnd=gs('neu_gender'); if(gnd) row.gender=gnd;
   if(g('neu_color'))         row.color         = g('neu_color');
   if(g('neu_race'))          row.race          = g('neu_race');
+  if(hasEye() && g('neu_eyecolor') && g('neu_eyecolor')!=='__other') row.eyecolor = g('neu_eyecolor');
   if(g('neu_strain'))        row.strain        = g('neu_strain');
   if(g('neu_breeder'))       row.breeder       = g('neu_breeder');
   if(g('neu_owner'))         row.owner         = g('neu_owner');
