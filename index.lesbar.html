@@ -1869,8 +1869,8 @@ const BULK_FIELDS = [
   { key:'sold',    label:'Verkauft',   type:'bool' },
   { key:'died',    label:'Verstorben', type:'bool' },
   { key:'color',   label:'Farbe',      type:'text', list:'dl-colors' },
-  { key:'eyecolor', label:'Augenfarbe', type:'select', options:()=>[{v:'',l:'— leer —'}].concat(EYE_OPTS.map(x=>({v:x,l:x}))) },
-  { key:'eyetrait', label:'Augenfarbausprägung', type:'select', options:()=>[{v:'',l:'— leer —'}].concat(EYET_OPTS.map(x=>({v:x,l:x}))) },
+  { key:'eyecolor', label:'Augenfarbe', type:'select', options:()=>[{v:'',l:'— leer —'}].concat(eyeOpts().map(x=>({v:x,l:x}))) },
+  { key:'eyetrait', label:'Augenfarbausprägung', type:'select', options:()=>[{v:'',l:'— leer —'}].concat(eyetOpts().map(x=>({v:x,l:x}))) },
   { key:'strain',  label:'Blutlinie', type:'text', list:'dl-strains' },
   { key:'race',    label:'Zuchtbasis', type:'text' },
   { key:'breeder', label:'Züchter',    type:'text' },
@@ -2390,14 +2390,16 @@ function qeTypeSelectHtml(p){
 
 // ══ Augenfarbe (Spalte pigeons.eyecolor – einmalig per SQL anlegen) ══
 // Begriffe wie im Bewertungsbogen (Auge): Augenfarbe + Augenfarbausprägung
-const EYE_OPTS=['weiß (Glas)','gelb (Farb)','rot','zu jung'];
-const EYET_OPTS=['weiß/hell','scheck/dunkel','grün','Flecken'];
+const EYE_DEF=['weiß (Glas)','gelb (Farb)','rot','zu jung'];
+const EYET_DEF=['weiß/hell','scheck/dunkel','grün','Flecken'];
+function eyeOpts(){ const l=cfgGet('eye_opts',null); return Array.isArray(l)&&l.length?l:EYE_DEF; }
+function eyetOpts(){ const l=cfgGet('eyet_opts',null); return Array.isArray(l)&&l.length?l:EYET_DEF; }
 let _hasEye=null, _hasEyeT=null;
 function hasEye(){ if(_hasEye===true) return true; const a=S.pigeons; if(!a||!a.length) return false; const r=a.slice(0,60).some(p=>p&&('eyecolor' in p)); if(r) _hasEye=true; return r; }
 function hasEyeT(){ if(_hasEyeT===true) return true; const a=S.pigeons; if(!a||!a.length) return false; const r=a.slice(0,60).some(p=>p&&('eyetrait' in p)); if(r) _hasEyeT=true; return r; }
 const eyeText=p=>[p.eyecolor, p.eyetrait].filter(Boolean).join(' · ');
 function eyeOptionsHtml(cur,opts){
-  const l=(opts||EYE_OPTS).slice(); if(cur && !l.some(x=>x.toLowerCase()===String(cur).toLowerCase())) l.unshift(cur);
+  const l=(opts||eyeOpts()).slice(); if(cur && !l.some(x=>x.toLowerCase()===String(cur).toLowerCase())) l.unshift(cur);
   return `<option value="">– keine –</option>`+l.map(x=>`<option value="${escH(x)}"${String(cur||'').toLowerCase()===x.toLowerCase()?' selected':''}>${escH(x)}</option>`).join('')+`<option value="__other">✎ andere…</option>`;
 }
 function qeEyeSelectHtml(p){
@@ -2411,7 +2413,7 @@ async function qeEyeChange(id,sel){
 }
 function qeEyeTSelectHtml(p){
   if(!hasEyeT()) return '<span style="color:var(--text3)" title="Einmalige Einrichtung nötig: Spalte eyetrait in Supabase anlegen (Datei pigeons_augenfarbe.sql)">—</span>';
-  return `<select class="qe-status-select qe-eye" onclick="event.stopPropagation()" onchange="qeEyeTChange('${p.pigeonid}',this)">${eyeOptionsHtml(p.eyetrait,EYET_OPTS)}</select>`;
+  return `<select class="qe-status-select qe-eye" onclick="event.stopPropagation()" onchange="qeEyeTChange('${p.pigeonid}',this)">${eyeOptionsHtml(p.eyetrait,eyetOpts())}</select>`;
 }
 async function qeEyeTChange(id,sel){
   let v=sel.value;
@@ -6989,7 +6991,7 @@ function renderPigeonForm(mode, p){
         <div class="form-field"><label>${t('fld_color')}</label>
           <input id="${I.color}" list="pf-dl-color" value="${v('color')}" autocomplete="off" placeholder="${t('ph_color')}"></div>
         ${hasEye()?`<div class="form-field"><label>Augenfarbe</label><select id="${I.eye}">${eyeOptionsHtml(v('eyecolor'))}</select></div>`:''}
-        ${hasEyeT()?`<div class="form-field"><label>Augenfarbausprägung</label><select id="${I.eyet}">${eyeOptionsHtml(v('eyetrait'),EYET_OPTS)}</select></div>`:''}
+        ${hasEyeT()?`<div class="form-field"><label>Augenfarbausprägung</label><select id="${I.eyet}">${eyeOptionsHtml(v('eyetrait'),eyetOpts())}</select></div>`:''}
       </div>
       <div id="${pfx}-ring-preview" style="margin-top:10px"></div>
     </div>
@@ -19121,6 +19123,7 @@ function bwOpen(pid, mode, rid){
     try{ const d = JSON.parse(localStorage.getItem(BW_DRAFT)||'null');
       if(d && d.pid===pid && !d.rid && Object.keys(d.vals||{}).length && confirm('Für diese Taube gibt es einen nicht gespeicherten Entwurf. Fortsetzen?')){ vals=d.vals; note=d.note||''; date=d.date||date; } }catch(e){}
   }
+  bwEyePrefill(p, vals, mode);
   Object.assign(BW, {pid, rid:id, vals, date, note, g:0, dirty:false, busy:false});
   // Reihenfolge für „Speichern & nächste Taube“: aktuelle Tabellenansicht, sonst Bestand
   const src = (S.filtered && S.filtered.length) ? S.filtered : S.pigeons.filter(x=>x.instock && !x.deleted);
@@ -19241,6 +19244,7 @@ async function bwSave(next){
     if(BW.rid){ const r = await apiPatchBy('pigeon_ratings','id=eq.'+encodeURIComponent(BW.rid), row); saved = Array.isArray(r) ? r[0] : null; if(!saved) throw new Error('Keine Berechtigung oder Eintrag nicht gefunden.'); RAT.rows = RAT.rows.map(x=>x.id===BW.rid ? saved : x); }
     else { const r = await apiPost('pigeon_ratings', row); saved = Array.isArray(r) ? r[0] : r; if(!saved || !saved.id) throw new Error('Keine Rückmeldung von der Datenbank.'); RAT.rows.unshift(saved); }
     ratIndex(); bwDraftClear();
+    try{ await bwEyeSync(BW.pid, BW.vals); }catch(e){}
   }catch(e){ BW.busy = false; bwRender(); alert('Beurteilung konnte nicht gespeichert werden: '+e.message); return; }
   BW.busy = false; BW.dirty = false;
   if(next){
@@ -19274,11 +19278,12 @@ function renderListen(){
   else if(sec==='status') body = lvStatusHtml();
   else if(sec==='distanz') body = lvDistHtml();
   else if(sec==='standorte') body = lvLocHtml();
+  else if(sec==='augen') body = lvEyeHtml();
   else body = lvTypesHtml();
   const warn = CFG.missing ? `<div class="bw-warn">Die Tabelle <code>app_config</code> fehlt noch – Änderungen werden vorerst nur in diesem Browser gespeichert. Für alle Geräte bitte dieses SQL einmal in Supabase ausführen (legt auch die Beurteilungen und das Feld Distanztyp an):
       <details><summary>SQL anzeigen</summary><pre class="bw-sql">${escH(BEUR_SQL)}</pre></details><button class="btn btn-outline btn-sm" onclick="bwCopySql()">📋 SQL kopieren</button></div>` : '';
   return `<div><div class="serif" style="font-size:20px;margin-bottom:10px">🗂 Auswahllisten &amp; Bewertungsschema</div>
-    <div class="subnav" style="margin-bottom:14px">${chip('beur','📝 Handbeurteilung')}${chip('farben','🎨 Farben')}${chip('status','🏷 Status')}${chip('standorte','📍 Standorte')}${chip('distanz','📏 Distanztypen')}${chip('typen','🕊 Taubentyp')}</div>
+    <div class="subnav" style="margin-bottom:14px">${chip('beur','📝 Handbeurteilung')}${chip('farben','🎨 Farben')}${chip('status','🏷 Status')}${chip('standorte','📍 Standorte')}${chip('augen','👁 Augen')}${chip('distanz','📏 Distanztypen')}${chip('typen','🕊 Taubentyp')}</div>
     ${warn}${LV_MSG?`<div class="bw-ok">${escH(LV_MSG)}</div>`:''}${body}</div>`;
 }
 function lvSec(k){ if(LV_DIRTY && !confirm('Ungespeicherte Änderungen am Bewertungsschema verwerfen?')) return; LV_DRAFT=null; LV_DIRTY=false; LV_MSG=''; S.lvSec=k; render(); }
@@ -19416,6 +19421,84 @@ function lvDist(i,f,v){ const l = JSON.parse(JSON.stringify(distTypes())); if(f=
 function lvDistMove(i,d){ const l = JSON.parse(JSON.stringify(distTypes())); lvMove(l,i,d); lvDistSave(l); }
 function lvDistDel(i){ const l = JSON.parse(JSON.stringify(distTypes())); if(!confirm('Distanztyp „'+l[i].c+'“ entfernen? Bereits zugeordnete Tauben behalten das Kürzel.')) return; l.splice(i,1); lvDistSave(l); }
 function lvDistAdd(){ const l = JSON.parse(JSON.stringify(distTypes())); l.push({c:'NEU', l:'Neuer Distanztyp', from:null, to:null}); lvDistSave(l); }
+
+// ── Augenfarbe: Taube ↔ Handbeurteilung (Augenfarbe ändert sich nicht → Merkmal der Taube) ──
+const EYE_MAP = [['augenfarbe','eyecolor',()=>hasEye()],['augenfarbauspr','eyetrait',()=>hasEyeT()]];
+function bwCritById(id){ for(const g of bwSchema().groups) for(const c of (g.crits||[])) if(c.id===id) return c; return null; }
+function bwOptByLabel(c, txt){ if(!c||!txt) return null; const t=String(txt).trim().toLowerCase(); return (c.opts||[]).find(o=>String(o.l).trim().toLowerCase()===t || o.id===bwSlug(txt)) || null; }
+function bwEyePrefill(p, vals, mode){
+  EYE_MAP.forEach(([cid,field,has])=>{
+    if(vals[cid]!=null && vals[cid]!=='') return;
+    const c = bwCritById(cid); if(!c) return;
+    let o = has() ? bwOptByLabel(c, p[field]) : null;
+    if(!o){ const r = ratLatest(p.pigeonid); if(r && r.vals && r.vals[cid]) o = (c.opts||[]).find(x=>x.id===r.vals[cid]) || null; }
+    if(o) vals[cid] = o.id;
+  });
+}
+async function bwEyeSync(pid, vals){
+  const p = findById(pid); if(!p) return;
+  for(const [cid,field,has] of EYE_MAP){
+    if(!has()) continue;
+    const c = bwCritById(cid), o = c && (c.opts||[]).find(x=>x.id===vals[cid]);
+    if(o && (p[field]||'').toLowerCase()!==o.l.toLowerCase()) await quickEditPigeonField(pid, field, o.l);
+  }
+}
+// Alle Tauben ohne Eintrag aus der jeweils letzten Beurteilung füllen
+async function eyeBackfill(){
+  const todo = [];
+  S.pigeons.forEach(p=>{ if(!p||p._virtual) return; const r = ratLatest(p.pigeonid); if(!r||!r.vals) return;
+    EYE_MAP.forEach(([cid,field,has])=>{ if(!has()||p[field]) return; const c=bwCritById(cid), o=c&&(c.opts||[]).find(x=>x.id===r.vals[cid]); if(o) todo.push([p.pigeonid,field,o.l]); }); });
+  if(!todo.length){ LV_MSG='Es gibt nichts zu übernehmen – alle Tauben mit Beurteilung haben die Augenwerte schon.'; render(); return; }
+  if(!confirm(todo.length+' leere Augenwert(e) aus den letzten Handbeurteilungen in die Tauben übernehmen?')) return;
+  let n=0; for(const [id,f,v] of todo){ try{ await quickEditPigeonField(id,f,v); n++; }catch(e){} }
+  LV_MSG = n+' Augenwert(e) übernommen.'; render();
+}
+function eyeKind(k){ return k==='t' ? {key:'eyet_opts', field:'eyetrait', cid:'augenfarbauspr', get:eyetOpts, def:EYET_DEF, name:'Augenfarbausprägung'} : {key:'eye_opts', field:'eyecolor', cid:'augenfarbe', get:eyeOpts, def:EYE_DEF, name:'Augenfarbe'}; }
+async function eyeListSave(k, list, msg){
+  const K = eyeKind(k);
+  try{
+    await cfgSet(K.key, list);
+    // Handbeurteilung: Auswahl des Kriteriums angleichen (Punkte bleiben erhalten)
+    const sch = JSON.parse(JSON.stringify(bwSchema())); let ch=false;
+    sch.groups.forEach(g=>(g.crits||[]).forEach(c=>{ if(c.id===K.cid){ const old=c.opts||[];
+      c.opts = list.map(l=>old.find(o=>o.l.toLowerCase()===l.toLowerCase()) || _bo(l)); ch=true; } }));
+    if(ch) await cfgSet('beur_schema', sch);
+    LV_MSG = (msg||'Liste gespeichert')+'.';
+  }catch(e){ alert('Speichern fehlgeschlagen: '+e.message); }
+  render();
+}
+function eyeAdd(k,v){ v=String(v||'').trim(); if(!v) return; const K=eyeKind(k), l=K.get().slice(); if(l.some(x=>x.toLowerCase()===v.toLowerCase())) return; l.push(v); eyeListSave(k,l); }
+function eyeDel(k,i){ const K=eyeKind(k), l=K.get().slice(); if(l.length<2){ alert('Mindestens ein Eintrag muss bleiben.'); return; } if(!confirm('„'+l[i]+'“ aus der Liste entfernen? Tauben behalten den Eintrag.')) return; l.splice(i,1); eyeListSave(k,l); }
+function eyeMove(k,i,d){ const K=eyeKind(k), l=K.get().slice(); lvMove(l,i,d); eyeListSave(k,l); }
+function eyeReset(k){ const K=eyeKind(k); if(!confirm('Liste auf die Standardwerte zurücksetzen?')) return; eyeListSave(k,K.def.slice(),'Standardliste wiederhergestellt'); }
+async function eyeRename(k,i,neu){
+  const K=eyeKind(k), l=K.get().slice(), old=l[i]; neu=String(neu||'').trim(); if(!neu||neu===old) return;
+  if(l.some((x,j)=>j!==i&&x.toLowerCase()===neu.toLowerCase())){ alert('Diesen Eintrag gibt es schon.'); return; }
+  const ids = S.pigeons.filter(p=>p&&!p._virtual&&p[K.field]===old).map(p=>p.pigeonid);
+  if(!confirm('„'+old+'“ in „'+neu+'“ umbenennen'+(ids.length?' – betrifft '+ids.length+' Taube(n)':'')+'?')) return;
+  for(const id of ids){ try{ await quickEditPigeonField(id,K.field,neu); }catch(e){} }
+  l[i]=neu; eyeListSave(k,l,'Umbenannt');
+}
+function lvEyeBlock(k){
+  const K=eyeKind(k), l=K.get(), cnt=new Map(); S.pigeons.forEach(p=>{ if(p&&!p._virtual&&p[K.field]) cnt.set(p[K.field],(cnt.get(p[K.field])||0)+1); });
+  const other=[...cnt.keys()].filter(x=>!l.some(y=>y.toLowerCase()===x.toLowerCase()));
+  return `<div class="card lv-card" style="margin-bottom:14px"><div style="font-weight:700;margin-bottom:8px">${K.name}</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;max-width:520px"><input id="lv-eye-${k}" placeholder="Neuer Eintrag" style="flex:1"><button class="btn btn-sm" onclick="eyeAdd('${k}',document.getElementById('lv-eye-${k}').value)">＋ Hinzufügen</button></div>
+    <div class="table-wrap"><table class="bw-tbl"><thead><tr><th>Eintrag</th><th class="num">Tauben</th><th>Umbenennen</th><th></th></tr></thead><tbody>${
+    l.map((c,i)=>`<tr><td><b>${escH(c)}</b></td><td class="num">${cnt.get(c)||0}</td>
+      <td><span style="display:flex;gap:6px"><input id="lve-${k}${i}" placeholder="neuer Name" style="flex:1;min-width:0"><button class="btn btn-outline btn-sm" onclick="eyeRename('${k}',${i},document.getElementById('lve-${k}${i}').value)">ändern</button></span></td>
+      <td style="white-space:nowrap;text-align:right"><button class="btn btn-outline btn-sm" onclick="eyeMove('${k}',${i},-1)" ${i===0?'disabled':''}>↑</button><button class="btn btn-outline btn-sm" onclick="eyeMove('${k}',${i},1)" ${i===l.length-1?'disabled':''}>↓</button><button class="btn btn-outline btn-sm" onclick="eyeDel('${k}',${i})">aus Liste</button></td></tr>`).join('')
+    }</tbody></table></div>
+    ${other.length?`<div style="margin-top:10px;font-size:13px;color:var(--orange)">Weitere Schreibweisen im Bestand: ${other.map(escH).join(', ')}</div>`:''}
+    <div style="margin-top:8px"><button class="btn btn-outline btn-sm" onclick="eyeReset('${k}')">Standardliste</button></div></div>`;
+}
+function lvEyeHtml(){
+  const miss = !hasEye()||!hasEyeT();
+  return `<p style="color:var(--text3);font-size:13px;margin:0 0 12px">Die Augenfarbe ändert sich nicht und gehört deshalb zur Taube. Sie wird in der Handbeurteilung vorbelegt und beim Speichern der Beurteilung in die Taube übernommen. Änderungen an den Listen gelten auch dort (Kriterien <i>Augenfarbe</i> und <i>Augenfarbausprägung</i>).</p>
+    ${miss?'<div class="bw-warn">Die Spalten <code>eyecolor</code>/<code>eyetrait</code> fehlen noch – bitte <code>pigeons_augenfarbe.sql</code> in Supabase ausführen.</div>':''}
+    ${lvEyeBlock('c')}${lvEyeBlock('t')}
+    <div class="card lv-card"><div style="font-weight:700;margin-bottom:6px">Bestand abgleichen</div><p style="color:var(--text3);font-size:13px;margin:0 0 10px">Leere Augenwerte der Tauben aus der jeweils letzten Handbeurteilung füllen.</p><button class="btn btn-sm" onclick="eyeBackfill()">Aus Beurteilungen übernehmen</button></div>`;
+}
 function lvTypesHtml(){
   return `<div class="card"><p style="color:var(--text3);font-size:13px;margin:0">Der <b>Taubentyp</b> (Reisetaube, Zuchttaube, Heimtaube, Verkauf) bleibt fest, weil Zuchtplan, Erfolgs-Score, Filter und Auswertungen direkt darauf aufbauen. Für eigene Einteilungen bitte <b>Status</b> oder <b>Distanztyp</b> nutzen.</p></div>`;
 }
