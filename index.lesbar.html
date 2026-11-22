@@ -1799,6 +1799,8 @@ const COLUMN_DEFS = [
     val:p=>tColor(p.color)||'', cell:p=>qeColorSelectHtml(p) },
   { key:'eyecolor', label:'Augenfarbe', sortKey:'eyecolor',
     val:p=>p.eyecolor||'', cell:p=>qeEyeSelectHtml(p) },
+  { key:'eyetrait', label:'Augenfarbausprägung', sortKey:'eyetrait',
+    val:p=>p.eyetrait||'', cell:p=>qeEyeTSelectHtml(p) },
   { key:'strain', get label(){return t('fld_strain');}, sortKey:'strain',
     val:p=>p.strain||'', cell:p=>escH(p.strain||'—') },
   { key:'line_derived', label:'Blutlinie (abgeleitet)',
@@ -1868,6 +1870,7 @@ const BULK_FIELDS = [
   { key:'died',    label:'Verstorben', type:'bool' },
   { key:'color',   label:'Farbe',      type:'text', list:'dl-colors' },
   { key:'eyecolor', label:'Augenfarbe', type:'select', options:()=>[{v:'',l:'— leer —'}].concat(EYE_OPTS.map(x=>({v:x,l:x}))) },
+  { key:'eyetrait', label:'Augenfarbausprägung', type:'select', options:()=>[{v:'',l:'— leer —'}].concat(EYET_OPTS.map(x=>({v:x,l:x}))) },
   { key:'strain',  label:'Blutlinie', type:'text', list:'dl-strains' },
   { key:'race',    label:'Zuchtbasis', type:'text' },
   { key:'breeder', label:'Züchter',    type:'text' },
@@ -2386,12 +2389,15 @@ function qeTypeSelectHtml(p){
 }
 
 // ══ Augenfarbe (Spalte pigeons.eyecolor – einmalig per SQL anlegen) ══
-const EYE_OPTS=['Weiß (Glas)','Gelb (Farb)','Perlauge','Orange','Rot','Bunt'];
-let _hasEye=null;
+// Begriffe wie im Bewertungsbogen (Auge): Augenfarbe + Augenfarbausprägung
+const EYE_OPTS=['weiß (Glas)','gelb (Farb)','rot','zu jung'];
+const EYET_OPTS=['weiß/hell','scheck/dunkel','grün','Flecken'];
+let _hasEye=null, _hasEyeT=null;
 function hasEye(){ if(_hasEye===true) return true; const a=S.pigeons; if(!a||!a.length) return false; const r=a.slice(0,60).some(p=>p&&('eyecolor' in p)); if(r) _hasEye=true; return r; }
-const EYE_SQL="alter table public.pigeons add column if not exists eyecolor text;\nnotify pgrst, 'reload schema';";
-function eyeOptionsHtml(cur){
-  const l=EYE_OPTS.slice(); if(cur && !l.some(x=>x.toLowerCase()===String(cur).toLowerCase())) l.unshift(cur);
+function hasEyeT(){ if(_hasEyeT===true) return true; const a=S.pigeons; if(!a||!a.length) return false; const r=a.slice(0,60).some(p=>p&&('eyetrait' in p)); if(r) _hasEyeT=true; return r; }
+const eyeText=p=>[p.eyecolor, p.eyetrait].filter(Boolean).join(' · ');
+function eyeOptionsHtml(cur,opts){
+  const l=(opts||EYE_OPTS).slice(); if(cur && !l.some(x=>x.toLowerCase()===String(cur).toLowerCase())) l.unshift(cur);
   return `<option value="">– keine –</option>`+l.map(x=>`<option value="${escH(x)}"${String(cur||'').toLowerCase()===x.toLowerCase()?' selected':''}>${escH(x)}</option>`).join('')+`<option value="__other">✎ andere…</option>`;
 }
 function qeEyeSelectHtml(p){
@@ -2402,6 +2408,15 @@ async function qeEyeChange(id,sel){
   let v=sel.value;
   if(v==='__other'){ v=await appAsk('Augenfarbe','Augenfarbe eingeben:',''); if(!v){ qeRefresh(id); return; } }
   quickEditPigeonField(id,'eyecolor',v||null);
+}
+function qeEyeTSelectHtml(p){
+  if(!hasEyeT()) return '<span style="color:var(--text3)" title="Einmalige Einrichtung nötig: Spalte eyetrait in Supabase anlegen (Datei pigeons_augenfarbe.sql)">—</span>';
+  return `<select class="qe-status-select qe-eye" onclick="event.stopPropagation()" onchange="qeEyeTChange('${p.pigeonid}',this)">${eyeOptionsHtml(p.eyetrait,EYET_OPTS)}</select>`;
+}
+async function qeEyeTChange(id,sel){
+  let v=sel.value;
+  if(v==='__other'){ v=await appAsk('Augenfarbausprägung','Ausprägung eingeben:',''); if(!v){ qeRefresh(id); return; } }
+  quickEditPigeonField(id,'eyetrait',v||null);
 }
 // Farbe als Auswahl: eigene Farbliste (Einstellungen) sonst die häufigsten Farben aus dem Bestand; „andere Farbe…“ erlaubt Freitext
 let _colOpt=null;
@@ -2929,7 +2944,7 @@ async function exportKartenA4(){
   const parent=(p,which)=>{ const q=which==='f'?findFather(p):findMother(p); if(q) return {r:ring(q), n:q.name||''}; const r=which==='f'?p.ringnumberfather:p.ringnumbermother; return {r:r||'', n:''}; };
   const gsym=p=>{ const x=sex_(p); return x==='M'?'♂ Vogel':x==='F'?'♀ Weibchen':'—'; };
   const card=p=>{
-    const f=parent(p,'f'), m=parent(p,'m'), eye=hasEye()?(p.eyecolor||''):'';
+    const f=parent(p,'f'), m=parent(p,'m'), eye=eyeText(p);
     return `<div class="k"><div class="kr">${esc(ring(p))}</div>
       <div class="km"><div class="kp">${p.photo?`<img src="${esc(p.photo)}" alt="">`:'<span>kein Foto</span>'}</div>
         <table class="kt">
@@ -4356,6 +4371,7 @@ async function saveEdit(id, opts){
     gender:         val('e_gender')||null,
     color:          val('e_color'),
     ...(hasEye()&&g('e_eyecolor')?{eyecolor:(_eyeV==='__other'?null:_eyeV)||null}:{}),
+    ...(hasEyeT()&&g('e_eyetrait')?{eyetrait:(g('e_eyetrait').value==='__other'?null:g('e_eyetrait').value)||null}:{}),
     race:           val('e_race'),
     strain:         val('e_strain'),
     breeder:        val('e_breeder'),
@@ -6926,11 +6942,11 @@ function renderNeu(){
 //              → Eltern + Stammbaum-Vorschau (2 Generationen) → Herkunft → Ring-Details → Notizen
 // Die Feld-IDs bleiben bewusst unverändert (neu_* bzw. e_*), damit submitNeu()/saveEdit() weiter funktionieren.
 const PF_IDS = {
-  e:   { ring:'e_ringnumber', ringold:'e_ringnumberold', name:'e_name', year:'e_date_year', gender:'e_gender', color:'e_color', eye:'e_eyecolor',
+  e:   { ring:'e_ringnumber', ringold:'e_ringnumberold', name:'e_name', year:'e_date_year', gender:'e_gender', color:'e_color', eye:'e_eyecolor', eyet:'e_eyetrait',
          race:'e_race', strain:'e_strain', breeder:'e_breeder', owner:'e_owner', standort:'e_standort', country:'e_countrycode',
          assoc:'e_associationno', birthday:'e_birthday', died:'e_died', bought:'e_bought', sold:'e_sold', instock:'e_instock',
          type:'e_pigeontype', state:'e_pigeonstateid', info:'e_info', internal:'e_internalinfo' },
-  neu: { ring:'neu_ring', ringold:'neu_ringold', name:'neu_name', year:'neu_year', gender:'neu_gender', color:'neu_color', eye:'neu_eyecolor',
+  neu: { ring:'neu_ring', ringold:'neu_ringold', name:'neu_name', year:'neu_year', gender:'neu_gender', color:'neu_color', eye:'neu_eyecolor', eyet:'neu_eyetrait',
          race:'neu_race', strain:'neu_strain', breeder:'neu_breeder', owner:'neu_owner', standort:'neu_standort', country:'neu_country',
          assoc:'neu_assoc', birthday:'neu_birthday', died:'neu_died', bought:'neu_bought', sold:'neu_sold', instock:'neu_instock',
          type:'neu_pigeontype', state:'neu_pigeonstateid', info:'neu_info', internal:'neu_internalinfo' }
@@ -6973,6 +6989,7 @@ function renderPigeonForm(mode, p){
         <div class="form-field"><label>${t('fld_color')}</label>
           <input id="${I.color}" list="pf-dl-color" value="${v('color')}" autocomplete="off" placeholder="${t('ph_color')}"></div>
         ${hasEye()?`<div class="form-field"><label>Augenfarbe</label><select id="${I.eye}">${eyeOptionsHtml(v('eyecolor'))}</select></div>`:''}
+        ${hasEyeT()?`<div class="form-field"><label>Augenfarbausprägung</label><select id="${I.eyet}">${eyeOptionsHtml(v('eyetrait'),EYET_OPTS)}</select></div>`:''}
       </div>
       <div id="${pfx}-ring-preview" style="margin-top:10px"></div>
     </div>
@@ -7401,6 +7418,7 @@ function renderPigeonView(p){
         <div class="form-field"><label>${t('fld_gender')}</label>${pfGenderSegHtml('v', g, true)}</div>
         ${ro(t('fld_color'), p.color ? tColor(p.color) : '')}
         ${hasEye()?ro('Augenfarbe', p.eyecolor||''):''}
+        ${hasEyeT()?ro('Augenfarbausprägung', p.eyetrait||''):''}
       </div>
     </div>
 
@@ -7524,6 +7542,7 @@ async function submitNeu(opts){
   if(g('neu_color'))         row.color         = g('neu_color');
   if(g('neu_race'))          row.race          = g('neu_race');
   if(hasEye() && g('neu_eyecolor') && g('neu_eyecolor')!=='__other') row.eyecolor = g('neu_eyecolor');
+  if(hasEyeT() && g('neu_eyetrait') && g('neu_eyetrait')!=='__other') row.eyetrait = g('neu_eyetrait');
   if(g('neu_strain'))        row.strain        = g('neu_strain');
   if(g('neu_breeder'))       row.breeder       = g('neu_breeder');
   if(g('neu_owner'))         row.owner         = g('neu_owner');
