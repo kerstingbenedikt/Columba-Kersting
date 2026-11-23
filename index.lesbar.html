@@ -11336,6 +11336,10 @@ function zpMarkBack(mid){ if(S.tab==='zucht'){ const m=findById(mid); S.zpBack={
 function zpBackGo(){ const b=S.zpBack; if(!b){ showTab('zucht'); return; } S.zpBack=null; S.planView=b.view||S.planView; TAB_Y.zucht=b.y; showTab('zucht'); setTimeout(()=>{ const r=document.querySelector('[data-zpm="'+b.mid+'"]'); if(r){ r.classList.add('zp-flash'); setTimeout(()=>r.classList.remove('zp-flash'),2500); } },200); }
 function zpOpenAlt(id){ zpMarkBack(id); const p=findById(id); if(!p) return; if(sex_(p)==='M'){ S.paarungM=p; S.paarungF=null; PV.fix='M'; } else { S.paarungF=p; S.paarungM=null; PV.fix='F'; } showTab('paarung'); window.scrollTo(0,0); TAB_Y.paarung=0; }
 function zpOpenCheck(mid,fid){ zpMarkBack(mid); S.paarungM=findById(mid); S.paarungF=findById(fid); PV.fix='M'; TAB_Y.paarung=0; showTab('paarung'); window.scrollTo(0,0); }
+async function zpSaveOne(mid,fid){
+  if(S._zpSaving) return; S._zpSaving=true;
+  try{ await mlEnsureLoaded(); await savePairingToList(mid,fid); }finally{ S._zpSaving=false; }
+}
 async function zpSaveAll(){
   const A=zpState().assign; if(!A||!A.pairs.length || S._zpSaving) return;
   await mlEnsureLoaded(); const T=mlTarget();
@@ -11580,7 +11584,7 @@ function renderZuchtplan(){
         <td class="zp-hide-t" style="text-align:center;font-size:12px">${r.e?Math.round(r.e.b)+' / '+Math.round(r.e.s):'—'}</td>
         <td style="text-align:center;color:${r.e?(isLine&&r.e.ib-r.e.ibLine<0.0625?'var(--green)':ibCol(r.e.ib)):'var(--text3)'}">${r.e?(r.e.ib*100).toFixed(2)+' %'+(isLine&&r.e.ib>0?`<div style="font-size:11px;color:var(--text3)">davon Linie ${(r.e.ibLine*100).toFixed(2)} %</div>`:''):'—'}</td>
         <td class="zp-hide-t" style="text-align:center;color:var(--text3);font-size:12px">${r.e?Math.round(r.e.rel*100)+' %':''}</td>
-        <td class="zp-act" style="white-space:nowrap;text-align:right">${r.f?`<button class="btn btn-outline btn-sm" title="${z.locked[r.m.pigeonid]?'Fixierung lösen':'Paar beim Neuoptimieren behalten'}" onclick="zpLock('${r.m.pigeonid}')">${z.locked[r.m.pigeonid]?'🔒':'🔓'}</button> <button class="btn btn-outline btn-sm" title="Im Paarungscheck öffnen" onclick="zpOpenCheck('${r.m.pigeonid}','${r.f.pigeonid}')">👁</button>`:''}</td></tr>`).join('')}
+        <td class="zp-act" style="white-space:nowrap;text-align:right">${r.f?`<button class="btn btn-outline btn-sm" title="${z.locked[r.m.pigeonid]?'Fixierung lösen':'Paar beim Neuoptimieren behalten'}" onclick="zpLock('${r.m.pigeonid}')">${z.locked[r.m.pigeonid]?'🔒':'🔓'}</button> <button class="btn btn-outline btn-sm" title="Im Paarungscheck öffnen" onclick="zpOpenCheck('${r.m.pigeonid}','${r.f.pigeonid}')">👁</button> <button class="btn btn-sm" title="Nur dieses Paar in die Paarungsliste (${T?escH(T.liste+' › '+T.zucht):'gewählte Zucht'}) übernehmen" onclick="zpSaveOne('${r.m.pigeonid}','${r.f.pigeonid}')">💾 In Liste</button>`:''}</td></tr>`).join('')}
       </tbody></table></div>
     ${vis.length?'':'<div style="color:var(--text3);font-size:13px;margin-top:8px">Keine Vögel in dieser Auswahl.</div>'}${freeF.length?`<div class="card" style="margin-top:10px;font-size:13px"><b>♀ Noch ohne Partner (${freeF.length}):</b> <span style="color:var(--text2)">${freeF.map(f=>escH(ring(f))+(f.name?' '+escH(f.name):'')).join(' · ')}</span></div>`:''}
     <div class="m-intro" onclick="this.classList.toggle('open')" style="font-size:12px;color:var(--text3);margin-top:10px;line-height:1.5">B = Beständigkeit (Preisquote, Anzahl Preise), S = Schnelligkeit (Flüge über 90 AS, Ø und Summe AS) – je Taube aus eigenen Flügen und Nachkommen, ersatzweise aus den Eltern; „?“ = kaum Daten.
