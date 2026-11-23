@@ -120,6 +120,7 @@ nav button.active{color:var(--green);border-bottom-color:var(--green);font-weigh
 /* ── Subnav (Kontext-Reiter innerhalb einer Gruppe, z.B. Tauben/Stammbaum/Nachkommen/Paarungscheck) ── */
 .zp-round{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}.zp-rl{font-weight:700;font-size:13px}.zp-round select{padding:6px 8px;font-size:14px}.zp-rs,.zp-note{font-size:12px;color:var(--text3)}.zp-note{margin-bottom:8px}
 .zp-done{margin-bottom:8px;font-size:12px;color:var(--text2)}.zp-done summary{cursor:pointer;color:var(--green)}.zp-done div div{padding:2px 0 2px 14px}
+.ml-pe{margin-top:4px;padding:2px 8px;font-size:11px}
 .zp-dash{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .zp-chip{border:1px solid var(--border);background:var(--bg2);color:var(--text2);border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer}
 .zp-chip b{color:var(--c,var(--text));font-size:14px}
@@ -10347,6 +10348,8 @@ async function savePairingToList(fatherId, motherId){
       return;
     }
   }catch(e){ /* Prüfung fehlgeschlagen — Speichern trotzdem versuchen */ }
+  { const cs=mlConflicts(fatherId,motherId,T.liste,T.zucht,null);
+    if(cs.length){ const nz=await mlPickZuchtFor(fatherId,motherId,T.liste,null,'In „'+escH(T.zucht)+'“ kommt jeder Vogel und jedes Weibchen nur einmal vor:<br>'+mlConflictText(cs,fatherId,motherId)); if(!nz) return; T.zucht=nz; } }
   const pp = computePaarungsprognose(f,m);
   const ib = calcInbreedingPair(f,m);
   const body = Object.assign({
@@ -10459,9 +10462,64 @@ async function mlPatchRow(id,f){
 }
 function mlSetStatus(id,v){ mlPatchRow(id,{status:v}); }
 async function mlEditNote(id){ const r=(S.matings||[]).find(x=>String(x.id)===String(id)); if(!r) return; const v=await appAsk('Notiz','Notiz zu '+(r.father_ring||'')+' × '+(r.mother_ring||'')+':', r.note||'', true); if(v==null) return; mlPatchRow(id,{note:v||null}); }
+
+// ── Partner ändern + keine Doppelungen je Zucht ──
+function mlConflicts(fid,mid,liste,zucht,exceptId){
+  if(!zucht||zucht===ML_NOZ||zucht==='*') return [];
+  return (S.matings||[]).filter(r=>String(r.id)!==String(exceptId) && mlListOf(r)===liste && mlZuchtOf(r)===zucht && ((fid&&r.fatherid===fid)||(mid&&r.motherid===mid)));
+}
+function mlConflictText(cs,fid,mid){ return cs.map(r=>(r.fatherid===fid?'♂ '+escH(r.father_ring||'')+' ist schon mit ♀ '+escH(r.mother_ring||''):'♀ '+escH(r.mother_ring||'')+' ist schon mit ♂ '+escH(r.father_ring||''))).join('<br>'); }
+async function mlPickZuchtFor(fid,mid,liste,exceptId,intro){
+  const free=mlZuchten(liste).filter(z=>z!==ML_NOZ && !mlConflicts(fid,mid,liste,z,exceptId).length);
+  const sel='<select id="ml-zsel" style="width:100%;padding:8px;font-size:15px">'+free.map(z=>'<option value="'+escH(z)+'">'+escH(z)+'</option>').join('')+'<option value="__new">＋ Neue Zucht anlegen…</option></select>';
+  if(!await appConfirm('Doppelung in dieser Zucht',intro+'<div style="margin-top:8px">In welche Zucht soll das Paar stattdessen?</div>','Übernehmen',sel)) return null;
+  const v=(document.getElementById('ml-zsel')||{}).value; if(!v) return null;
+  if(v==='__new'){ const Z=mlZuchten(liste).filter(z=>z!==ML_NOZ); const n=await mlAskName('Name der neuen Zucht:',(Z.length+1)+'. Zucht'); if(!n) return null; const e=mlState().empty; (e[liste]||(e[liste]=[])); if(!e[liste].includes(n)) e[liste].push(n); mlSave(); return n; }
+  return v;
+}
+function mlEditPartner(id,role){
+  const r=(S.matings||[]).find(x=>String(x.id)===String(id)); if(!r) return;
+  const sex=role==='F'?'M':'F'; // F = Mutter (♀) ändern
+  const label=role==='M'?'♂ Vater':'♀ Mutter';
+  const w=document.createElement('div'); w.className='aa-ov'; w.style.zIndex=10001;
+  w.innerHTML='<div class="aa-box"><div class="aa-head"><div class="serif" style="font-size:18px">'+label+' ändern</div><button type="button" class="btn btn-outline btn-sm" data-c>✕</button></div>'
+   +'<div style="font-size:12px;color:var(--text3);margin:6px 0">Paar: '+escH(r.father_ring||'')+' × '+escH(r.mother_ring||'')+' · '+escH(mlZuchtOf(r))+'</div>'
+   +'<input id="mlp-q" class="tm-in" placeholder="🔎 Ringnummer, Endnummer oder Name" style="width:100%;font-size:16px;min-height:44px" autocomplete="off"><div id="mlp-hits" style="margin-top:8px;max-height:50vh;overflow:auto"></div></div>';
+  document.body.appendChild(w);
+  const close=()=>w.remove(); w.querySelectorAll('[data-c]').forEach(b=>b.onclick=close); w.onclick=e=>{ if(e.target===w) close(); };
+  const want=role==='M'?'M':'F', cur=role==='M'?r.fatherid:r.motherid;
+  const show=()=>{
+    const q=(document.getElementById('mlp-q').value||'').trim().toLowerCase(), qn=q.replace(/[\s.]/g,'');
+    let list=S.pigeons.filter(p=>p&&!p._virtual&&sex_(p)===want&&p.pigeonid!==cur&&zuchtOk(p));
+    if(qn) list=list.filter(p=>{ const rg=String(ring(p)).toLowerCase().replace(/[\s.]/g,''), en=(String(ring(p)).match(/(\d+)\s*$/)||[])[1]||''; return rg.includes(qn)||en===q||String(p.name||'').toLowerCase().includes(q); });
+    list=list.slice(0,30);
+    const L=mlListOf(r), Z=mlZuchtOf(r);
+    document.getElementById('mlp-hits').innerHTML=list.length?list.map(p=>{
+      const fid=role==='M'?p.pigeonid:r.fatherid, mid=role==='M'?r.motherid:p.pigeonid, cs=mlConflicts(fid,mid,L,Z,r.id);
+      return '<div class="zp-hit" data-p="'+escH(p.pigeonid)+'" style="cursor:pointer"><span style="font-family:monospace">'+escH(ring(p))+'</span>'+(p.name?' <span style="color:var(--text3)">'+escH(p.name)+'</span>':'')+(cs.length?' <span style="color:#e0a030;font-size:11px">⚠ in '+escH(Z)+' schon vergeben</span>':'')+'</div>';
+    }).join(''):'<div style="color:var(--text3);font-size:13px">Keine passende Taube'+(qn?'':' – tippe eine Nummer oder einen Namen')+'.</div>';
+    document.querySelectorAll('#mlp-hits [data-p]').forEach(el=>el.onclick=()=>{ close(); mlSetPartner(r.id,role,el.getAttribute('data-p')); });
+  };
+  document.getElementById('mlp-q').oninput=show; show(); setTimeout(()=>{ const i=document.getElementById('mlp-q'); if(i) i.focus(); },50);
+}
+async function mlSetPartner(id,role,pid){
+  const r=(S.matings||[]).find(x=>String(x.id)===String(id)), p=findById(pid); if(!r||!p) return;
+  const fid=role==='M'?pid:r.fatherid, mid=role==='M'?r.motherid:pid, L=mlListOf(r);
+  let zucht=mlZuchtOf(r);
+  const bl=zuchtSperre(p); if(bl && !confirm('Achtung: '+ring(p)+' ('+bl+') steht für die Zucht nicht zur Verfügung. Trotzdem übernehmen?')) return;
+  const cs=mlConflicts(fid,mid,L,zucht,r.id);
+  if(cs.length){ const nz=await mlPickZuchtFor(fid,mid,L,r.id,'In „'+escH(zucht)+'“ kommt jeder Vogel und jedes Weibchen nur einmal vor:<br>'+mlConflictText(cs,fid,mid)); if(!nz) return; zucht=nz; }
+  const f=findById(fid), m=findById(mid), body={zucht};
+  if(role==='M'){ body.fatherid=pid; body.father_ring=ring(p); body.father_name=p.name||null; } else { body.motherid=pid; body.mother_ring=ring(p); body.mother_name=p.name||null; }
+  if(f&&m){ try{ const pp=computePaarungsprognose(f,m), ib=calcInbreedingPair(f,m); body.inzucht=ib!=null?Math.round(ib*10000)/100:null; body.score_father=pp.sF; body.score_mother=pp.sM; body.score_combined=pp.combined; }catch(e){} }
+  if(!S.matingsExt) delete body.zucht;
+  await mlPatchRow(id,body);
+}
 async function mlMoveZucht(id,sel){
   const v=sel.value, L=mlCurListe(); if(v===''||!L) return;
   if(v==='__new'){ const n=await mlAskName('Name der neuen Zucht:',''); sel.value=''; if(!n) return; const e=mlState().empty; (e[L]||(e[L]=[])).push(n); mlSave(); mlPatchRow(id,{zucht:n}); return; }
+  const r=(S.matings||[]).find(x=>String(x.id)===String(id)), cs=r?mlConflicts(r.fatherid,r.motherid,L,v,id):[];
+  if(cs.length){ const nz=await mlPickZuchtFor(r.fatherid,r.motherid,L,id,'In „'+escH(v)+'“ kommt jeder Vogel und jedes Weibchen nur einmal vor:<br>'+mlConflictText(cs,r.fatherid,r.motherid)); if(!nz){ render(); return; } mlPatchRow(id,{zucht:nz}); return; }
   mlPatchRow(id,{zucht:v});
 }
 // sichtbare Zeilen: gewählte Liste (+ Zucht)
@@ -10522,14 +10580,15 @@ function renderMatingsList(){
   let live=true;
   if(miss.length){ live=false; if(!S._mlLoad){ S._mlLoad=true; withTimeout(loadPigeonTripsBatchChunked(miss),60000).then(()=>{ S._mlLoad=false; scoreMemoClear(); if(S.tab==='zuchtliste') render(); }).catch(()=>{ S._mlLoad=false; }); } }
   const lv=r=>{ if(!live) return null; const f=findById(r.fatherid), m=findById(r.motherid); if(!f||!m) return null; try{ const pp=computePaarungsprognose(f,m); return pp.stillLoading?null:pp; }catch(e){ return null; } };
+  const dupB=(r,role)=>{ const cs=mlConflicts(role==='M'?r.fatherid:null,role==='F'?r.motherid:null,mlListOf(r),mlZuchtOf(r),r.id); return cs.length?'<div style="font-size:11px;color:#e0a030" title="In dieser Zucht kommt der Vogel mehrfach vor – eines der Paare in eine andere Zucht legen">⚠ doppelt in '+escH(mlZuchtOf(r))+'</div>':''; };
   const body = rows.map(r=>{
     const LP=lv(r); const vF=LP?LP.sF:r.score_father, vM=LP?LP.sM:r.score_mother, vC=LP?LP.combined:r.score_combined;
     const snap='Gespeichert am '+(r.created_at?new Date(r.created_at).toLocaleDateString('de'):'?')+': Vater '+sc(r.score_father)+' · Mutter '+sc(r.score_mother)+' · Ø '+sc(r.score_combined);
     const zopts=Z.filter(z=>z!==ML_NOZ).map(z=>`<option value="${escH(z)}" ${mlZuchtOf(r)===z?'selected':''}>${escH(z)}</option>`).join('');
     return `<tr>
       ${ext?`<td><select onchange="mlMoveZucht('${r.id}',this)" style="padding:4px 6px;font-size:12.5px">${mlZuchtOf(r)===ML_NOZ?'<option value="">Ohne Zucht</option>':''}${zopts}<option value="__new">＋ Neue Zucht…</option></select></td>`:''}
-      <td style="cursor:pointer;font-family:monospace;font-size:12px" onclick="loadMatingIntoCheck('${r.fatherid}','${r.motherid}')">♂ ${escH(r.father_ring||'')}${r.father_name?'<br><span style="color:var(--text3)">'+escH(r.father_name)+'</span>':''}</td>
-      <td style="cursor:pointer;font-family:monospace;font-size:12px" onclick="loadMatingIntoCheck('${r.fatherid}','${r.motherid}')">♀ ${escH(r.mother_ring||'')}${r.mother_name?'<br><span style="color:var(--text3)">'+escH(r.mother_name)+'</span>':''}</td>
+      <td style="cursor:pointer;font-family:monospace;font-size:12px" onclick="loadMatingIntoCheck('${r.fatherid}','${r.motherid}')">♂ ${escH(r.father_ring||'')}${r.father_name?'<br><span style="color:var(--text3)">'+escH(r.father_name)+'</span>':''}<br><button class="btn btn-outline btn-sm ml-pe" onclick="event.stopPropagation();mlEditPartner('${r.id}','M')" title="Vater ändern">✎ ändern</button>${dupB(r,'M')}</td>
+      <td style="cursor:pointer;font-family:monospace;font-size:12px" onclick="loadMatingIntoCheck('${r.fatherid}','${r.motherid}')">♀ ${escH(r.mother_ring||'')}${r.mother_name?'<br><span style="color:var(--text3)">'+escH(r.mother_name)+'</span>':''}<br><button class="btn btn-outline btn-sm ml-pe" onclick="event.stopPropagation();mlEditPartner('${r.id}','F')" title="Mutter ändern">✎ ändern</button>${dupB(r,'F')}</td>
       <td style="text-align:center">${r.inzucht!=null?Number(r.inzucht).toFixed(2)+' %':'—'}</td>
       <td style="text-align:center;color:${cColor(vF)}" title="${escH(snap)}">${sc(vF)}</td>
       <td style="text-align:center;color:${cColor(vM)}" title="${escH(snap)}">${sc(vM)}</td>
@@ -11287,6 +11346,7 @@ async function zpSaveAll(){
     try{
       const ex=await apiGet('/matings?fatherid=eq.'+m.pigeonid+'&motherid=eq.'+f.pigeonid+'&select=id&limit=1'+mlDupFilter(T));
       if(ex && ex.length){ skip++; continue; }
+      if(mlConflicts(m.pigeonid,f.pigeonid,T.liste,T.zucht,null).length){ skip++; continue; }
       const pp=computePaarungsprognose(m,f);
       await apiPost('matings',Object.assign({fatherid:m.pigeonid, motherid:f.pigeonid, father_ring:ring(m), father_name:m.name||null, mother_ring:ring(f), mother_name:f.name||null,
         inzucht:Math.round(e.ib*10000)/100, score_father:pp.sF, score_mother:pp.sM, score_combined:pp.combined}, mlStamp(T)));
