@@ -332,6 +332,10 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
   .zp-sel{max-width:260px}
   .table-wrap td,.table-wrap th{padding-left:8px;padding-right:8px}
 }
+.pv-savebar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--green);border-radius:12px;padding:10px 14px;margin-bottom:12px}
+.pv-sv-pair{flex:1 1 260px;font-size:14px;font-family:monospace}.pv-sv-mid{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.pv-sv-sc{font-size:26px;font-weight:700}.pv-sv-l,.pv-sv-t{font-size:12px;color:var(--text3)}
+.pv-sv-btn{font-size:16px;font-weight:700;padding:12px 22px;min-height:48px}.pv-sv-done{color:var(--green);font-weight:700;font-size:14px}
+@media(max-width:600px){.pv-sv-btn{width:100%}}
 .pv-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-bottom:4px;align-items:start}
 @media(max-width:900px){.pv-top{grid-template-columns:minmax(0,1fr)}}
 .pv-ibrow{display:flex;justify-content:space-between;align-items:center;gap:10px}
@@ -5729,6 +5733,7 @@ function renderPaarung(){
       ${birdPicker('paarungM', S.paarungM, '♂ Vogel wählen','M')}
       ${birdPicker('paarungF', S.paarungF, '♀ Weibchen wählen','F')}
     </div>
+    ${S.paarungM && S.paarungF ? pvSaveBar() : ''}
     ${S.paarungM && S.paarungF ? pvTopHtml(ib, ibClass) : ''}
     ${pvSuggestHtml()}
     ${S.paarungM && S.paarungF ? `
@@ -10253,14 +10258,14 @@ function renderPaarungsprognoseCard(father, mother){
     if(!(father&&mother)) s3='';
     else if(rec && rec.n>0) s3=`<li><b>Bilanz dieses Paares:</b> ${rec.kids} Nachkommen, davon ${rec.n} mit genug Flügen geprüft (${rec.erf} erfolgreich), Ø Leistung <b>${Math.round(rec.mean)}</b>. Das zählt zu ${Math.round(pp.w*100)} % mit: ${pp.prior} → <b>${pp.empf}</b>. Je mehr geprüfte Nachkommen, desto mehr zählt die echte Bilanz.</li>`;
     else s3=`<li><b>Bilanz dieses Paares:</b> ${rec&&rec.kids?rec.kids+' Nachkommen, aber noch keiner mit genug Flügen':'noch keine gemeinsamen Nachkommen'} – die Prognose beruht allein auf den Eltern.</li>`;
-    steps=`<details class="ppb-how" open><summary>So kommt die Zahl zustande</summary><ol>${s1}${s2}${s3}</ol></details>`;
+    steps=`<details class="ppb-how"><summary>So kommt die Zahl zustande</summary><ol>${s1}${s2}${s3}</ol></details>`;
   } else head=`<div style="font-size:13px;color:var(--text3)">${pp.stillLoading?'Daten werden geladen…':'Noch keine ausreichende Datenbasis bei den Eltern'}</div>`;
   return `<div class="card" style="margin-bottom:14px">
     <div class="card-title" style="display:flex;align-items:center;gap:8px">🏆 Erfolgs-Prognose <span onclick="showScoreSettingsModal()" title="Score-Einstellungen" style="cursor:pointer;color:var(--text3);font-size:14px;font-weight:400">⚙️</span></div>
     ${head}${steps}
-    <div style="font-size:12px;font-weight:600;color:var(--text2);margin:14px 0 6px">Woraus besteht der Score der Eltern?</div>
-    <div class="ppb-grid"><div>${_pp_parentLine(father,pp.ef)}</div><div>${_pp_parentLine(mother,pp.em)}</div></div>
-    ${saveBtn}
+    <details class="ppb-how" style="margin-top:6px"><summary>Woraus besteht der Score der Eltern?</summary>
+    <div class="ppb-grid" style="margin-top:8px"><div>${_pp_parentLine(father,pp.ef)}</div><div>${_pp_parentLine(mother,pp.em)}</div></div></details>
+    ${S.tab==='paarung'?'':saveBtn}
   </div>`;
 }
 
@@ -19928,6 +19933,19 @@ function pvControlsHtml(){
   }
   return `<div class="pv-ctl"><div class="pv-ctl-l">Partner vorschlagen nach</div>${seg}
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer;margin-top:8px"><input type="checkbox" ${PV.reise?'checked':''} onchange="pvSet('reise',this.checked)"> Reisetauben einbeziehen</label>${line}</div>`;
+}
+function pvSaveBar(){
+  const M=S.paarungM, F=S.paarungF;
+  if(S.matings===null && !S._pvMl){ S._pvMl=true; mlEnsureLoaded().then(()=>{ S._pvMl=false; if(S.tab==='paarung') render(); }).catch(()=>{ S._pvMl=false; }); }
+  const T=S.matings?mlTarget():null;
+  const saved=T&&(S.matings||[]).some(r=>r.fatherid===M.pigeonid&&r.motherid===F.pigeonid&&mlListOf(r)===T.liste&&mlZuchtOf(r)===T.zucht);
+  const pp=computePaarungsprognose(M,F);
+  const sc=pp.empf!=null?`<span class="pv-sv-sc" style="color:${scoreColor(pp.empf)}">${pp.empf}</span><span class="pv-sv-l">Prognose</span>`:'';
+  return `<div class="pv-savebar">
+    <div class="pv-sv-pair"><b>♂ ${escH(ring(M))}</b>${M.name?' '+escH(M.name):''} <span style="color:var(--text3)">×</span> <b>♀ ${escH(ring(F))}</b>${F.name?' '+escH(F.name):''}</div>
+    <div class="pv-sv-mid">${sc}<span class="pv-sv-t">${T?'Ziel: <b>'+escH(T.liste+' › '+T.zucht)+'</b> <a onclick="showTab(\'zuchtliste\')" style="cursor:pointer;text-decoration:underline">ändern</a>':''}</span></div>
+    ${saved?`<div class="pv-sv-done">✓ In der Paarungsliste (${escH(T.zucht)})</div>`:`<button class="btn pv-sv-btn" onclick="savePairingToList('${M.pigeonid}','${F.pigeonid}')">💾 Paarung speichern</button>`}
+  </div>`;
 }
 function pvTopHtml(ib, ibClass){
   const M=S.paarungM, F=S.paarungF;
