@@ -121,8 +121,8 @@ nav button.active{color:var(--green);border-bottom-color:var(--green);font-weigh
 .zp-round{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}.zp-rl{font-weight:700;font-size:13px}.zp-round select{padding:6px 8px;font-size:14px}.zp-rs,.zp-note{font-size:12px;color:var(--text3)}.zp-note{margin-bottom:8px}
 .zp-done{margin-bottom:8px;font-size:12px;color:var(--text2)}.zp-done summary{cursor:pointer;color:var(--green)}.zp-done div div{padding:2px 0 2px 14px}
 .ml-pe{margin-top:4px;padding:2px 8px;font-size:11px}
-.zs-th{cursor:pointer;user-select:none;white-space:nowrap}.zs-th:hover{color:var(--gold,#e0b040)}.zs-asc::after{content:' ▲';font-size:9px}.zs-desc::after{content:' ▼';font-size:9px}
-.zs-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.zs-q{flex:1 1 200px;min-width:0;max-width:340px;padding:7px 10px;font-size:14px}.zs-c{padding:7px 8px;font-size:13px;max-width:220px}
+.zts-th{cursor:pointer;user-select:none;white-space:nowrap}.zts-th:hover{color:var(--gold,#e0b040)}.zts-asc::after{content:' ▲';font-size:9px}.zts-desc::after{content:' ▼';font-size:9px}
+.zts-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.zts-q{flex:1 1 200px;min-width:0;max-width:340px;padding:7px 10px;font-size:14px}.zts-c{padding:7px 8px;font-size:13px;max-width:220px}
 .zp-dash{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .zp-chip{border:1px solid var(--border);background:var(--bg2);color:var(--text2);border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer}
 .zp-chip b{color:var(--c,var(--text));font-size:14px}
@@ -3410,7 +3410,7 @@ function zsSort(tb,col,dir){
 }
 function zsApply(tb,key){
   const st=ZSORT[key]||{}; const ths=[...tb.tHead.rows[0].cells];
-  ths.forEach((th,i)=>{ th.classList.toggle('zs-asc',st.col===i&&st.dir===1); th.classList.toggle('zs-desc',st.col===i&&st.dir===-1); });
+  ths.forEach((th,i)=>{ th.classList.toggle('zts-asc',st.col===i&&st.dir===1); th.classList.toggle('zts-desc',st.col===i&&st.dir===-1); });
   if(st.col!=null) zsSort(tb,st.col,st.dir);
   const q=String(st.q||'').toLowerCase().replace(/\s+/g,' ').trim(), nq=q.replace(/[\s.]/g,'');
   [...tb.tBodies[0].rows].forEach(r=>{ if(!q){ r.style.display=''; return; } const tx=r.textContent.toLowerCase().replace(/\s+/g,' '); r.style.display=(tx.includes(q)||tx.replace(/[\s.]/g,'').includes(nq))?'':'none'; });
@@ -3423,20 +3423,20 @@ function zsInit(){
     if(rows.some(r=>[...r.cells].some(c=>c.colSpan>1))) return;
     if(tb.dataset.nosort) return;
     const key=S.tab+':'+ti, ths=[...tb.tHead.rows[0].cells];
-    ths.forEach((th,i)=>{ const lbl=th.textContent.trim(); if(!lbl) return; th.classList.add('zs-th'); th.onclick=()=>{ const st=ZSORT[key]||(ZSORT[key]={}); st.dir=(st.col===i)?-st.dir:1; st.col=i; zsApply(tb,key); const sel=document.getElementById('zsb-'+key.replace(/\W/g,'_')+'-c'); if(sel) sel.value=String(i); }; });
-    if(rows.length>=4 && !tb.closest('.zs-has')){
+    ths.forEach((th,i)=>{ const lbl=th.textContent.trim(); if(!lbl) return; th.classList.add('zts-th'); th.onclick=()=>{ const st=ZSORT[key]||(ZSORT[key]={}); st.dir=(st.col===i)?-st.dir:1; st.col=i; zsApply(tb,key); const sel=document.getElementById('zsb-'+key.replace(/\W/g,'_')+'-c'); if(sel) sel.value=String(i); }; });
+    if(rows.length>=4 && !tb.closest('.zts-has')){
       const id='zsb-'+key.replace(/\W/g,'_'), st=ZSORT[key]||{};
-      const bar=document.createElement('div'); bar.className='zs-bar';
-      bar.innerHTML='<input type="search" class="zs-q" placeholder="🔎 filtern: Nummer, Name …" value="'+escH(st.q||'')+'"><select id="'+id+'-c" class="zs-c"><option value="">Sortieren nach …</option>'+ths.map((th,i)=>th.textContent.trim()?'<option value="'+i+'"'+(st.col===i?' selected':'')+'>'+escH(th.textContent.trim())+'</option>':'').join('')+'</select><button type="button" class="btn btn-outline btn-sm zs-d" title="Reihenfolge umkehren">'+(st.dir===-1?'↓':'↑')+'</button>';
+      const bar=document.createElement('div'); bar.className='zts-bar';
+      bar.innerHTML='<input type="search" class="tm-in zts-q" placeholder="🔎 filtern: Nummer, Name …" value="'+escH(st.q||'')+'"><select id="'+id+'-c" class="tm-in zts-c"><option value="">Sortieren nach …</option>'+ths.map((th,i)=>th.textContent.trim()?'<option value="'+i+'"'+(st.col===i?' selected':'')+'>'+escH(th.textContent.trim())+'</option>':'').join('')+'</select><button type="button" class="btn btn-outline btn-sm zts-d" title="Reihenfolge umkehren">'+(st.dir===-1?'↓':'↑')+'</button>';
       const host=tb.closest('.table-wrap')||tb; host.parentNode.insertBefore(bar,host);
-      bar.querySelector('.zs-q').oninput=function(){ (ZSORT[key]||(ZSORT[key]={})).q=this.value; zsApply(tb,key); };
-      bar.querySelector('.zs-c').onchange=function(){ const s=ZSORT[key]||(ZSORT[key]={}); if(this.value===''){ s.col=null; } else { s.col=+this.value; s.dir=s.dir||1; } zsApply(tb,key); };
-      bar.querySelector('.zs-d').onclick=function(){ const s=ZSORT[key]||(ZSORT[key]={}); s.dir=-(s.dir||1); this.textContent=s.dir===-1?'↓':'↑'; if(s.col!=null) zsApply(tb,key); };
+      bar.querySelector('.zts-q').oninput=function(){ (ZSORT[key]||(ZSORT[key]={})).q=this.value; zsApply(tb,key); };
+      bar.querySelector('.zts-c').onchange=function(){ const s=ZSORT[key]||(ZSORT[key]={}); if(this.value===''){ s.col=null; } else { s.col=+this.value; s.dir=s.dir||1; } zsApply(tb,key); };
+      bar.querySelector('.zts-d').onclick=function(){ const s=ZSORT[key]||(ZSORT[key]={}); s.dir=-(s.dir||1); this.textContent=s.dir===-1?'↓':'↑'; if(s.col!=null) zsApply(tb,key); };
     }
     zsApply(tb,key);
   });
 }
-function zRestoreY(y){ window.scrollTo(0,y); requestAnimationFrame(()=>{ window.scrollTo(0,y); setTimeout(()=>window.scrollTo(0,y),120); }); }
+function zRestoreY(y){ window.scrollTo(0,y); requestAnimationFrame(()=>window.scrollTo(0,y)); }
 // Merkt den aktuellen Tab auf dem navStack, wenn man von AUSSERHALB der
 // Tauben-Themengruppe (z.B. Bestenliste, Züchter, Reisen) zu einer Taube
 // springt. Springt man dagegen innerhalb der Tauben-Themengruppe selbst um
