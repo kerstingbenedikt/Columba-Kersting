@@ -3438,6 +3438,14 @@ function zsVal(td){
   m=t.replace(',','.').match(/^[^\d\-]{0,3}(-?\d+(?:\.\d+)?)/); if(m && t.length<28) return {n:parseFloat(m[1]),s:t.toLowerCase()};
   return {s:t.toLowerCase()};
 }
+function zsCellText(td){
+  const sel=td.querySelector('select'), inp=td.querySelector('input:not([type=checkbox])');
+  let t=td.textContent;
+  if(sel){ const c=td.cloneNode(true); c.querySelectorAll('select').forEach((x,i)=>{ const o=sel.options[sel.selectedIndex]; x.replaceWith(document.createTextNode(o?o.text:'')); }); t=c.textContent; }
+  if(inp&&inp.value) t+=' '+inp.value;
+  return t;
+}
+function zsRowText(r){ return [...r.cells].map(zsCellText).join(' ').toLowerCase().replace(/\s+/g,' '); }
 function zsSort(tb,col,dir){
   const body=tb.tBodies[0]; if(!body) return;
   const rows=[...body.rows].map((r,i)=>({r,i,v:zsVal(r.cells[col])}));
@@ -3451,7 +3459,7 @@ function zsApply(tb,key){
   ths.forEach((th,i)=>{ th.classList.toggle('zts-asc',st.col===i&&st.dir===1); th.classList.toggle('zts-desc',st.col===i&&st.dir===-1); });
   if(st.col!=null) zsSort(tb,st.col,st.dir);
   const q=String(st.q||'').toLowerCase().replace(/\s+/g,' ').trim(), nq=q.replace(/[\s.]/g,'');
-  [...tb.tBodies[0].rows].forEach(r=>{ if(!q){ r.style.display=''; return; } const tx=r.textContent.toLowerCase().replace(/\s+/g,' '); r.style.display=(tx.includes(q)||tx.replace(/[\s.]/g,'').includes(nq))?'':'none'; });
+  [...tb.tBodies[0].rows].forEach(r=>{ if(!q){ r.style.display=''; return; } const tx=zsRowText(r); r.style.display=(tx.includes(q)||tx.replace(/[\s.]/g,'').includes(nq))?'':'none'; });
 }
 function zsInit(){
   const main=document.getElementById('main'); if(!main) return;
@@ -3465,9 +3473,9 @@ function zsInit(){
     if(rows.length>=4 && !tb.closest('.zts-has')){
       const id='zsb-'+key.replace(/\W/g,'_'), st=ZSORT[key]||{};
       const bar=document.createElement('div'); bar.className='zts-bar';
-      bar.innerHTML='<input type="search" class="tm-in zts-q" placeholder="🔎 filtern: Nummer, Name …" value="'+escH(st.q||'')+'"><select id="'+id+'-c" class="tm-in zts-c"><option value="">Sortieren nach …</option>'+ths.map((th,i)=>th.textContent.trim()?'<option value="'+i+'"'+(st.col===i?' selected':'')+'>'+escH(th.textContent.trim())+'</option>':'').join('')+'</select><button type="button" class="btn btn-outline btn-sm zts-d" title="Reihenfolge umkehren">'+(st.dir===-1?'↓':'↑')+'</button>';
+      bar.innerHTML=(S.tab==='zuchtliste'?'':'<input type="search" class="tm-in zts-q" placeholder="🔎 filtern: Nummer, Name …" value="'+escH(st.q||'')+'">')+'<select id="'+id+'-c" class="tm-in zts-c"><option value="">Sortieren nach …</option>'+ths.map((th,i)=>th.textContent.trim()?'<option value="'+i+'"'+(st.col===i?' selected':'')+'>'+escH(th.textContent.trim())+'</option>':'').join('')+'</select><button type="button" class="btn btn-outline btn-sm zts-d" title="Reihenfolge umkehren">'+(st.dir===-1?'↓':'↑')+'</button>';
       const host=tb.closest('.table-wrap')||tb; host.parentNode.insertBefore(bar,host);
-      bar.querySelector('.zts-q').oninput=function(){ (ZSORT[key]||(ZSORT[key]={})).q=this.value; zsApply(tb,key); };
+      const _q=bar.querySelector('.zts-q'); if(_q) _q.oninput=function(){ (ZSORT[key]||(ZSORT[key]={})).q=this.value; zsApply(tb,key); };
       bar.querySelector('.zts-c').onchange=function(){ const s=ZSORT[key]||(ZSORT[key]={}); if(this.value===''){ s.col=null; } else { s.col=+this.value; s.dir=s.dir||1; } zsApply(tb,key); };
       bar.querySelector('.zts-d').onclick=function(){ const s=ZSORT[key]||(ZSORT[key]={}); s.dir=-(s.dir||1); this.textContent=s.dir===-1?'↓':'↑'; if(s.col!=null) zsApply(tb,key); };
     }
@@ -10627,10 +10635,23 @@ async function mlMoveZucht(id,sel){
   mlPatchRow(id,{zucht:v});
 }
 // sichtbare Zeilen: gewählte Liste (+ Zucht)
+function mlLocSel(){ if(!S.mlLoc){ try{ S.mlLoc=JSON.parse(localStorage.getItem('pigman_mlloc')||'[]'); }catch(e){ S.mlLoc=[]; } } return S.mlLoc; }
+function mlLocKey(r){ const f=r.fatherid?findById(r.fatherid):null, m=r.motherid?findById(r.motherid):null; return (f&&f.standort)||(m&&m.standort)||'__none'; }
+function mlLocOk(r){ const sel=mlLocSel(); return !sel.length||sel.includes(mlLocKey(r)); }
+function mlLocToggle(k){ const sel=mlLocSel(), i=sel.indexOf(k); if(i>=0) sel.splice(i,1); else sel.push(k); try{ localStorage.setItem('pigman_mlloc',JSON.stringify(sel)); }catch(e){} render(); }
+function mlLocClear(){ S.mlLoc=[]; try{ localStorage.setItem('pigman_mlloc','[]'); }catch(e){} render(); }
+function mlLocBarHtml(){
+  const L=mlCurListe(), st=mlState(); let base=(S.matings||[]).filter(r=>mlListOf(r)===L); if(st.zucht&&st.zucht!=='*') base=base.filter(r=>mlZuchtOf(r)===st.zucht);
+  const cnt=new Map(); base.forEach(r=>{ const k=mlLocKey(r); cnt.set(k,(cnt.get(k)||0)+1); });
+  const sel=mlLocSel(); if(cnt.size<2 && !sel.length) return '';
+  const keys=[...cnt.keys()].concat(sel.filter(k=>!cnt.has(k))).sort((a,b)=>a==='__none'?1:b==='__none'?-1:String(a).localeCompare(b,'de'));
+  return `<div class="zloc-bar" style="margin:8px 0"><span class="zloc-l">📍 Standort</span><button type="button" class="zp-chip ${sel.length?'':'on'}" onclick="mlLocClear()">Alle</button>${keys.map(k=>`<button type="button" class="zp-chip ${sel.includes(k)?'on':''}" onclick="mlLocToggle(${JSON.stringify(k).replace(/"/g,'&quot;')})"><b>${cnt.get(k)||0}</b> ${k==='__none'?'ohne Standort':escH(k)}</button>`).join('')}<span class="zloc-h">Standort des Vogels. Der Filter gilt auch für ④ Termine und die Zeitleiste.</span></div>`;
+}
 function mlRows(){
   const st=mlState(), L=mlCurListe();
   let rows=(S.matings||[]).filter(r=>mlListOf(r)===L);
   if(st.zucht && st.zucht!=='*') rows=rows.filter(r=>mlZuchtOf(r)===st.zucht);
+  rows=rows.filter(mlLocOk);
   return rows.slice().sort((a,b)=>mlNat(mlZuchtOf(a),mlZuchtOf(b)) || String(b.created_at||'').localeCompare(String(a.created_at||'')));
 }
 // Suche in der Paarungsliste: Ring (komplett oder Endnummer), Name, Zelle, Abteil – über alle Zuchten der Liste
@@ -10639,7 +10660,7 @@ function mlSearchRows(q){
   const norm=x=>String(x||'').toLowerCase().replace(/[\s.]/g,'');
   const qn=norm(ql), hit=r=>[r.father_ring,r.mother_ring].some(g=>{ const n=norm(g); return n.includes(qn)||tmEnd(g)===ql; })
     || [r.father_name,r.mother_name,rZelle(r),r.abteil].some(x=>String(x||'').toLowerCase().includes(ql));
-  return (S.matings||[]).filter(r=>mlListOf(r)===L && hit(r)).sort((a,b)=>mlNat(mlZuchtOf(a),mlZuchtOf(b))||String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  return (S.matings||[]).filter(r=>mlListOf(r)===L && hit(r) && mlLocOk(r)).sort((a,b)=>mlNat(mlZuchtOf(a),mlZuchtOf(b))||String(b.created_at||'').localeCompare(String(a.created_at||'')));
 }
 function mlSearch(v,el){
   S.mlQ=v; const pos=el&&el.selectionStart; render();
@@ -10671,6 +10692,7 @@ function renderMatingsList(){
     </div>
     ${L?`<div class="ml-chips"><button class="ml-chip ${st.zucht==='*'?'on':''}" onclick="mlPickZucht(-1)">Alle · ${cnt()}</button>${Z.map((z,i)=>`<button class="ml-chip ${st.zucht===z?'on':''}" onclick="mlPickZucht(${i})">${escH(z)} · ${cnt(z)}</button>`).join('')}${ext?`<button class="ml-chip" onclick="mlNewZucht()">＋ Zucht</button>`:''}
       ${ext&&st.zucht&&st.zucht!=='*'?`<button class="btn btn-outline btn-sm" onclick="mlRenameZucht()" title="Zucht umbenennen">✎</button><button class="btn btn-outline btn-sm" onclick="mlDeleteZucht()" title="Zucht löschen">🗑</button>`:''}</div>
+    ${mlLocBarHtml()}
     <div style="margin:8px 0"><input type="search" id="ml-q" class="tm-in" style="max-width:420px;min-height:40px;padding:8px 12px;font-size:15px" placeholder="🔎 Taube suchen: Ringnummer, Endnummer oder Name" value="${escH(S.mlQ||'')}" oninput="mlSearch(this.value,this)" autocomplete="off"></div>
     <div style="font-size:12px;color:var(--text3)">Neue Paare aus Zuchtplan und Paarungscheck landen in <b>${escH(mlTarget().liste)} › ${escH(mlTarget().zucht)}</b> – das ist die Liste/Zucht, die du hier gerade gewählt hast.</div>`:''}
   </div>`;
