@@ -124,6 +124,7 @@ nav button.active{color:var(--green);border-bottom-color:var(--green);font-weigh
 .zts-th{cursor:pointer;user-select:none;white-space:nowrap}.zts-th:hover{color:var(--gold,#e0b040)}.zts-asc::after{content:' ▲';font-size:9px}.zts-desc::after{content:' ▼';font-size:9px}
 .zts-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.zts-q{flex:1 1 200px;min-width:0;max-width:340px;padding:7px 10px;font-size:14px}.zts-c{padding:7px 8px;font-size:13px;max-width:220px}
 .zloc-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 10px}.zloc-l{font-weight:700;font-size:13px;margin-right:4px}.zloc-h{font-size:12px;color:var(--text3);flex-basis:100%}.zloc-note{flex-basis:100%;font-size:12px;color:var(--orange)}
+.zp-why{margin:0 0 10px;font-size:13px;color:var(--text2)}.zp-why>summary{cursor:pointer}.zp-why-b{padding:6px 0 0 14px}.zp-why-b details{margin:3px 0}.zp-why-b summary{cursor:pointer;color:var(--text2)}.zp-why-l{font-size:12px;color:var(--text3);padding:4px 0 4px 14px;line-height:1.6}
 .zp-dash{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .zp-chip{border:1px solid var(--border);background:var(--bg2);color:var(--text2);border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer}
 .zp-chip b{color:var(--c,var(--text));font-size:14px}
@@ -1769,6 +1770,24 @@ function zLocOk(p){ const sel=zLocSel(); return !sel.length || sel.includes(p.st
 function zuchtOkLoc(p){ return zuchtOk(p) && zLocOk(p); }
 function zLocToggle(k){ const sel=zLocSel(), i=sel.indexOf(k); if(i>=0) sel.splice(i,1); else sel.push(k); try{ localStorage.setItem('pigman_zloc',JSON.stringify(sel)); }catch(e){} zpInvalidate(); try{ PAIR_REC.results=null; }catch(e){} render(); }
 function zLocClear(){ S.zLoc=[]; try{ localStorage.setItem('pigman_zloc','[]'); }catch(e){} zpInvalidate(); try{ PAIR_REC.results=null; }catch(e){} render(); }
+function zpWhyHtml(z,cx){
+  const g=new Map(), add=(k,p)=>{ (g.get(k)||g.set(k,[]).get(k)).push(p); };
+  S.pigeons.forEach(p=>{ if(!p||p.deleted||p._virtual||!zLocOk(p)) return;
+    if(!p.instock) return add('nicht im Bestand',p);
+    const bl=zuchtSperre(p); if(bl) return add('Status: '+bl.replace(/^Status\s*/,''),p);
+    const ty=p.pigeontype||'';
+    if(!(ty==='Zuchttaube'||(z.inclReise&&ty==='Reisetaube'))) return add('Typ „'+(ty||'ohne Typ')+'“ (nur Zuchttauben'+(z.inclReise?' und Reisetauben':'')+' werden verpaart)',p);
+    const sx=sex_(p); if(sx!=='M'&&sx!=='F') return add('Geschlecht fehlt',p);
+    if((sx==='M'&&cx.dm.has(p.pigeonid))||(sx==='F'&&cx.df.has(p.pigeonid))) return add('in dieser Zucht schon eingeplant',p);
+    add(sx==='M'?'__M':'__F',p); });
+  const nM=(g.get('__M')||[]).length, nF=(g.get('__F')||[]).length;
+  const tot=[...g.values()].reduce((a,l)=>a+l.length,0);
+  const ex=[...g.keys()].filter(k=>k[0]!=='_');
+  const nm=p=>escH(ring(p))+(p.name?' '+escH(p.name):'');
+  return `<details class="zp-why"><summary>ℹ️ Warum sind nur ${nM+nF} von ${tot} Tauben${zLocSel().length?' an den gewählten Standorten':''} im Vorschlag?</summary>
+    <div class="zp-why-b"><div><b>${nM+nF} Kandidaten:</b> ${nM} Vögel · ${nF} Weibchen → höchstens ${Math.min(nM,nF)} Paare${nM!==nF?'; '+Math.abs(nM-nF)+(nM>nF?' Vögel':' Weibchen')+' bleiben ohne Partner':''}.</div>
+    ${ex.map(k=>`<details><summary>${g.get(k).length} × ${escH(k)}</summary><div class="zp-why-l">${g.get(k).map(nm).join(' · ')}</div></details>`).join('')||'<div style="color:var(--text3)">Alle Tauben dieses Standorts sind Kandidaten.</div>'}</div></details>`;
+}
 function zLocBarHtml(){
   const cnt=new Map(); S.pigeons.forEach(p=>{ if(zuchtOk(p)&&(p.pigeontype==='Zuchttaube'||p.pigeontype==='Reisetaube')){ const k=p.standort||'__none'; cnt.set(k,(cnt.get(k)||0)+1); } });
   const keys=[...cnt.keys()].sort((a,b)=>a==='__none'?1:b==='__none'?-1:String(a).localeCompare(b,'de'));
@@ -11663,7 +11682,7 @@ function renderZuchtplan(){
   const chip=(k,l,n,c)=>`<button type="button" class="zp-chip ${flt===k?'on':''}" style="${c?'--c:'+c:''}" onclick="S.zpFilter='${k}';render()"><b>${n}</b> ${l}</button>`;
   const dash=`<div class="zp-dash">${chip('all','Alle Vögel',rows.length)}${chip('fix','🔒 fest',cntSt('fix'),'var(--blue)')}${chip('vor','💡 Vorschlag',cntSt('vor'),'var(--text3)')}${chip('offen','⚠ ohne Partner',cntSt('offen'),'var(--orange)')}</div>
     <div class="m-intro" onclick="this.classList.toggle('open')" style="font-size:12px;color:var(--text3);line-height:1.45;margin-bottom:10px"><b>So arbeitest du:</b> 1) Vorschlag ansehen. 2) Paare, die du so willst, festlegen: Weibchen selbst wählen/suchen (wird automatisch 🔒 fest) oder 🔓 antippen. 3) „↻ Neu optimieren“ rechnet nur die <u>nicht</u> festen Paare neu – feste bleiben. 4) „In Paarungsliste übernehmen“ speichert die Paare in die gewählte Zucht – sie verschwinden dann aus dem Vorschlag. 5) Sind alle Paare eingeplant, wählst du die nächste Zucht (2., 3., 4.) und bekommst alternative Partner.</div>`;
-  return head+round+ctl+dash+`
+  return head+round+ctl+zpWhyHtml(z,cx)+dash+`
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:13px;color:var(--text2)">
       <span>${A.M.length} Vögel × ${A.F.length} Weibchen · ${np} Paare · Ø Score <b>${np?Math.round(total/np):'—'}</b></span>
       <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
