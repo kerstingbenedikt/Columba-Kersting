@@ -10662,11 +10662,17 @@ function mlSearchRows(q){
     || [r.father_name,r.mother_name,rZelle(r),r.abteil].some(x=>String(x||'').toLowerCase().includes(ql));
   return (S.matings||[]).filter(r=>mlListOf(r)===L && hit(r) && mlLocOk(r)).sort((a,b)=>mlNat(mlZuchtOf(a),mlZuchtOf(b))||String(b.created_at||'').localeCompare(String(a.created_at||'')));
 }
+let _mlT=null;
 function mlSearch(v,el){
-  S.mlQ=v; const pos=el&&el.selectionStart; render();
-  setTimeout(()=>{ const i=document.getElementById('ml-q'); if(i){ i.focus(); try{ i.setSelectionRange(pos,pos); }catch(e){} } },0);
+  S.mlQ=v; clearTimeout(_mlT);
+  _mlT=setTimeout(()=>{
+    const host=document.getElementById('ml-res'); if(!host){ render(); return; }
+    const h=renderMatingsList0(), k=h.indexOf('<!--MLRES-->'); if(k<0){ render(); return; }
+    host.innerHTML=h.slice(k+12); try{ zsInit(); }catch(e){}
+  },280);
 }
-function renderMatingsList(){
+function renderMatingsList(){ const h=renderMatingsList0(), k=h.indexOf('<!--MLRES-->'); return k<0?h:h.slice(0,k)+'<div id="ml-res">'+h.slice(k+12)+'</div>'; }
+function renderMatingsList0(){
   loadMatingsIfNeeded();
   if(S.matingsError) return `<div class="card"><div style="color:#e07070;font-size:13px">Paarungsliste konnte nicht geladen werden: ${escH(S.matingsError)}</div>
     <div style="font-size:12px;color:var(--text3);margin-top:6px">Falls die Tabelle "matings" in Supabase noch nicht existiert, muss sie einmalig angelegt werden.</div></div>`;
@@ -10693,9 +10699,9 @@ function renderMatingsList(){
     ${L?`<div class="ml-chips"><button class="ml-chip ${st.zucht==='*'?'on':''}" onclick="mlPickZucht(-1)">Alle · ${cnt()}</button>${Z.map((z,i)=>`<button class="ml-chip ${st.zucht===z?'on':''}" onclick="mlPickZucht(${i})">${escH(z)} · ${cnt(z)}</button>`).join('')}${ext?`<button class="ml-chip" onclick="mlNewZucht()">＋ Zucht</button>`:''}
       ${ext&&st.zucht&&st.zucht!=='*'?`<button class="btn btn-outline btn-sm" onclick="mlRenameZucht()" title="Zucht umbenennen">✎</button><button class="btn btn-outline btn-sm" onclick="mlDeleteZucht()" title="Zucht löschen">🗑</button>`:''}</div>
     ${mlLocBarHtml()}
-    <div style="margin:8px 0"><input type="search" id="ml-q" class="tm-in" style="max-width:420px;min-height:40px;padding:8px 12px;font-size:15px" placeholder="🔎 Taube suchen: Ringnummer, Endnummer oder Name" value="${escH(S.mlQ||'')}" oninput="mlSearch(this.value,this)" autocomplete="off"></div>
+    <div style="margin:8px 0"><input type="search" id="ml-q" class="tm-in" style="max-width:420px;min-height:40px;padding:8px 12px;font-size:15px" placeholder="🔎 Taube suchen: Ringnummer, Endnummer oder Name" value="${escH(S.mlQ||'')}" oninput="mlSearch(this.value,this)" autocomplete="off" enterkeyhint="search"></div>
     <div style="font-size:12px;color:var(--text3)">Neue Paare aus Zuchtplan und Paarungscheck landen in <b>${escH(mlTarget().liste)} › ${escH(mlTarget().zucht)}</b> – das ist die Liste/Zucht, die du hier gerade gewählt hast.</div>`:''}
-  </div>`;
+  </div><!--MLRES-->`;
   if(L && q && !rows.length) return setup+bar+`<div class="card" style="color:var(--text3);font-size:13px">Keine Paarung mit „${escH(q)}“ in dieser Liste.</div>`;
   if(!L || !rows.length) return setup+bar+`<div class="card"><div style="color:var(--text3);font-size:13px">${L?'In dieser Auswahl sind noch keine Paarungen – im Zuchtplan „In Paarungsliste übernehmen“ oder im Paarungscheck „💾 Paarung speichern“ nutzen.':'Noch keine Paarungen gespeichert – im Paarungscheck auf „💾 Paarung speichern“ klicken oder eine JSON-Datei importieren.'}</div></div>`;
   const cColor = v => v==null?'var(--text3)':v>=60?'var(--green)':v>=35?'var(--orange)':'#e07070';
