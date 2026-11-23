@@ -11393,6 +11393,9 @@ function ppSub(er){
 }
 var SECT=(function(){ try{ return JSON.parse(localStorage.getItem('pigman_sect')||'{}')||{}; }catch(e){ return {}; } })();
 function sectOpen(k,def){ return SECT[k]!=null ? !!SECT[k] : !!def; }
+var SECT_PLAN=['za_schlag','za_paare','pl_basis'];
+function sectPlanClose(){ SECT_PLAN.forEach(function(k){ SECT[k]=false; }); }
+sectPlanClose();
 function sectSave(){ try{ localStorage.setItem('pigman_sect',JSON.stringify(SECT)); }catch(e){} }
 function sectToggle(el){
   var k=el.dataset.k, def=el.dataset.def==='1';
@@ -11452,7 +11455,7 @@ function planSwitch(v){
   if(v==='rang'){ S.pairRecIncludeReise=!!z.inclReise; PAIR_REC.results=null; S.pairRecOpen=true; }
   else if(!!z.inclReise!==!!S.pairRecIncludeReise){ z.inclReise=!!S.pairRecIncludeReise; zpSave(); zpInvalidate(); }
   S.planView=v; try{ localStorage.setItem('pigman_planview',v); }catch(e){}
-  render(); window.scrollTo(0,0);
+  sectPlanClose(); render(); window.scrollTo(0,0);
 }
 function planReise(on){
   const z=zpState(); z.inclReise=!!on; S.pairRecIncludeReise=!!on; PAIR_REC.results=null; zpSave(); zpInvalidate(); render();
@@ -11474,7 +11477,7 @@ function renderPlanBasis(){
   let body='';
   if(open) body = '<div class="pf-seg" style="margin-bottom:10px;max-width:640px">'+b('score','📋 Erfolgs-Score')+b('ver','🧬 Vererbungsstärke')+b('nach','🐣 Meiste Nachkommen')+'</div>'
     + (k==='ver'?renderVererberRanking():k==='nach'?renderTopNachkommen():renderErfolgsScoreListe());
-  return sectStart('pl_basis','📊','Ausgangslage: Wer ist stark?','Erfolgs-Score, Vererbungsstärke und meiste Nachkommen im Bestand – die Grundlage für die Paarbildung',false,true)+body+sectEnd();
+  return sectStart('pl_basis','⭐','Bewährte Einzeltauben','Die stärksten Tauben im Bestand nach Erfolgs-Score, Vererbungsstärke und Nachkommen – Grundlage für die Paarbildung',false,true)+body+sectEnd();
 }
 function renderPlanen(){
   if(!S.planView){ try{ S.planView=localStorage.getItem('pigman_planview')||'zuordnung'; }catch(e){ S.planView='zuordnung'; } }
@@ -11492,7 +11495,7 @@ function renderPlanen(){
     <div style="font-size:12px;color:var(--text3);margin-top:8px">${intro} Gute Paare mit 💾 in die Paarungsliste übernehmen, mit „Prüfen“ im Detail ansehen. Welche Reisetauben sich für die Zucht eignen, zeigt „★ Bewährte Paare“ im Abschnitt Zuchtschlag.</div></div>`;
   return top + (v==='rang' ? renderPairingRecommendations() : v==='bewaehrt' ? renderZuchtAuswertung() : renderZuchtplan()) + renderPlanBasis();
 }
-function showAuswertung(){ S.tab='zucht'; S.selected=null; S.planView='bewaehrt'; setActiveNav('zucht'); render(); window.scrollTo(0,0); }
+function showAuswertung(){ sectPlanClose(); S.tab='zucht'; S.selected=null; S.planView='bewaehrt'; setActiveNav('zucht'); render(); window.scrollTo(0,0); }
 function renderZuchtplan(){
   const z=zpState(), c=zpCandidates(z), cx=zpCtx(), craw=zpCandidates(z,true);
   if(S.matings===null && !S._zpMl){ S._zpMl=true; mlEnsureLoaded().then(()=>{ S._zpMl=false; if(S.tab==='zucht') render(); }).catch(()=>{ S._zpMl=false; }); }
@@ -11653,9 +11656,9 @@ function renderZuchtAuswertung(){
           : `<button class="btn btn-outline btn-sm" title="Paar im Paarungscheck öffnen" onclick="zpOpenCheck('${e.F.pigeonid}','${e.M.pigeonid}')">Prüfen ›</button> <button class="btn btn-outline btn-sm" title="In die Paarungsliste (Schritt ③) übernehmen" onclick="savePairingToList('${e.F.pigeonid}','${e.M.pigeonid}')">💾 In Liste</button>`}</td></tr>`).join('')}
       </tbody></table></div>` : `<div class="card" style="color:var(--text3)">Noch keine Elternpaare mit erfolgreichen Nachkommen gefunden.</div>`;
   return head
-    +sectNav([['za_schlag','🏅 Zuchtschlag'],['za_paare','💞 Erfolgspaare']])
-    +sectStart('za_schlag','🏅','Reisetauben für den Zuchtschlag','Erfolgreiche Reisetauben im Bestand – Zuchtwert = 60 % Leistung + 25 % Abstammung + 15 % Familie',true)+t1+sectEnd()
-    +sectStart('za_paare','💞','Erfolgspaare','Elternpaare mit erfolgreichen Nachkommen (mind. ein Elternteil im Bestand) – im Zuchtplan gibt es dafür einen Bonus. Paare mit einer Taube, die nicht mehr im Bestand oder unfruchtbar ist, sind mit ⚠ markiert; dafür gibt es „Alternativen“.',true)+t2+sectEnd();
+    +sectNav([['za_schlag','🏅 Reisetauben für den Zuchtschlag'],['za_paare','💞 Erfolgspaare']])
+    +sectStart('za_schlag','🏅','Vorschläge: Reisetauben für den Zuchtschlag','Erfolgreiche Reisetauben im Bestand – Zuchtwert = 60 % Leistung + 25 % Abstammung + 15 % Familie',false)+t1+sectEnd()
+    +sectStart('za_paare','💞','Erfolgspaare','Elternpaare mit erfolgreichen Nachkommen (mind. ein Elternteil im Bestand) – im Zuchtplan gibt es dafür einen Bonus. Paare mit einer Taube, die nicht mehr im Bestand oder unfruchtbar ist, sind mit ⚠ markiert; dafür gibt es „Alternativen“.',false)+t2+sectEnd();
 }
 
 // ── Automatische Paarungsempfehlungen ─────────────────────────────────────
