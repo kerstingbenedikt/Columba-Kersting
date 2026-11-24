@@ -11491,6 +11491,39 @@ function exportMatingsCSV(){
     r.created_at?new Date(r.created_at).toLocaleDateString('de'):'']);
   mlDownload('paarungsliste.csv','﻿'+[header,...data].map(r=>r.map(mlCsvCell).join(';')).join('\n'),'text/csv;charset=utf-8');
 }
+// Herkunft einer Taube für Listen/Druck:
+//   1. eingetragene Blutlinie (Feld strain)
+//   2. sonst die abgeleitete Linie (deriveLine: mehrfach vorkommender Ahne / berühmte Stammtaube)
+//   3. sonst die Hauptzuchttauben, auf die sie zurückgeht: Ahnen bis zur 4. Generation, die berühmt sind
+//      oder im eigenen Bestand als Zuchttiere viel Nachzucht haben – sortiert nach Blutanteil (max. 2).
+const HZ_MIN_KIDS = 5;
+function pigeonOrigin(p){
+  if(!p) return null;
+  const st = String(p.strain||'').trim();
+  if(st) return {kind:'strain', text:st};
+  try{ const d = deriveLine(p); if(d && d.label) return {kind:'derived', text:d.label}; }catch(e){}
+  const acc = new Map();
+  const walk = (node, depth, w)=>{
+    if(depth>4 || !node) return;
+    [findFather(node), findMother(node)].forEach(a=>{
+      if(!a) return;
+      const e = acc.get(a.pigeonid) || {p:a, w:0, depth};
+      e.w += w/2; e.depth = Math.min(e.depth, depth); acc.set(a.pigeonid, e);
+      walk(a, depth+1, w/2);
+    });
+  };
+  walk(p, 1, 1);
+  const cands = [];
+  acc.forEach(e=>{
+    const famous = lineIsFamous(e.p), kids = findChildren(e.p.pigeonid).length;
+    if(!famous && kids<HZ_MIN_KIDS) return;
+    cands.push({p:e.p, w:e.w, kids, famous});
+  });
+  if(!cands.length) return null;
+  cands.sort((a,b)=> (b.famous?1:0)-(a.famous?1:0) || b.w-a.w || b.kids-a.kids);
+  const pct = w=>String(Math.round(w*1000)/10).replace('.',',')+' %';
+  return {kind:'ancestors', text: cands.slice(0,2).map(c=>(c.famous?'#'+c.famous:lineShort(c.p,true))+' ('+pct(c.w)+')').join(' · ')};
+}
 function printMatingsList(){
   const rows=mlRows();
   if(!rows.length){ alert('Keine gespeicherten Paarungen zum Drucken.'); return; }
@@ -11499,6 +11532,11 @@ function printMatingsList(){
   const today = new Date().toLocaleDateString('de-DE');
   const title=(ext?esc(mlCurListe())+(st.zucht&&st.zucht!=='*'?' › '+esc(st.zucht):''):'Paarungsliste');
   // Eltern einer Taube zweizeilig (♂ oben, ♀ unten) – nutzt den freien Platz statt Zucht/Status
+  const origin = id=>{
+    const o = pigeonOrigin(findById(id)); if(!o) return '';
+    const lbl = o.kind==='strain' ? 'Blutlinie' : o.kind==='derived' ? 'Linie' : 'geht zurück auf';
+    return `<div class="org"><span class="ol">${lbl}:</span> ${esc(o.text)}</div>`;
+  };
   const par = id=>{
     const p=findById(id); if(!p) return '<span class="sub">—</span>';
     const line=(q,sx)=>q?`<div class="par">${sx} ${esc(ring(q))}${q.name?' <span class="sub">'+esc(q.name)+'</span>':''}</div>`:`<div class="par sub">${sx} —</div>`;
@@ -11513,9 +11551,9 @@ function printMatingsList(){
     const head = (multiZ && z!==lastZ) ? `<tr class="zh"><td colspan="${cols}">${esc(z)}</td></tr>` : '';
     lastZ = z;
     return head+`<tr>
-    <td>${esc(r.father_ring)}${r.father_name?'<br><span class="sub">'+esc(r.father_name)+'</span>':''}</td>
+    <td>${esc(r.father_ring)}${r.father_name?'<br><span class="sub">'+esc(r.father_name)+'</span>':''}${origin(r.fatherid)}</td>
     <td>${par(r.fatherid)}</td>
-    <td>${esc(r.mother_ring)}${r.mother_name?'<br><span class="sub">'+esc(r.mother_name)+'</span>':''}</td>
+    <td>${esc(r.mother_ring)}${r.mother_name?'<br><span class="sub">'+esc(r.mother_name)+'</span>':''}${origin(r.motherid)}</td>
     <td>${par(r.motherid)}</td>
     <td style="text-align:center">${r.inzucht!=null?Number(r.inzucht).toFixed(2)+' %':'—'}</td>
     <td style="text-align:center;font-weight:700">${r.score_combined??'—'}</td>
@@ -11534,6 +11572,8 @@ function printMatingsList(){
   td{padding:2mm 3mm;border-bottom:.2mm solid #e0e0e0;vertical-align:top}
   .sub{color:#777;font-size:7.5pt}
   .par{font-size:8pt;white-space:nowrap;line-height:1.35}
+  .org{font-size:7.5pt;color:#7a5a00;margin-top:.8mm}
+  .org .ol{color:#999}
   tbody tr{break-inside:avoid}
   tr:nth-child(even) td{background:#f7f7f7}
   tr.zh td{background:#e8e8e8!important;font-weight:700;padding:1.5mm 3mm}
@@ -11541,7 +11581,7 @@ function printMatingsList(){
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
 <h1>📋 ${title}</h1>
-<div class="meta">${today} &nbsp;·&nbsp; ${rows.length} Paarungen &nbsp;·&nbsp; Score = Erfolgs-Score (Ø aus Vater und Mutter)</div>
+<div class="meta">${today} &nbsp;·&nbsp; ${rows.length} Paarungen &nbsp;·&nbsp; Score = Erfolgs-Score (Ø aus Vater und Mutter) &nbsp;·&nbsp; Herkunft: eingetragene Blutlinie, sonst abgeleitete Linie, sonst Hauptzuchttauben bis 4. Generation (berühmt oder ≥${HZ_MIN_KIDS} Nachkommen im Bestand) mit Blutanteil</div>
 <table>
   <thead><tr><th>Vater</th><th>Eltern des Vaters</th><th>Mutter</th><th>Eltern der Mutter</th><th>Inzucht</th><th>Score Ø</th>${ext?'<th>Notiz</th>':''}</tr></thead>
   <tbody>${tr}</tbody>
