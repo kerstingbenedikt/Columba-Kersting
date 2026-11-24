@@ -6239,6 +6239,23 @@ function renderScanUpload(){
       <div class="scan-step"><div class="scan-step-dot">3</div><span>Abgleich mit Datenbank (${S.pigeons.length.toLocaleString('de')} Tauben)</span></div>
       <div class="scan-step"><div class="scan-step-dot">4</div><span>Pro Taube: ergänzen / anlegen / überspringen</span></div>
     </div>
+  </div>
+  <div class="card">
+    <div class="card-title serif" style="font-size:18px">📋 Abstammung einfügen</div>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:12px">
+      Alternative zum KI-Scan: Stammbaum-Foto im Claude-Projekt hochladen, mit
+      <strong style="color:var(--text)">„Abstammung für PIGMAN“</strong> anfordern und die Antwort (JSON) hier einfügen
+      oder die .json-Datei auswählen. Danach folgen derselbe Datenbank-Abgleich und dieselbe Vorschau wie beim Scan.
+    </p>
+    <textarea id="scan-json-input" rows="6" style="width:100%;resize:vertical;font-family:monospace;font-size:12px"
+      placeholder='{ "proband": { "ringnumber": "DE-08600-26-224", … }, "father": { … }, … }'></textarea>
+    <div id="scan-json-msg" class="scan-error" style="display:none;margin-top:8px"></div>
+    <div class="form-actions" style="margin-top:10px;flex-wrap:wrap;gap:8px">
+      <label class="btn btn-outline" style="cursor:pointer">📂 .json-Datei wählen
+        <input type="file" accept=".json,.txt,application/json,text/plain" style="display:none" onchange="handleScanJsonFile(this.files[0])">
+      </label>
+      <button class="btn" onclick="importScanJson(document.getElementById('scan-json-input').value)">✅ Übernehmen &amp; abgleichen</button>
+    </div>
   </div>`;
 }
 
@@ -6780,6 +6797,7 @@ async function pdfToScanInput(file){
 function handleScanFile(file){
   if(!file) return;
   if(file.size>10*1024*1024){ alert('Datei zu groß (max. 10 MB)'); return; }
+  if(file.type==='application/json' || /\.(json|txt)$/i.test(file.name||'')){ handleScanJsonFile(file); return; }
   const isPdf = file.type==='application/pdf' || /\.pdf$/i.test(file.name||'');
   SCAN.pdfText = '';
   if(isPdf){
@@ -6878,8 +6896,51 @@ async function runScanAI(){
     });
     const json = await resp.json();
     if(!resp.ok||!json.ok) throw new Error(json.error||`HTTP ${resp.status}`);
+    applyScanData(json.data||{});
+  } catch(err){
+    stopScanProgress();
+    SCAN.rawResponse = {error:err.message};
+    SCAN.pigeons = {};
+    SCAN.step = 'result';
+    render();
+  }
+}
 
-    const d = json.data||{};
+// Abstammung als Text einfügen (z. B. von Claude aus einem Stammbaum-Foto erzeugt).
+// Erwartet dasselbe JSON wie die Edge-Funktion: {proband:{…}, father:{…}, …, mmmm:{…}}.
+// Toleriert ```json-Codeblöcke und Begleittext vor/nach dem JSON.
+function importScanJson(text){
+  const msg = document.getElementById('scan-json-msg');
+  const showErr = t => { if(msg){ msg.textContent = '⚠️ '+t; msg.style.display='block'; } else alert(t); };
+  let s = String(text||'').trim();
+  if(!s){ showErr('Bitte zuerst die Abstammung (JSON) einfügen.'); return; }
+  s = s.replace(/^```[a-z]*\s*/i,'').replace(/```\s*$/,'');
+  const a = s.indexOf('{'), b = s.lastIndexOf('}');
+  if(a<0 || b<=a){ showErr('Kein gültiger Abstammungs-Text gefunden (es fehlt ein { … }-Block).'); return; }
+  let d;
+  try { d = JSON.parse(s.slice(a,b+1)); }
+  catch(e){ showErr('Der Text ist kein gültiges JSON: '+e.message); return; }
+  if(d && d.data && typeof d.data==='object' && !d.proband && !d.father) d = d.data;
+  if(!d || typeof d!=='object' || !(d.proband||d.father||d.mother||d.ringnumber||d.ring)){
+    showErr('Keine Positionen erkannt. Erwartet werden Schlüssel wie proband, father, mother, ff … mmmm.');
+    return;
+  }
+  SCAN.pigeons={}; SCAN.matches={}; SCAN.actions={}; SCAN.instock={};
+  SCAN.imageData=null; SCAN.imagePreview=null; SCAN.pdfText='';
+  applyScanData(d);
+}
+
+function handleScanJsonFile(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => importScanJson(e.target.result);
+  reader.readAsText(file);
+}
+
+// Gemeinsame Verarbeitung für KI-Scan und eingefügten Text: Positionen übernehmen,
+// normalisieren, prüfen und mit der Datenbank abgleichen.
+function applyScanData(d){
+  try {
     SCAN.rawResponse = d;
     SCAN.serverWarnings = Array.isArray(d._warnings) ? d._warnings.slice() : [];
 
