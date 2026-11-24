@@ -1486,7 +1486,7 @@ function renderLogin(errMsg){
         <div>
           <label style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">Passwort</label>
           <div style="position:relative">
-            <input id="login-pw" type="password" placeholder="••••••••" autocomplete="current-password"
+            <input id="login-pw" type="password" data-pweye="1" placeholder="••••••••" autocomplete="current-password"
               style="width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 46px 10px 12px;color:var(--text);font-size:14px;outline:none"
               onkeydown="if(event.key==='Enter')doLogin()">
             <button type="button" id="login-pw-eye" onclick="pwToggle('login-pw',this)" title="Passwort anzeigen" aria-label="Passwort anzeigen"
@@ -1586,12 +1586,33 @@ function handleAuthHash(){
 
 // Passwort im Klartext ein-/ausblenden (Auge-Symbol im Passwortfeld)
 function pwToggle(id, btn){
-  const el = document.getElementById(id); if(!el) return;
+  const el = typeof id==='string' ? document.getElementById(id) : id; if(!el) return;
   const show = el.type==='password';
   el.type = show ? 'text' : 'password';
   if(btn){ btn.textContent = show ? '🙈' : '👁'; btn.title = show ? 'Passwort verbergen' : 'Passwort anzeigen'; btn.setAttribute('aria-label', btn.title); }
   el.focus();
 }
+// Alle übrigen Passwortfelder (Passwort ändern, Zurücksetzen, künftige) automatisch mit Auge versehen
+function pwEnhance(){
+  document.querySelectorAll('input[type="password"]:not([data-pweye])').forEach(el=>{
+    el.dataset.pweye = '1';
+    const w = document.createElement('span');
+    w.style.cssText = 'position:relative;display:block;width:100%';
+    el.parentNode.insertBefore(w, el); w.appendChild(el);
+    el.style.width = '100%'; el.style.boxSizing = 'border-box'; el.style.paddingRight = '44px';
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = '👁'; b.title = 'Passwort anzeigen'; b.setAttribute('aria-label','Passwort anzeigen');
+    b.style.cssText = 'position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);font-size:18px;line-height:1;padding:8px;cursor:pointer;min-height:0;box-shadow:none';
+    b.addEventListener('click', ev=>{ ev.preventDefault(); pwToggle(el, b); });
+    w.appendChild(b);
+  });
+}
+(function(){
+  let q = false;
+  const run = ()=>{ q = false; try{ pwEnhance(); }catch(e){} };
+  const start = ()=>{ run(); new MutationObserver(()=>{ if(!q){ q = true; requestAnimationFrame(run); } }).observe(document.body, {childList:true, subtree:true}); };
+  if(document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+})();
 async function doLogin(){
   const email = document.getElementById('login-email').value.trim();
   const pw    = document.getElementById('login-pw').value;
