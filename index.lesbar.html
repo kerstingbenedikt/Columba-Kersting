@@ -5836,6 +5836,13 @@ function renderPaarung(){
     </div>`;
   }
 
+  // Virtueller Nachkomme vorab setzen, damit „Drucken“ oben schon funktioniert
+  VIRTUAL_PROBAND = S.paarungM && S.paarungF ? {
+    pigeonid: 'virtueller-nachkomme', _virtual: true,
+    name: 'Verpaarung '+ring(S.paarungM)+' × '+ring(S.paarungF),
+    gender: null, fatherid: S.paarungM.pigeonid, motherid: S.paarungF.pigeonid
+  } : null;
+
   return `
     <div class="pv-pickers" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       ${birdPicker('paarungM', S.paarungM, '♂ Vogel wählen','M')}
@@ -5843,23 +5850,15 @@ function renderPaarung(){
     </div>
     ${S.paarungM && S.paarungF ? pvSaveBar() : ''}
     ${S.paarungM && S.paarungF ? pvTopHtml(ib, ibClass) : ''}
-    ${pvSuggestHtml()}
+    ${S.paarungM && S.paarungF ? '' : pvSuggestHtml()}
     ${S.paarungM && S.paarungF ? `
-    <details class="pv-anc"><summary>👪 Gemeinsame Vorfahren (bis 4. Generation): ${sharedAnc.length?sharedAnc.length+' gefunden':'keine'}</summary>
+    <details class="pv-anc" ${PV.det.anc?'open':''} ontoggle="PV.det.anc=this.open"><summary>👪 Gemeinsame Vorfahren (bis 4. Generation): ${sharedAnc.length?sharedAnc.length+' gefunden':'keine'}</summary>
       ${sharedAnc.length?`<div class="tag-list" style="margin-top:8px">${sharedAnc.map(p=>`<div class="tag">${escH(ring(p))}${p.name?`<strong>${escH(p.name)}</strong>`:''}</div>`).join('')}</div>`:'<div style="margin-top:8px;font-size:13px;color:var(--text3)">Keine gemeinsamen Vorfahren in 4 Generationen gefunden.</div>'}
     </details>
-    <div class="section-label" style="margin-top:18px">🌳 Stammbaum des virtuellen Nachkommen (druckbar)</div>
-    ${(() => {
-      VIRTUAL_PROBAND = {
-        pigeonid: 'virtueller-nachkomme',
-        _virtual: true,
-        name: 'Verpaarung '+ring(S.paarungM)+' × '+ring(S.paarungF),
-        gender: null,
-        fatherid: S.paarungM.pigeonid,
-        motherid: S.paarungF.pigeonid
-      };
-      return renderPedigree(VIRTUAL_PROBAND.pigeonid, {embedded:true});
-    })()}
+    <details class="pv-anc" ${PV.det.ped?'open':''} ontoggle="if(PV.det.ped!==this.open){PV.det.ped=this.open; if(this.open) render();}"><summary>🌳 Vollständiger Stammbaum des virtuellen Nachkommen</summary>
+      <div style="margin-top:10px">${PV.det.ped ? renderPedigree(VIRTUAL_PROBAND.pigeonid, {embedded:true}) : ''}</div>
+    </details>
+    ${pvSuggestHtml()}
     ` : `<div class="empty-state"><div class="icon">💑</div>Wähle einen Vogel und ein Weibchen, um den Inzuchtkoeffizienten und die Erfolgs-Prognose der Nachkommen zu berechnen.</div>
     `}`;
 }
@@ -5947,10 +5946,11 @@ function renderExistingMatingCard(){
   return `<div class="card">
     <div class="card-title">🐣 Bereits verpaart — ${offspring.length} Nachkomme${offspring.length===1?'':'n'} in der Datenbank</div>
     ${summary}
-    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <details ${PV.det.kids?'open':''} ontoggle="PV.det.kids=this.open"><summary style="cursor:pointer;font-size:13px;color:var(--text2)">Nachkommen anzeigen (${offspring.length})</summary>
+    <div class="table-wrap" style="margin-top:8px"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr><th>Ring</th><th>Name</th><th>Jahr</th><th>Eigenleistung</th><th>Status</th></tr></thead>
       <tbody>${rows}</tbody>
-    </table></div>
+    </table></div></details>
   </div>`;
 }
 
@@ -20190,7 +20190,7 @@ new MutationObserver(mcardSchedule).observe(document.body, {childList:true, subt
 
 
 // ── Paarungscheck: Partnervorschläge für die gewählte Taube ──
-const PV = { goal:null, reise:false, fix:'M', open:{}, memo:null, memoKey:'' };
+const PV = { goal:null, reise:false, fix:'M', open:{}, memo:null, memoKey:'', det:{} };
 function pvSuggest(p){
   const z = zpState(), goal = PV.goal || (z.goal==='linie' ? 'ausgewogen' : z.goal);
   const sx = sex_(p), want = sx==='M' ? 'F' : 'M';
@@ -20264,8 +20264,8 @@ function pvSuggestHtml(){
     body = '<div class="loading" style="padding:20px"><div class="spinner"></div>Flugdaten werden geladen…</div>';
   } else if(M && F){
     const fx = PV.fix!=='F';
-    const dM = `<details class="pv-alt" ${fx?'open':''}><summary>${fx?'Weibchen':'Weibchen (Alternative)'} für ♂ ${escH(label_(M))}${fx?' – festgehaltener Vogel':''}</summary>${pvListHtml(M)}</details>`;
-    const dF = `<details class="pv-alt" ${fx?'':'open'}><summary>${fx?'Vögel (Alternative)':'Vögel'} für ♀ ${escH(label_(F))}${fx?'':' – festgehaltenes Weibchen'}</summary>${pvListHtml(F)}</details>`;
+    const dM = `<details class="pv-alt" ${PV.det.altM?'open':''} ontoggle="PV.det.altM=this.open"><summary>${fx?'Weibchen':'Weibchen (Alternative)'} für ♂ ${escH(label_(M))}${fx?' – festgehaltener Vogel':''}</summary>${pvListHtml(M)}</details>`;
+    const dF = `<details class="pv-alt" ${PV.det.altF?'open':''} ontoggle="PV.det.altF=this.open"><summary>${fx?'Vögel (Alternative)':'Vögel'} für ♀ ${escH(label_(F))}${fx?'':' – festgehaltenes Weibchen'}</summary>${pvListHtml(F)}</details>`;
     body = fx ? dM+dF : dF+dM;
   } else body = pvListHtml(base);
   const ctl = (M&&F) ? '' : pvControlsHtml();
@@ -20320,7 +20320,14 @@ function pvSaveBar(){
     ${zLocSel().length?`<div class="zloc-note">📍 Standortfilter aktiv: ${zLocSel().map(k=>k==='__none'?'ohne Standort':escH(k)).join(', ')} – Alternativen nur von dort <a onclick="zLocClear()" style="cursor:pointer;text-decoration:underline">alle zeigen</a></div>`:''}
     <div class="pv-sv-mid">${sc}<span class="pv-sv-t">${T?'Ziel: <b>'+escH(T.liste+' › '+T.zucht)+'</b> <a onclick="showTab(\'zuchtliste\')" style="cursor:pointer;text-decoration:underline">ändern</a>':''}</span></div>
     ${saved?`<div class="pv-sv-done">✓ In der Paarungsliste (${escH(T.zucht)})</div>`:`<button class="btn pv-sv-btn" onclick="savePairingToList('${M.pigeonid}','${F.pigeonid}')">💾 Paarung speichern</button>`}
+    <button class="btn btn-outline pv-sv-btn" onclick="pvPrint()" title="Stammbaum des virtuellen Nachkommen: Vorschau, Drucken, PDF, PNG">🖨 Stammbaum drucken</button>
   </div>`;
+}
+function pvPrint(){
+  if(!S.paarungM || !S.paarungF) return;
+  VIRTUAL_PROBAND = { pigeonid:'virtueller-nachkomme', _virtual:true, name:'Verpaarung '+ring(S.paarungM)+' × '+ring(S.paarungF),
+    gender:null, fatherid:S.paarungM.pigeonid, motherid:S.paarungF.pigeonid };
+  pedPrintOpen(VIRTUAL_PROBAND.pigeonid);
 }
 function pvTopHtml(ib, ibClass){
   const M=S.paarungM, F=S.paarungF;
@@ -20332,7 +20339,7 @@ function pvTopHtml(ib, ibClass){
   const fixBtn=(r,lbl)=>`<button type="button" class="${(PV.fix==='F'?'F':'M')===r?'on':''}" onclick="pvSetFix('${r}')">${lbl}</button>`;
   const step = `<div class="pv-fixrow"><span class="pv-ctl-l" style="margin:0">Festhalten</span><div class="pf-seg">${fixBtn('M','♂ '+escH(ring(M)))}${fixBtn('F','♀ '+escH(ring(F)))}</div></div>
     <div class="pv-step" style="margin-top:8px"><span class="pv-step-l">${fixM?'♀ Weibchen':'♂ Vogel'} wechseln</span><button type="button" class="btn btn-outline btn-sm" onclick="pvStep(-1)" title="Vorheriger Partner">◀</button><span class="pv-step-n">${i>=0?(i+1)+' / '+ok.length:'– / '+ok.length}</span><button type="button" class="btn btn-outline btn-sm" onclick="pvStep(1)" title="Nächster Partner">▶</button></div>
-    <div style="font-size:11px;color:var(--text3);margin-top:4px">Gleiche Reihenfolge und Nummern wie in der Liste „Alternative Partner“ unten.</div>`;
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">Gleiche Reihenfolge und Nummern wie in der Liste „Alternative Partner“ ganz unten.</div>`;
   const ped = pfPedMarkup({ringnumber:null,name:'Nachzucht',gender:null}, {p:M}, {p:F}, findFather(M), findMother(M), findFather(F), findMother(F), true);
   return `<div class="pv-top">
     <div>
