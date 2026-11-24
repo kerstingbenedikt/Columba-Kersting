@@ -977,7 +977,7 @@ fsApply(fsGet());
 
 <nav id="nav">
   <button data-group="tauben" class="active" onclick="showTab('tauben')"><span class="pg-ico-wrap"><svg class="pg-ico" viewBox="0 0 32 32" width="18" height="18" aria-hidden="true"><g fill="currentColor"><circle cx="23" cy="9" r="4.6"/><path d="M26.5 8.2l4.2 1.3-4.2 1.9z"/><path d="M20 11c-5 .5-9 3.500-11 8L2 24.500l8-.8c3 2.800 8 3.500 11.500 1 3-2.200 4-6 2.800-9.500z"/><path d="M13 25l-2 5 4-3z"/><path d="M17 26.500l-.5 4.500 3-3.500z"/></g><circle cx="24.200" cy="8.200" r="1" fill="#0f1a2e"/><path d="M9 20.500c4-2.500 8-2 11 1" fill="none" stroke="#0f1a2e" stroke-width="1.200" stroke-linecap="round" opacity=".6"/></svg></span> <span id="navPigeonsLabel">Tauben</span></button>
-  <button data-group="zucht" onclick="showTab('zucht')">🧬 <span>Zucht</span></button>
+  <button data-group="zucht" onclick="showTab('zucht')">🧬 <span id="navZuchtLabel">Zucht</span></button>
   <button data-group="reisen" onclick="showTab('reisen')">🏁 <span id="navRacingLabel">Reisen</span></button>
   <button data-group="add" onclick="showTab('import')">⇄ <span id="navAddLabel">Daten</span></button>
 </nav>
@@ -999,6 +999,38 @@ let LANG = localStorage.getItem('lang') || 'de';
 const I18N = {
   de: {
     nav_pigeons:'Tauben', nav_add:'Daten', nav_racing:'Flüge',
+    nav_breeding:'Zucht',
+    z_plan:'① Planen',
+    z_check:'② Prüfen',
+    z_list:'③ Paarungsliste',
+    z_dates:'④ Termine',
+    z_back_plan:'↩ Zurück zur Planung',
+    z_back_txt:'Du hast {p} aus der {v} geöffnet – dort geht es an derselben Stelle weiter.',
+    z_a_pair:'ein Paar',
+    z_toplist:'Top-Paar-Liste',
+    z_complete:'Komplettverpaarung',
+    d_import:'Import',
+    d_export:'Export',
+    d_backup:'Sicherung',
+    d_addresses:'Adressen',
+    d_lists:'Auswahllisten',
+    d_maint:'Wartung',
+    r_contests:'Wettbewerbe',
+    r_trips:'Reisen',
+    n_manual:'Manuell anlegen',
+    n_scan:'Stammbaum scannen',
+    n_scan_short:'Scan',
+    n_new:'+ Neue Taube',
+    n_scan_pigeon:'Taube scannen',
+    n_new_title:'Taube manuell anlegen',
+    n_scan_title:'Taube aus einem Stammbaum-Foto anlegen',
+    sub_assess:'Beurteilung',
+    m_list:'Liste',
+    m_stats:'Statistik',
+    loading_pigeons:'Lade Tauben…',
+    gloss_title:'📖 Begriffe kurz erklärt',
+    gloss_sub:'Erfolgs-Score, Sicherheit, Vererbungsstärke, B/S, Inzucht, Erfolgspaar',
+    menu_title:'Menü',
     sub_racing:'Flüge', sub_best:'Bestenliste', sub_breeders:'Züchter',
     trip_word:'Flug', trips_word:'Flüge', all_trips:'Alle Flüge',
     all_breeders:'Alle Züchter', breeders_word:'Züchter',
@@ -1126,6 +1158,38 @@ const I18N = {
   },
   en: {
     nav_pigeons:'Pigeons', nav_add:'Data', nav_racing:'Racing',
+    nav_breeding:'Breeding',
+    z_plan:'① Plan',
+    z_check:'② Check',
+    z_list:'③ Pairing list',
+    z_dates:'④ Schedule',
+    z_back_plan:'↩ Back to planning',
+    z_back_txt:'You opened {p} from the {v} – you will continue at the same place there.',
+    z_a_pair:'a pair',
+    z_toplist:'top pair list',
+    z_complete:'complete pairing',
+    d_import:'Import',
+    d_export:'Export',
+    d_backup:'Backup',
+    d_addresses:'Addresses',
+    d_lists:'Option lists',
+    d_maint:'Maintenance',
+    r_contests:'Competitions',
+    r_trips:'Races',
+    n_manual:'Add manually',
+    n_scan:'Scan pedigree',
+    n_scan_short:'Scan',
+    n_new:'+ New pigeon',
+    n_scan_pigeon:'Scan pigeon',
+    n_new_title:'Add a pigeon manually',
+    n_scan_title:'Create a pigeon from a pedigree photo',
+    sub_assess:'Assessment',
+    m_list:'List',
+    m_stats:'Statistics',
+    loading_pigeons:'Loading pigeons…',
+    gloss_title:'📖 Key terms explained',
+    gloss_sub:'Success score, certainty, breeding strength, C/S, inbreeding, successful pair',
+    menu_title:'Menu',
     sub_racing:'Racing', sub_best:'Leaderboard', sub_breeders:'Breeders',
     trip_word:'Race', trips_word:'Races', all_trips:'All Races',
     all_breeders:'All Breeders', breeders_word:'Breeders',
@@ -3581,7 +3645,7 @@ function renderTaubenSubnav(active, p){
     ${btn('detail',t('sub_details'),'📋',`selectPigeon('${p.pigeonid}')`)}
     ${btn('stammbaum',t('sub_pedigree'),'🌳',`showPedigree('${p.pigeonid}')`)}
     ${btn('nachkommen',t('sub_offspring'),'🐣',`showNachkommen('${p.pigeonid}')`)}
-    ${btn('beurteilung','Beurteilung','📝',`showBeurteilung('${p.pigeonid}')`)}
+    ${btn('beurteilung',t('sub_assess'),'📝',`showBeurteilung('${p.pigeonid}')`)}
     ${btn('paarung',t('sub_pairing'),'💑',`setPaarungVogel('${p.pigeonid}')`)}
     ${tog}
   </div>`;
@@ -3590,7 +3654,7 @@ function renderTaubenSubnav(active, p){
 function renderReisenSubnav(active){
   const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="showTab('${key}')">${icon} ${label}</button>`;
   return `<div class="subnav">
-    ${btn('reisen',t('sub_racing'),'🏁')}${btn('bestenliste',t('sub_best'),'🏆')}<button class="subnav-btn ${active==='contest'?'active':''}" onclick="openContest()">🥇 Wettbewerbe</button>${btn('zuechter',t('sub_breeders'),'🧑‍🌾')}
+    ${btn('reisen',t('sub_racing'),'🏁')}${btn('bestenliste',t('sub_best'),'🏆')}<button class="subnav-btn ${active==='contest'?'active':''}" onclick="openContest()">🥇 ${t('r_contests')}</button>${btn('zuechter',t('sub_breeders'),'🧑‍🌾')}
   </div>`;
 }
 // Subnav: Tauben-Übersicht (Liste / Statistik)
@@ -3598,7 +3662,7 @@ function renderTaubenOverviewNav(active){
   const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="S.taubenView='${key}';render();window.scrollTo(0,0)">${icon} ${label}</button>`;
   return `<div class="subnav">
     ${btn('liste',t('sub_liste'),'📋')}${btn('statistik',t('sub_statistik'),'📊')}
-    <button class="subnav-btn" onclick="showTab('neu')" title="Taube manuell anlegen">+ Neue Taube</button><button class="subnav-btn" onclick="showTab('scan')" title="Taube aus einem Stammbaum-Foto anlegen">📷 Scan</button>
+    <button class="subnav-btn" onclick="showTab('neu')" title="${t('n_new_title')}">${t('n_new')}</button><button class="subnav-btn" onclick="showTab('scan')" title="${t('n_scan_title')}">📷 ${t('n_scan_short')}</button>
     <span id="split-tabs-top" style="display:contents">${splitTabsHtml()}</span>
     <button class="subnav-btn split-toggle" onclick="toggleSplitMode()" title="Liste und Detail nebeneinander bzw. Liste in voller Breite">${splitOn()?t('split_on'):t('split_off')}</button>
   </div>`;
@@ -3607,14 +3671,14 @@ function renderTaubenOverviewNav(active){
 function renderAddSubnav(active){
   const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="showTab('${key}')">${icon} ${label}</button>`;
   return `<div class="subnav">
-    ${btn('import','Import','📥')}${btn('export','Export','📤')}${btn('backup','Sicherung','📦')}${btn('adressen','Adressen','📇')}${btn('listen','Auswahllisten','🗂')}${btn('wartung','Wartung','🛠')}
+    ${btn('import',t('d_import'),'📥')}${btn('export',t('d_export'),'📤')}${btn('backup',t('d_backup'),'📦')}${btn('adressen',t('d_addresses'),'📇')}${btn('listen',t('d_lists'),'🗂')}${btn('wartung',t('d_maint'),'🛠')}
   </div>`;
 }
 // Subnav: neue Taube anlegen (aus der Taubenliste heraus erreichbar)
 function renderNewSubnav(active){
   const btn=(key,label,icon)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="showTab('${key}')">${icon} ${label}</button>`;
   return `<div class="subnav"><button class="subnav-btn" onclick="showTab('tauben')">${t('back_overview')}</button>
-    ${btn('neu','Manuell anlegen','✏️')}${btn('scan','Stammbaum scannen','📷')}
+    ${btn('neu',t('n_manual'),'✏️')}${btn('scan',t('n_scan'),'📷')}
   </div>`;
 }
 
@@ -3782,8 +3846,9 @@ function render0(){
   const npl=document.getElementById('navPigeonsLabel'); if(npl) npl.textContent=t('nav_pigeons');
   const nal=document.getElementById('navAddLabel'); if(nal) nal.textContent=t('nav_add');
   const nrl=document.getElementById('navRacingLabel'); if(nrl) nrl.textContent=t('nav_racing');
+  const nzl=document.getElementById('navZuchtLabel'); if(nzl) nzl.textContent=t('nav_breeding');
   const lsw=document.getElementById('langSwitch'); if(lsw && !lsw.innerHTML) renderLangSwitch();
-  if(S.loading){ m.innerHTML='<div class="loading"><div class="spinner"></div>Lade Tauben…</div>'; return; }
+  if(S.loading){ m.innerHTML='<div class="loading"><div class="spinner"></div>'+t('loading_pigeons')+'</div>'; return; }
   if(S.tab==='tauben'){
     const prevScroll=(document.getElementById('split-list')||{}).scrollTop;
     if(splitActive()){
@@ -11925,8 +11990,8 @@ var GLOSS=[
   ['★ Erfolgspaar','Ein Elternpaar, das bereits erfolgreiche Nachkommen gebracht hat. Im Zuchtplan gibt es dafür einen Bonus.']
 ];
 function glossHtml(){
-  return '<details class="sect gloss" id="sect-gloss" data-k="gloss" data-def="0" ontoggle="sectToggle(this)"'+(sectOpen('gloss',false)?' open':'')+'><summary><span class="sect-t">📖 Begriffe kurz erklärt</span><span class="sect-s">Erfolgs-Score, Sicherheit, Vererbungsstärke, B/S, Inzucht, Erfolgspaar</span></summary><div class="sect-b"><dl class="gloss-l">'
-    +GLOSS.map(function(g){ return '<dt>'+g[0]+'</dt><dd>'+g[1]+'</dd>'; }).join('')+'</dl></div></details>';
+  return '<details class="sect gloss" id="sect-gloss" data-k="gloss" data-def="0" ontoggle="sectToggle(this)"'+(sectOpen('gloss',false)?' open':'')+'><summary><span class="sect-t">'+t('gloss_title')+'</span><span class="sect-s">'+t('gloss_sub')+'</span></summary><div class="sect-b"><dl class="gloss-l">'
+    +(LANG==='en'?GLOSS_EN:GLOSS).map(function(g){ return '<dt>'+g[0]+'</dt><dd>'+g[1]+'</dd>'; }).join('')+'</dl></div></details>';
 }
 var ZUCHT_HINT={
   zucht:['Planen','Hinweis: Tauben, die nicht im Bestand sind oder den Status „unfruchtbar“ haben, werden nicht verplant. Bewährte Paare, die so nicht mehr möglich sind, bieten „Alternativen“. Schritt 1: Alles beginnt mit dem, was sich bewährt hat (★ Bewährte Paare). Dazu lässt du dir passende Paare vorschlagen – als beste Zuordnung für den ganzen Schlag oder als Rangliste. Danach prüfen (②) und in die Paarungsliste übernehmen (③).'],
@@ -11934,16 +11999,31 @@ var ZUCHT_HINT={
   zuchttermine:['Termine','Schritt 4: Lege den Anpaarungstermin fest (für alle Paare oder einzeln). Daraus werden Eiablage, Schlupf, Beringen und Absetzen berechnet. Die tatsächlichen Termine trägst du in der großen Erfassungsmaske ein – auch am Smartphone im Schlag.'],
   zuchtliste:['Paarungsliste','Schritt 3: Dein Ergebnis. Listen und Zuchten anlegen, Status und Notizen pflegen, als JSON sichern oder wieder einlesen.']
 };
+var ZUCHT_HINT_EN={
+  zucht:['Plan','Note: pigeons that are not in stock or have the status “infertile” are not scheduled. Proven pairs that are no longer possible offer “Alternatives”. Step 1: everything starts with what has proven itself (★ Proven pairs). Then let the app suggest suitable pairs – as the best assignment for the whole loft or as a ranking. Then check them (②) and add them to the pairing list (③).'],
+  paarung:['Check','Step 2: look closely at a specific pair (pedigree, inbreeding, expected success) – or browse suitable partners for one pigeon.'],
+  zuchttermine:['Schedule','Step 4: set the pairing date (for all pairs or individually). Egg laying, hatching, ringing and weaning are calculated from it. Enter the actual dates in the large entry form – also on your smartphone in the loft.'],
+  zuchtliste:['Pairing list','Step 3: your result. Create lists and rounds, maintain status and notes, back up as JSON or import again.']
+};
+var GLOSS_EN=[
+  ['Success score (0–100)','Overall rating of a pigeon. It comes from three sources: <b>own races</b> (prize rate and share of strong races), <b>offspring</b> (how well children and grandchildren race) and <b>pedigree</b> (parents, grandparents, siblings). The more real race and offspring data there is, the less the pedigree counts. Green from 60, orange 35–59, red below.'],
+  ['Certainty (%)','How much data stands behind the score – <u>not</u> how good the pigeon is. Many races/offspring = high, only parents known = low. From 70 % well supported, 40–70 % solid estimate, below that a rough estimate.'],
+  ['Breeding strength','Pure offspring rating: how well do the children and grandchildren of this pigeon race? The pigeon’s own performance does not count here.'],
+  ['Consistency (C) / Speed (S)','C = how often a pigeon races in the prizes (prize rate). S = how often it reaches very high AS points.'],
+  ['Inbreeding','Inbreeding coefficient of the possible offspring. Green below 3 %, orange up to 6.5 %, red above.'],
+  ['Family (e.g. 5/5)','Siblings and own children of a pigeon that are already <b>tested</b> (at least 15 races). “5/5” means: all 5 tested family members were successful (at least 50 % prizes and 2 races above 90 AS). This is additional information only and does not count towards the score.'],
+  ['★ Successful pair','A parent pair that has already produced successful offspring. It receives a bonus in the breeding plan.']
+];
 function zuchtHintHtml(active){
-  var h=ZUCHT_HINT[active]; if(!h) return '';
+  var h=(LANG==='en'?ZUCHT_HINT_EN:ZUCHT_HINT)[active]; if(!h) return '';
   return '<div class="zs-hint"><b>'+h[0]+':</b> '+h[1]+'</div>';
 }
 function renderZuchtSubnav(active){
   if(active==='zuchtempf') active='zucht';
   const bk=S.zpBack;
   const b=(k,l,ic)=>`<button class="subnav-btn ${active===k?'active':''}" onclick="${k==='zucht'&&bk?'zpBackGo()':`showTab('${k}')`}">${ic} ${l}</button>`;
-  const back=bk&&active!=='zucht'?`<div class="zp-back"><button class="btn btn-sm" onclick="zpBackGo()">↩ Zurück zur Planung</button><span>Du hast ${bk.label?'<b>'+escH(bk.label)+'</b> ':'ein Paar '}aus der ${bk.view==='rang'?'Top-Paar-Liste':'Komplettverpaarung'} geöffnet – dort geht es an derselben Stelle weiter.</span></div>`:'';
-  return back+`<div class="subnav">${b('zucht','① Planen','🧬')}${b('paarung','② Prüfen','💑')}${b('zuchtliste','③ Paarungsliste','📋')}${b('zuchttermine','④ Termine','📅')}</div>${zuchtHintHtml(active)}${active==='zucht'||active==='paarung'?glossHtml():''}`;
+  const back=bk&&active!=='zucht'?`<div class="zp-back"><button class="btn btn-sm" onclick="zpBackGo()">${t('z_back_plan')}</button><span>${t('z_back_txt').replace('{p}', bk.label?'<b>'+escH(bk.label)+'</b>':t('z_a_pair')).replace('{v}', bk.view==='rang'?t('z_toplist'):t('z_complete'))}</span></div>`:'';
+  return back+`<div class="subnav">${b('zucht',t('z_plan'),'🧬')}${b('paarung',t('z_check'),'💑')}${b('zuchtliste',t('z_list'),'📋')}${b('zuchttermine',t('z_dates'),'📅')}</div>${zuchtHintHtml(active)}${active==='zucht'||active==='paarung'?glossHtml():''}`;
 }
 // „Planen“ bündelt Zuchtplan (beste Zuordnung für den ganzen Schlag) und Top-Empfehlungen (Rangliste der besten Einzelpaare)
 function planSwitch(v){
@@ -20502,10 +20582,10 @@ function pvTopHtml(ib, ibClass){
 // ══ Burger-Menü: alle Bereiche und Unterseiten auf einen Blick ══
 function menuItems(){
   return [
-   ['🐦 Tauben','tauben',[['Liste',"S.taubenView='liste';showTab('tauben')"],['Statistik',"S.taubenView='statistik';showTab('tauben')"],['+ Neue Taube',"showTab('neu')"],['Taube scannen',"showTab('scan')"]]],
-   ['🧬 Zucht','zucht',[['① Planen',"showTab('zucht')"],['② Prüfen',"showTab('paarung')"],['③ Paarungsliste',"showTab('zuchtliste')"],['④ Termine',"showTab('zuchttermine')"]]],
-   ['🏁 Flüge','reisen',[['Reisen',"showTab('reisen')"],['Bestenliste',"showTab('bestenliste')"],['Wettbewerbe',"openContest()"],['Züchter',"showTab('zuechter')"]]],
-   ['⇄ Daten','add',[['Import',"showTab('import')"],['Export',"showTab('export')"],['Sicherung',"showTab('backup')"],['Adressen',"showTab('adressen')"],['Auswahllisten',"showTab('listen')"],['Wartung',"showTab('wartung')"]]]
+   ['🐦 '+t('nav_pigeons'),'tauben',[[t('m_list'),"S.taubenView='liste';showTab('tauben')"],[t('m_stats'),"S.taubenView='statistik';showTab('tauben')"],[t('n_new'),"showTab('neu')"],[t('n_scan_pigeon'),"showTab('scan')"]]],
+   ['🧬 '+t('nav_breeding'),'zucht',[[t('z_plan'),"showTab('zucht')"],[t('z_check'),"showTab('paarung')"],[t('z_list'),"showTab('zuchtliste')"],[t('z_dates'),"showTab('zuchttermine')"]]],
+   ['🏁 '+t('nav_racing'),'reisen',[[t('r_trips'),"showTab('reisen')"],[t('sub_best'),"showTab('bestenliste')"],[t('r_contests'),"openContest()"],[t('sub_breeders'),"showTab('zuechter')"]]],
+   ['⇄ '+t('nav_add'),'add',[[t('d_import'),"showTab('import')"],[t('d_export'),"showTab('export')"],[t('d_backup'),"showTab('backup')"],[t('d_addresses'),"showTab('adressen')"],[t('d_lists'),"showTab('listen')"],[t('d_maint'),"showTab('wartung')"]]]
   ];
 }
 function menuClose(){ const d=document.getElementById('menu-drawer'); if(d) d.remove(); document.removeEventListener('keydown',menuKey,true); }
@@ -20515,7 +20595,7 @@ function menuToggle(){
   if(document.getElementById('menu-drawer')){ menuClose(); return; }
   const grp = (typeof TAB_GROUP!=='undefined' && TAB_GROUP[S.tab]) || S.tab;
   const d=document.createElement('div'); d.id='menu-drawer';
-  d.innerHTML='<div class="md-bg" onclick="menuClose()"></div><div class="md-panel"><div class="md-head"><b>Menü</b><button type="button" onclick="menuClose()" aria-label="Schließen">✕</button></div>'
+  d.innerHTML='<div class="md-bg" onclick="menuClose()"></div><div class="md-panel"><div class="md-head"><b>'+t('menu_title')+'</b><button type="button" onclick="menuClose()" aria-label="Schließen">✕</button></div>'
     +menuItems().map((g,i)=>'<div class="md-grp'+(g[1]===grp?' on':'')+'"><div class="md-gt">'+g[0]+'</div>'+g[2].map((it,j)=>'<button type="button" onclick="menuGo('+i+','+j+')">'+it[0]+'</button>').join('')+'</div>').join('')+'</div>';
   document.body.appendChild(d);
   document.addEventListener('keydown',menuKey,true);
