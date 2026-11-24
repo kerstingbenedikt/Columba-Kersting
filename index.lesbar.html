@@ -1485,9 +1485,13 @@ function renderLogin(errMsg){
         </div>
         <div>
           <label style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">Passwort</label>
-          <input id="login-pw" type="password" placeholder="••••••••" autocomplete="current-password"
-            style="width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;outline:none"
-            onkeydown="if(event.key==='Enter')doLogin()">
+          <div style="position:relative">
+            <input id="login-pw" type="password" placeholder="••••••••" autocomplete="current-password"
+              style="width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 46px 10px 12px;color:var(--text);font-size:14px;outline:none"
+              onkeydown="if(event.key==='Enter')doLogin()">
+            <button type="button" id="login-pw-eye" onclick="pwToggle('login-pw',this)" title="Passwort anzeigen" aria-label="Passwort anzeigen"
+              style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);font-size:18px;line-height:1;padding:8px;cursor:pointer">👁</button>
+          </div>
         </div>
         <button onclick="doLogin()"
           style="background:var(--green);color:#000;font-weight:700;font-size:15px;border:none;border-radius:10px;padding:12px;cursor:pointer;margin-top:4px;transition:opacity .2s"
@@ -1580,6 +1584,14 @@ function handleAuthHash(){
   return false;
 }
 
+// Passwort im Klartext ein-/ausblenden (Auge-Symbol im Passwortfeld)
+function pwToggle(id, btn){
+  const el = document.getElementById(id); if(!el) return;
+  const show = el.type==='password';
+  el.type = show ? 'text' : 'password';
+  if(btn){ btn.textContent = show ? '🙈' : '👁'; btn.title = show ? 'Passwort verbergen' : 'Passwort anzeigen'; btn.setAttribute('aria-label', btn.title); }
+  el.focus();
+}
 async function doLogin(){
   const email = document.getElementById('login-email').value.trim();
   const pw    = document.getElementById('login-pw').value;
