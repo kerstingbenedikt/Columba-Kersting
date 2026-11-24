@@ -11498,14 +11498,29 @@ function printMatingsList(){
   const esc = s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const today = new Date().toLocaleDateString('de-DE');
   const title=(ext?esc(mlCurListe())+(st.zucht&&st.zucht!=='*'?' › '+esc(st.zucht):''):'Paarungsliste');
-  const tr = rows.map(r=>`<tr>
-    ${ext?`<td>${esc(mlZuchtOf(r))}</td>`:''}
+  // Eltern einer Taube zweizeilig (♂ oben, ♀ unten) – nutzt den freien Platz statt Zucht/Status
+  const par = id=>{
+    const p=findById(id); if(!p) return '<span class="sub">—</span>';
+    const line=(q,sx)=>q?`<div class="par">${sx} ${esc(ring(q))}${q.name?' <span class="sub">'+esc(q.name)+'</span>':''}</div>`:`<div class="par sub">${sx} —</div>`;
+    return line(findFather(p),'♂')+line(findMother(p),'♀');
+  };
+  // Mehrere Zuchten in der Auswahl: Zwischenüberschrift statt eigener Spalte
+  const multiZ = new Set(rows.map(r=>mlZuchtOf(r))).size>1;
+  const cols = 6 + (ext?1:0);
+  let lastZ = null;
+  const tr = rows.map(r=>{
+    const z=mlZuchtOf(r);
+    const head = (multiZ && z!==lastZ) ? `<tr class="zh"><td colspan="${cols}">${esc(z)}</td></tr>` : '';
+    lastZ = z;
+    return head+`<tr>
     <td>${esc(r.father_ring)}${r.father_name?'<br><span class="sub">'+esc(r.father_name)+'</span>':''}</td>
+    <td>${par(r.fatherid)}</td>
     <td>${esc(r.mother_ring)}${r.mother_name?'<br><span class="sub">'+esc(r.mother_name)+'</span>':''}</td>
+    <td>${par(r.motherid)}</td>
     <td style="text-align:center">${r.inzucht!=null?Number(r.inzucht).toFixed(2)+' %':'—'}</td>
     <td style="text-align:center;font-weight:700">${r.score_combined??'—'}</td>
-    ${ext?`<td>${esc(tmEff(r))}</td><td>${esc(r.note||'')}</td>`:''}
-  </tr>`).join('');
+    ${ext?`<td>${esc(r.note||'')}</td>`:''}
+  </tr>`; }).join('');
   const html=`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
 <title>Paarungsliste ${today}</title>
 <style>
@@ -11518,14 +11533,17 @@ function printMatingsList(){
   th{background:#222;color:#fff;padding:2.5mm 3mm;text-align:left;font-size:8.5pt}
   td{padding:2mm 3mm;border-bottom:.2mm solid #e0e0e0;vertical-align:top}
   .sub{color:#777;font-size:7.5pt}
+  .par{font-size:8pt;white-space:nowrap;line-height:1.35}
+  tbody tr{break-inside:avoid}
   tr:nth-child(even) td{background:#f7f7f7}
+  tr.zh td{background:#e8e8e8!important;font-weight:700;padding:1.5mm 3mm}
   .footer{margin-top:4mm;font-size:7.5pt;color:#aaa;text-align:right}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
 <h1>📋 ${title}</h1>
 <div class="meta">${today} &nbsp;·&nbsp; ${rows.length} Paarungen &nbsp;·&nbsp; Score = Erfolgs-Score (Ø aus Vater und Mutter)</div>
 <table>
-  <thead><tr>${ext?'<th>Zucht</th>':''}<th>Vater</th><th>Mutter</th><th>Inzucht</th><th>Score Ø</th>${ext?'<th>Status</th><th>Notiz</th>':''}</tr></thead>
+  <thead><tr><th>Vater</th><th>Eltern des Vaters</th><th>Mutter</th><th>Eltern der Mutter</th><th>Inzucht</th><th>Score Ø</th>${ext?'<th>Notiz</th>':''}</tr></thead>
   <tbody>${tr}</tbody>
 </table>
 <div class="footer">PIGMAN PigeonManager · ${today}</div>
