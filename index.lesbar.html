@@ -5344,7 +5344,8 @@ function pedIsStandalone(){ return (window.matchMedia && matchMedia('(display-mo
 async function pedSaveBlob(blob, filename){
   const touch = pedIsTouch() || pedIsStandalone();
   const file = (typeof File==='function') ? new File([blob], filename, {type: blob.type}) : null;
-  const canShare = !!(file && navigator.share && navigator.canShare && navigator.canShare({files:[file]}));
+  let canShare = false;
+  try{ canShare = !!(file && navigator.share && navigator.canShare && navigator.canShare({files:[file]})); }catch(e){ canShare = false; }
   if(touch){
     // Der Teilen-Dialog braucht eine frische Berührung; nach der langen Erzeugung ist sie meist abgelaufen.
     // Darum: nur direkt teilen, wenn die Berührung noch aktiv ist – sonst Overlay mit eigenem Button.
@@ -11432,7 +11433,9 @@ function tmClose(){ const w=document.getElementById('tm-mask'); if(w) w.remove()
 // Auf iPhone/iPad (v. a. als App vom Home-Bildschirm) wird ein einfacher <a download> ignoriert –
 // deshalb über pedSaveBlob: Teilen-Dialog bzw. Speichern-Fenster auf Touch-Geräten, Download am PC.
 function mlDownload(name,text,mime){
-  const blob=new Blob([text],{type:mime});
+  // Nur den reinen Typ verwenden („text/csv“ statt „text/csv;charset=utf-8“): iOS lehnt Dateien mit
+  // Zusatzparametern im Teilen-Dialog ab. Die UTF-8-Kennung (BOM) steckt ohnehin im Text.
+  const blob=new Blob([text],{type:String(mime||'').split(';')[0].trim()||'application/octet-stream'});
   try{ return pedSaveBlob(blob, name); }
   catch(e){
     const url=URL.createObjectURL(blob);
