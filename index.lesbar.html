@@ -9288,7 +9288,10 @@ async function pedPrintBuild(){
     PP.built = built;
     const fr = document.getElementById('pp-frame');
     fr.onload = ()=>{ pedPrintFit(); setTimeout(pedPrintFit, 200); };
-    fr.srcdoc = built.html;
+    // iOS vergrößert kleine Schrift in Iframes automatisch („Text-Autosizing“) – dann passt der Text
+    // nicht mehr in die Kästchen und die Vorschau weicht vom PDF ab. Für die Vorschau abschalten.
+    const noAutosize = '<style>html,body,*{-webkit-text-size-adjust:none!important;text-size-adjust:none!important}</style>';
+    fr.srcdoc = /<head[^>]*>/i.test(built.html) ? built.html.replace(/<head[^>]*>/i, m=>m+noAutosize) : noAutosize+built.html;
     if(st) st.textContent = 'Seitenformat: A4 '+(built.pageWmm>built.pageHmm?'quer':'hoch')+' · scrollen zum Prüfen · Kästchen anklicken = farbig hervorheben';
   }catch(e){ if(st) st.textContent='Fehler: '+e.message; }
 }
