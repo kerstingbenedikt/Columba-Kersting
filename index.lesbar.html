@@ -4663,7 +4663,7 @@ async function buildPedigreeTreeData(pid, gens){
   await loadPigeonTripsBatch(travelIds);
 
   // Züchterdaten für die Kopfzeile (bereits über triggerPrint geladen).
-  const breederProf = BREEDER_PROFILE || {};
+  const breederProf = pedHeaderProfile();
 
   const rows   = Math.pow(2, gens-1);   // 8 (4gen) oder 16 (5gen)
   // Ab 5 Generationen reicht Hochformat nicht mehr aus (Spalten würden zu schmal für
@@ -8787,11 +8787,141 @@ async function removeBreederLogo(){
   try{ await upsertBreederProfile({logo:null}); render(); }
   catch(e){ alert('Entfernen fehlgeschlagen: '+e.message); }
 }
+// ── Abweichende Kopfzeile (aus Adressen oder manuell) ──────────────────────
+// Der Standard bleibt BREEDER_PROFILE (Supabase, geräteübergreifend). Eine abweichende
+// Kopfzeile gilt nur auf diesem Gerät (localStorage), bis wieder „Standard“ gewählt wird.
+// Erfolge werden nur beim Standard mitgedruckt (sie gehören zum eigenen Schlag).
+const PH_KEY = 'pigman.printHeader';
+let PRINT_HEADER = (()=>{ try{ const o=JSON.parse(localStorage.getItem(PH_KEY)||'null'); if(o && (o.mode==='adr'||o.mode==='manual') && o.data) return o; }catch(e){} return {mode:'standard', data:null, logo:false}; })();
+function phSave(){ try{ localStorage.setItem(PH_KEY, JSON.stringify(PRINT_HEADER)); }catch(e){} }
+function phActive(){ return PRINT_HEADER.mode!=='standard' && PRINT_HEADER.data; }
+function pedHeaderProfile(){
+  if(!phActive()) return BREEDER_PROFILE || {};
+  const d = PRINT_HEADER.data;
+  return { name:d.name||'', verein:d.verein||'', strasse:d.strasse||'', ort:d.ort||'', telefon:d.telefon||'',
+           logo: PRINT_HEADER.logo ? ((BREEDER_PROFILE||{}).logo||null) : null };
+}
+// Arbeitsstand des Formulars (Reiter + Eingaben), damit Umschalten nichts verliert
+let PHX = null;
+function phInit(){
+  if(PHX) return;
+  const d = PRINT_HEADER.data || {};
+  PHX = { tab: PRINT_HEADER.mode, q:'', contactId: d.contactId||null, logo: !!PRINT_HEADER.logo,
+          f:{ name:d.name||'', verein:d.verein||'', strasse:d.strasse||'', ort:d.ort||'', telefon:d.telefon||'' } };
+}
+async function phTab(t){
+  phInit();
+  if(t!==PHX.tab && t!=='standard'){
+    // Felder der aktiven abweichenden Kopfzeile behalten, sonst leer beginnen
+    const d = (PRINT_HEADER.mode===t && PRINT_HEADER.data) || {};
+    PHX.f = { name:d.name||'', verein:d.verein||'', strasse:d.strasse||'', ort:d.ort||'', telefon:d.telefon||'' };
+    PHX.q = t==='adr' ? (d.name||'') : ''; PHX.contactId = d.contactId||null;
+  }
+  PHX.tab = t;
+  if(t==='adr' && !ADR.loaded){ render(); await adrLoad(); }
+  render();
+}
+function phField(k,v){ phInit(); PHX.f[k]=v; }
+function phContactFields(a){
+  const ort = [a.zipcode, a.city].filter(Boolean).join(' ');
+  const strasse = [a.street, a.country && !/^(d|de|deu|deutschland)$/i.test(String(a.country).trim()) ? a.country : ''].filter(Boolean).join(', ');
+  return { name: [a.titel, a.name, a.nameaddon].filter(Boolean).join(' ').trim(), verein:'', strasse, ort,
+           telefon: a.phonemobile || a.phoneprivate || a.phoneoffice || '' };
+}
+function phPickContact(val){
+  phInit(); PHX.q = val;
+  const v = String(val||'').trim(); if(!v) return;
+  const a = ADR.rows.find(x=>x.id===v) || ADR.rows.find(x=>x.name===v) || adrFind(v);
+  if(!a) return;
+  PHX.contactId = a.id; PHX.q = a.name;
+  PHX.f = phContactFields(a);
+  render();
+}
+function phApply(){
+  phInit();
+  const f = PHX.f;
+  if(!(f.name||'').trim()){ alert('Bitte mindestens einen Namen für die Kopfzeile angeben.'); return; }
+  PRINT_HEADER = { mode: PHX.tab==='adr'?'adr':'manual', logo: !!PHX.logo,
+                   data: { name:f.name.trim(), verein:(f.verein||'').trim(), strasse:(f.strasse||'').trim(), ort:(f.ort||'').trim(), telefon:(f.telefon||'').trim(), contactId: PHX.tab==='adr'?PHX.contactId:null } };
+  phSave(); render();
+  if(typeof pedPrintPreview==='function' && document.getElementById('pp-overlay')) pedPrintPreview();
+}
+function phReset(){
+  PRINT_HEADER = {mode:'standard', data:null, logo:false}; phSave();
+  if(PHX) PHX.tab='standard';
+  render();
+  if(document.getElementById('pp-overlay')){ pedPrintHeaderBar(); pedPrintPreview(); }
+}
+async function phSaveAsStandard(){
+  phInit();
+  const f = PHX.f;
+  if(!confirm(`„${f.name||'(ohne Name)'}“ als neuen Standard speichern?\n\nDie bisherigen Standard-Züchterdaten werden überschrieben (Logo und Erfolge bleiben).`)) return;
+  try{ await upsertBreederProfile({ name:f.name, verein:f.verein, strasse:f.strasse, ort:f.ort, telefon:f.telefon }); }
+  catch(e){ alert('Speichern fehlgeschlagen: '+e.message); return; }
+  phReset();
+}
+// Hinweiszeile im Druckdialog, wenn eine abweichende Kopfzeile aktiv ist
+function pedPrintHeaderBar(){
+  const el = document.getElementById('pp-hdr'); if(!el) return;
+  if(!phActive()){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='flex';
+  el.innerHTML = `<span>🧑‍🌾 Kopfzeile: <b>${escH(PRINT_HEADER.data.name)}</b> ${PRINT_HEADER.mode==='adr'?'(aus Adressen)':'(manuell)'} – nicht der Standard</span>
+    <button class="btn btn-outline btn-sm" onclick="phReset()">↩ Standard verwenden</button>`;
+}
+function renderPrintHeaderChooser(){
+  phInit();
+  const tab = PHX.tab;
+  const seg = [['standard','⭐ Standard'],['adr','📇 Aus Adressen'],['manual','✍️ Manuell']].map(([v,l])=>
+    `<button type="button" class="btn btn-sm ${tab===v?'':'btn-outline'}" onclick="phTab('${v}')">${l}</button>`).join('');
+  const active = phActive()
+    ? `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;background:rgba(224,160,80,.12);border:1px solid rgba(224,160,80,.35);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:10px">
+         <span style="flex:1;min-width:180px">Beim Drucken wird zurzeit <b>${escH(PRINT_HEADER.data.name)}</b> verwendet ${PRINT_HEADER.mode==='adr'?'(aus Adressen)':'(manuell)'} – nur auf diesem Gerät.</span>
+         <button class="btn btn-outline btn-sm" onclick="phReset()">↩ Zurück zum Standard</button></div>`
+    : `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Beim Drucken wird der <b>Standard</b> verwendet.</div>`;
+  let body = '';
+  if(tab!=='standard'){
+    const f = PHX.f;
+    const inp = (k,l) => `<div class="form-field"><label>${l}</label><input value="${escH(f[k]||'')}" oninput="phField('${k}',this.value)"></div>`;
+    const search = tab==='adr' ? (ADR.loaded
+      ? (ADR.rows.length
+        ? `<div class="form-field" style="margin-bottom:10px"><label>Adresse suchen</label>
+             <input list="ph-adr-list" value="${escH(PHX.q||'')}" placeholder="Name eingeben…" autocomplete="off" onchange="phPickContact(this.value)">
+             <datalist id="ph-adr-list">${ADR.rows.map(a=>`<option value="${escH(a.name)}">${escH([a.zipcode,a.city].filter(Boolean).join(' '))}</option>`).join('')}</datalist>
+             <div style="font-size:11px;color:var(--text3);margin-top:4px">Felder werden aus der Adresse übernommen und lassen sich danach noch anpassen (z. B. Verein).</div></div>`
+        : `<div style="font-size:13px;color:var(--text3);margin-bottom:10px">Noch keine Adressen vorhanden – bitte „Manuell“ nutzen.</div>`)
+      : `<div style="font-size:13px;color:var(--text3);margin-bottom:10px">Adressen werden geladen…</div>`) : '';
+    const hasLogo = !!(BREEDER_PROFILE||{}).logo;
+    body = `${search}
+      <div class="bp-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${inp('name','Name')}${inp('verein','Verein / Verband')}${inp('strasse','Straße')}${inp('ort','PLZ / Ort')}${inp('telefon','Telefon')}
+      </div>
+      ${hasLogo?`<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:10px;cursor:pointer"><input type="checkbox" ${PHX.logo?'checked':''} onchange="PHX.logo=this.checked"> Eigenes Logo trotzdem mitdrucken</label>`:''}
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">Die Züchtererfolge werden bei abweichender Kopfzeile nicht mitgedruckt.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
+        <button class="btn btn-sm" onclick="phApply()">✅ Für Drucke verwenden</button>
+        <button class="btn btn-outline btn-sm" onclick="phSaveAsStandard()">⭐ Als Standard speichern</button>
+      </div>`;
+  }
+  return `<div style="margin-bottom:12px">
+    <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Kopfzeile beim Drucken</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${seg}</div>
+    ${active}${body}
+  </div>`;
+}
 function renderBreederProfileForm(){
   const p = BREEDER_PROFILE || {};
+  phInit();
+  if(PHX.tab!=='standard') return `<div class="card" style="margin-bottom:14px">
+    <div class="card-title">🧑‍🌾 Züchterdaten für die Druck-Kopfzeile</div>
+    ${renderPrintHeaderChooser()}
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-outline btn-sm" onclick="S.breederProfileEditing=false;S.erfolgeEditingId=null;render()">Schließen</button>
+    </div>
+  </div>`;
   return `<div class="card" style="margin-bottom:14px">
     <div class="card-title">🧑‍🌾 Züchterdaten für die Druck-Kopfzeile</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Name/Adresse für die Kopfzeile des Abstammungsdrucks (geräteübergreifend gespeichert). Weiter unten verwaltest du die Züchtererfolge und legst fest, welche davon standardmäßig mitgedruckt werden.</div>
+    ${renderPrintHeaderChooser()}
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Standard-Name/-Adresse für die Kopfzeile des Abstammungsdrucks (geräteübergreifend gespeichert). Weiter unten verwaltest du die Züchtererfolge und legst fest, welche davon standardmäßig mitgedruckt werden.</div>
     <div class="bp-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="form-field"><label>Name</label><input id="bp_name" value="${escH(p.name||'')}"></div>
       <div class="form-field"><label>Verein / Verband</label><input id="bp_verein" value="${escH(p.verein||'')}"></div>
@@ -8937,6 +9067,7 @@ function renderErfolgeSection(){
 // erfolgen ausschließlich über "Züchterdaten" (renderErfolgeSection).
 async function loadPrintErfolgeText(){
   if(!BREEDER_PROFILE_LOADED) await loadBreederProfile();
+  if(phActive()) return '';
   await loadBreedersdata();
   const ids = new Set(getDefaultErfolgeIds());
   const chosen = (BREEDERSDATA_CACHE||[]).filter(r=>ids.has(r.breederdataid));
@@ -8981,6 +9112,7 @@ function pedPrintOpen(pid){
         <button class="btn btn-outline btn-sm" onclick="pedPrintClose()">✕<span class="pp-lbl"> Schließen</span></button>
       </div>
     </div>
+    <div id="pp-hdr" style="display:none;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:6px 14px;border-bottom:1px solid var(--border);font-size:12px;background:rgba(224,160,80,.12)"></div>
     <div id="pp-opts" style="display:${window.innerWidth<700?'none':'flex'};flex-wrap:wrap;gap:8px 16px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--border)">
       ${grp('Ansicht', seg('view',[['stammbaum','Stammbaum'],['foto','Fotos']]))}
       ${grp('Generationen', seg('gens',[[3,'3'],[4,'4'],[5,'5']]))}
@@ -9000,6 +9132,7 @@ function pedPrintOpen(pid){
     <iframe id="pp-frame" style="flex:1;width:100%;min-width:0;max-width:100vw;border:0;background:#cfcfcf"></iframe>`;
   document.body.appendChild(o);
   pedPrintSwatches();
+  pedPrintHeaderBar();
   const _pp = PP;
   pedPrintSet('color', PP.color);
   pedLogoPalette((typeof BREEDER_PROFILE!=='undefined' && BREEDER_PROFILE) ? BREEDER_PROFILE.logo : null).then(pal=>{
