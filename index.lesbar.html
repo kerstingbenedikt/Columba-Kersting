@@ -9091,10 +9091,46 @@ async function triggerPdfExport(pid, gens, withPhoto){
 // ── EIN gemeinsamer Druck-/Export-Dialog für alle Stammbaum-Varianten ──────────
 // Stil (Fächer / Familie), Generationen, Foto, Reisedaten · Vorschau scrollbar · Drucken, PDF, PNG.
 let PP = null;
-function pedPrintOpen(pid){
+// Eigene Standard-Druckoptionen: in app_config (Schlüssel print_defaults) für alle Geräte,
+// fehlt die Tabelle, nur lokal im Browser (cfgGet/cfgSet regeln das).
+const PP_DEF_KEY = 'print_defaults';
+function pedPrintDefaults(){
+  const d = cfgGet(PP_DEF_KEY, null);
+  return (d && typeof d==='object') ? d : null;
+}
+async function pedPrintSaveDefaults(){
+  if(!PP) return;
+  const photo = !!document.getElementById('ped-print-photo')?.checked;
+  const items = {}; Object.keys(PP.items).forEach(k=>{ items[k] = {on:!!PP.items[k].on, c:PP.items[k].c}; });
+  const def = { view:PP.view, gens:PP.view==='foto' ? (PP.gensPrev||4) : PP.gens, orient:PP.orient, orientManual:!!PP.orientManual,
+                color:PP.color, frame:PP.frame, photo, items, saved:new Date().toISOString() };
+  const st = document.getElementById('pp-status');
+  try{
+    const synced = await cfgSet(PP_DEF_KEY, def);
+    if(st) st.textContent = synced
+      ? '⭐ Als Standard gespeichert – gilt ab jetzt auf allen Geräten.'
+      : '⭐ Als Standard gespeichert – vorerst nur auf diesem Gerät (Tabelle app_config fehlt in Supabase, siehe Daten → Auswahllisten).';
+  }catch(e){ if(st) st.textContent = 'Speichern fehlgeschlagen: '+e.message; }
+}
+async function pedPrintResetDefaults(){
+  if(!confirm('Eigene Standard-Druckoptionen löschen und wieder die Werkseinstellungen verwenden?')) return;
+  try{ await cfgSet(PP_DEF_KEY, null); }catch(e){}
+  try{ localStorage.removeItem(CFG_LS+PP_DEF_KEY); }catch(e){}
+  if(PP){ const pid = PP.pid; await pedPrintOpen(pid); }
+}
+async function pedPrintOpen(pid){
   pedPrintClose();
+  if(!CFG.loaded){ try{ await withTimeout(cfgLoad(), 4000); }catch(e){} }
   PP = { pid, gens:4, orient:'hoch', orientManual:false, color:'standard', frame:'neutral', timer:null, built:null,
          view:'stammbaum', hl:pedPrintHlLoad(pid), palette: PED_PAL_ALL(), items:{name:{on:true,c:8}, color:{on:true,c:7}, travel:{on:true,c:6}, breeder:{on:true,c:9}, line:{on:true,c:11}, info:{on:true,c:5}} };
+  const D = pedPrintDefaults();
+  if(D){
+    ['color','frame','orient'].forEach(k=>{ if(D[k]) PP[k]=D[k]; });
+    if([3,4,5].includes(Number(D.gens))) PP.gens = Number(D.gens);
+    PP.orientManual = !!D.orientManual;
+    if(D.items) Object.keys(PP.items).forEach(k=>{ const it=D.items[k]; if(it){ PP.items[k].on = !!it.on; if(Number.isInteger(it.c)) PP.items[k].c = it.c; } });
+  }
+  const photoDef = !(D && D.photo===false);
   const o = document.createElement('div');
   o.id = 'pp-overlay';
   o.style.cssText = 'position:fixed;inset:0;z-index:700;background:var(--bg);display:flex;flex-direction:column';
@@ -9119,7 +9155,11 @@ function pedPrintOpen(pid){
       ${grp('Format', seg('orient',[['hoch','A4 hoch'],['quer','A4 quer']]))}
       ${grp('Gestaltung', seg('color',[['standard','1 · Standard'],['sw','2 · S/W'],['marine','3 · Marine'],['schiefer','4 · Schiefer'],['creme','5 · Creme']]))}
       ${grp('Rahmen', seg('frame',[['neutral','Neutral'],['geschlecht','Geschlecht']]))}
-      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="ped-print-photo" checked onchange="pedPrintPreview()"> ${t('with_photo')}</label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="checkbox" id="ped-print-photo" ${photoDef?'checked':''} onchange="pedPrintPreview()"> ${t('with_photo')}</label>
+      <div style="display:flex;gap:6px;margin-left:auto">
+        <button type="button" class="btn btn-outline btn-sm" onclick="pedPrintSaveDefaults()" title="Aktuelle Einstellungen (Ansicht, Generationen, Format, Gestaltung, Rahmen, Foto, Mit andrucken + Farben) als deinen Standard für alle Geräte speichern">⭐ Als Standard speichern</button>
+        ${D?`<button type="button" class="btn btn-outline btn-sm" onclick="pedPrintResetDefaults()" title="Eigenen Standard löschen">↺ Werkseinstellung</button>`:''}
+      </div>
     </div>
     <div id="pp-items" style="display:${window.innerWidth<700?'none':'flex'};flex-wrap:wrap;gap:6px 8px;align-items:center;padding:6px 14px;border-bottom:1px solid var(--border)">
       <span style="font-size:12px;color:var(--text3);margin-right:2px">Mit andrucken<span class="pp-dotinfo"> · Punkt = Farbe</span>:</span>
@@ -9138,7 +9178,8 @@ function pedPrintOpen(pid){
   pedLogoPalette((typeof BREEDER_PROFILE!=='undefined' && BREEDER_PROFILE) ? BREEDER_PROFILE.logo : null).then(pal=>{
     if(PP!==_pp) return; PP.palette = pal.concat(PED_PAL_EXTRA); pedPrintSwatches(); pedPrintPreview();
   });
-  pedPrintSet('gens', PP.gens);
+  if(D && D.view==='foto') pedPrintSet('view','foto');
+  else pedPrintSet('gens', PP.gens);
 }
 // ── Einzelne Kästchen farbig hervorheben (Klick in der Vorschau) ──
 function pedPrintHlLoad(pid){ try{ return JSON.parse(localStorage.getItem('pigman_pphl_'+pid)||'{}')||{}; }catch(e){ return {}; } }
