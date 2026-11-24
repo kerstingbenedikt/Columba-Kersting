@@ -5382,7 +5382,8 @@ function pedShowSaveOverlay(blob, filename, file, canShare){
   o.id = 'ped-save-overlay'; o.dataset.url = url;
   o.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;padding:14px;overflow:auto';
   const bs = 'display:block;width:100%;max-width:340px;text-align:center;margin:6px 0;padding:12px 14px;font-size:15px;box-sizing:border-box;text-decoration:none';
-  o.innerHTML = '<div style="color:#fff;font-size:15px;margin:8px 0 2px;text-align:center">'+(isImg?'Bild':'PDF')+' ist fertig</div>'
+  const kind = isImg ? 'Bild' : blob.type==='application/pdf' ? 'PDF' : /json/.test(blob.type) ? 'JSON-Datei' : /csv/.test(blob.type) ? 'CSV-Datei' : 'Datei';
+  o.innerHTML = '<div style="color:#fff;font-size:15px;margin:8px 0 2px;text-align:center">'+kind+' ist fertig</div>'
     + '<div style="color:#bbb;font-size:12px;margin-bottom:10px;text-align:center;word-break:break-all">'+escH(filename)+'</div>'
     + (canShare ? '<button class="btn" style="'+bs+'" onclick="pedShareSaved()">📤 Teilen / Speichern / Drucken</button>' : '')
     + '<a class="btn '+(canShare?'btn-outline':'')+'" style="'+bs+'" href="'+url+'" download="'+escH(filename)+'">⬇ Herunterladen</a>'
@@ -11428,10 +11429,16 @@ function tmMask(id,keep){
 function tmClose(){ const w=document.getElementById('tm-mask'); if(w) w.remove(); document.body.style.overflow=''; TM.id=null; }
 
 // ── Export / Import (JSON) ──
+// Auf iPhone/iPad (v. a. als App vom Home-Bildschirm) wird ein einfacher <a download> ignoriert –
+// deshalb über pedSaveBlob: Teilen-Dialog bzw. Speichern-Fenster auf Touch-Geräten, Download am PC.
 function mlDownload(name,text,mime){
-  const url=URL.createObjectURL(new Blob([text],{type:mime}));
-  const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  const blob=new Blob([text],{type:mime});
+  try{ return pedSaveBlob(blob, name); }
+  catch(e){
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }
 }
 function mlExportJson(all){
   const L=mlCurListe(); const names = all ? mlLists() : (L?[L]:[]);
