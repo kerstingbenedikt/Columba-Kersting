@@ -937,6 +937,8 @@ body.bw-lock{overflow:hidden}
   .subnav-btn{padding:6px 10px;font-size:12.5px;min-height:32px;gap:4px}
   .subnav-sep{display:none}
   .subnav-lbl{flex-basis:100%;margin:2px 0 0 2px}
+  .subnav.pig-subnav{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .subnav.pig-subnav .subnav-btn{flex:none;white-space:nowrap}
   .pv-pickers{grid-template-columns:1fr !important}
   table.mcard td.mc-idx{display:none}
   table.mcard td.mc-full{display:block}
@@ -1049,6 +1051,7 @@ const I18N = {
     legend_click:'Klick → Stammbaum wechseln', pedigree_not_found:'Taube nicht gefunden.',
     gens:'Gen.',
     sub_details:'Details', sub_pedigree:'Stammbaum', sub_offspring:'Nachkommen', sub_pairing:'Paarungscheck',
+    dt_stamm:'Stammdaten', dt_flug:'Reiseleistung', dt_score:'Erfolgs-Score', dt_web:'Website', dt_auc:'Auktion',
     back_overview:'← Übersicht',
     fld_ring:'Ringnummer', fld_ring_old:'Alte Ringnr.', fld_name:'Name', fld_year:'Jahrgang',
     fld_gender:'Geschlecht', gender_cock:'Vogel', gender_hen:'Weibchen', gender_choose:'— wählen —',
@@ -1208,6 +1211,7 @@ const I18N = {
     legend_click:'Click → switch pedigree', pedigree_not_found:'Pigeon not found.',
     gens:'gen.',
     sub_details:'Details', sub_pedigree:'Pedigree', sub_offspring:'Offspring', sub_pairing:'Pairing Check',
+    dt_stamm:'Master data', dt_flug:'Race performance', dt_score:'Success score', dt_web:'Website', dt_auc:'Auction',
     back_overview:'← Overview',
     fld_ring:'Ring Number', fld_ring_old:'Old Ring No.', fld_name:'Name', fld_year:'Year',
     fld_gender:'Gender', gender_cock:'Cock', gender_hen:'Hen', gender_choose:'— select —',
@@ -5763,14 +5767,38 @@ function renderTaubenSubnav(active, p){
   const back = `<button class="subnav-btn" onclick="goBackFromPigeon()">${backLabel()}</button>`;
   if(!p) return `<div class="subnav">${back}${tog}</div>`;
   const btn=(key,label,icon,fn)=>`<button class="subnav-btn ${active===key?'active':''}" onclick="${fn}">${icon} ${label}</button>`;
-  return `<div class="subnav">${back}
-    ${btn('detail',t('sub_details'),'📋',`selectPigeon('${p.pigeonid}')`)}
-    ${btn('stammbaum',t('sub_pedigree'),'🌳',`showPedigree('${p.pigeonid}')`)}
-    ${btn('nachkommen',t('sub_offspring'),'🐣',`showNachkommen('${p.pigeonid}')`)}
-    ${btn('beurteilung',t('sub_assess'),'📝',`showBeurteilung('${p.pigeonid}')`)}
-    ${btn('paarung',t('sub_pairing'),'💑',`setPaarungVogel('${p.pigeonid}')`)}
+  // Die Bereiche der Detailansicht (Stammdaten, Reiseleistung, …) stehen direkt in dieser Leiste –
+  // keine zweite Reiterzeile mehr in der Detailansicht.
+  const pid = p.pigeonid;
+  const dk = active==='detail' ? (S._dtabPid===pid ? (S.dtab||'stamm') : 'stamm') : '';
+  const dbtn=(k,icon,label)=>`<button class="subnav-btn ${dk===k?'active':''}" data-dk="${k}" onclick="openDetailTab('${pid}','${k}')">${icon} ${label}</button>`;
+  setTimeout(pigSubnavCenter, 0);
+  return `<div class="subnav pig-subnav">${back}
+    ${dbtn('stamm','📋',t('dt_stamm'))}
+    ${btn('stammbaum',t('sub_pedigree'),'🌳',`showPedigree('${pid}')`)}
+    ${dbtn('flug','🏁',t('dt_flug'))}
+    ${dbtn('score','🧬',t('dt_score'))}
+    ${btn('nachkommen',t('sub_offspring'),'🐣',`showNachkommen('${pid}')`)}
+    ${btn('beurteilung',t('sub_assess'),'📝',`showBeurteilung('${pid}')`)}
+    ${btn('paarung',t('sub_pairing'),'💑',`setPaarungVogel('${pid}')`)}
+    ${dbtn('web','🌐',t('dt_web'))}
+    ${dbtn('auc','🕊',t('dt_auc'))}
     ${tog}
   </div>`;
+}
+// Bereich der Detailansicht öffnen – von überall aus der Tauben-Leiste
+function openDetailTab(id, k){
+  const root=document.getElementById('edit-root');
+  if(root && root.dataset.pid===id && document.getElementById('dwrap')){ setDtab(k); return; }
+  S._dtabPid=id; S.dtab=k;
+  selectPigeon(id);
+  if(k==='auc') setDtab('auc');   // Auktions-Editor starten
+}
+// Auf dem Smartphone ist die Leiste waagerecht wischbar – den aktiven Reiter sichtbar halten
+function pigSubnavCenter(){
+  const n=document.querySelector('.pig-subnav'), a=n&&n.querySelector('.subnav-btn.active');
+  if(!n || !a || n.scrollWidth<=n.clientWidth) return;
+  n.scrollLeft += (a.getBoundingClientRect().left - n.getBoundingClientRect().left) - (n.clientWidth - a.offsetWidth)/2;
 }
 // Subnav: Reisen-Themenkreis (Flüge, Bestenliste, Züchter)
 function renderReisenSubnav(active){
@@ -6678,12 +6706,9 @@ function renderDetail(p, opts){
             <div style="margin-top:6px;font-size:13px">${bwDetailChip(p)}</div>
           </div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-sm btn-outline" onclick="setDtab('auc')">🕊 Auktion (HTML)</button>
-        </div>
       </div>
 
-      <div class="dtabs">${dtabBtn('stamm','📋 Stammdaten')}${split?'':dtabBtn('flug','🏁 Reiseleistung')}${split?'':dtabBtn('score','🧬 Erfolgs-Score')}${dtabBtn('web','🌐 Website')}${dtabBtn('auc','🕊 Auktion')}</div>
+      ${split?`<div class="dtabs">${dtabBtn('stamm','📋 '+t('dt_stamm'))}${dtabBtn('web','🌐 '+t('dt_web'))}${dtabBtn('auc','🕊 '+t('dt_auc'))}</div>`:''}
 
       <div class="edit-bar${S._dirty?' dirty':''}" id="edit-bar">
         <span class="edit-state" id="edit-state">${S._dirty?'● Ungespeicherte Änderungen':(saved?'✓ Gespeichert':'Alle Änderungen gespeichert')}</span>
@@ -6725,7 +6750,10 @@ function setDtab(k){
   w.querySelectorAll('.dtab-btn').forEach(b=>b.classList.toggle('active', b.dataset.k===k));
   const host=document.getElementById('auc-host');
   if(k==='auc' && host && !document.getElementById('auc-modal')) openAuctionExport(host.dataset.pid);
+  document.querySelectorAll('.pig-subnav .subnav-btn[data-dk]').forEach(b=>b.classList.toggle('active', b.dataset.dk===k));
+  pigSubnavCenter();
   const bar=w.querySelector('.dtabs'); if(bar && bar.getBoundingClientRect().top<0) bar.scrollIntoView({block:'start'});
+  else if(!bar && w.getBoundingClientRect().top<0) window.scrollTo(0,0);
 }
 // Der Auktions-Editor soll Neuzeichnen der Seite überstehen (Eingaben bleiben erhalten)
 function aucReattach(){
