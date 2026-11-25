@@ -401,6 +401,7 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .edit-bar{position:sticky;top:0;z-index:25;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:8px 12px;margin:0 0 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm)}
 .edit-bar.dirty{border-color:var(--gold);box-shadow:0 0 0 2px rgba(201,162,39,.25)}
 .edit-state{font-size:13px;color:var(--text3)}
+.edit-bar:not(.dirty) .ed-discard,.edit-bar.dirty .ed-undo{display:none}
 .edit-bar.dirty .edit-state{color:#e0a050;font-weight:600}
 .ped-layout{display:block}
 .ped-fam-scroll{overflow:auto;padding:2px 0 8px;min-width:0}
@@ -3349,7 +3350,14 @@ const I18N_EN_TEXT = {
   '🧬 Vererbungsstärke nach Flügen (reine Nachkommen-Wertung)':'🧬 Breeding strength by races (pure offspring rating)',
   '🧬 Virtuelle Taube – nur für die Berechnung, nicht bearbeitbar.':'🧬 Virtual pigeon – for calculation only, cannot be edited.',
   '🧬 Zuchtbasis, Blutlinie und Züchter aufräumen':'🧬 Clean up breeding base, bloodline and breeder',
-  '🧹 Duplikate suchen':'🧹 Search duplicates'
+  '🧹 Duplikate suchen':'🧹 Search duplicates',
+  '✕ Änderungen verwerfen':'✕ Discard changes',
+  '↶ Rückgängig':'↶ Undo',
+  '↶ Letzte Speicherung rückgängig gemacht':'↶ Last save undone',
+  'Ungespeicherte Änderungen':'Unsaved changes',
+  'Du hast Änderungen an dieser Taube noch nicht gespeichert. Was soll damit passieren?':'You have unsaved changes to this pigeon. What should happen to them?',
+  'Hier bleiben':'Stay here',
+  '✕ Verwerfen':'✕ Discard'
 };
 Object.assign(I18N.en, I18N_EN_TEXT);
 function t(key){ return (I18N[LANG]&&I18N[LANG][key]) || I18N.de[key] || key; }
@@ -6682,6 +6690,9 @@ function websiteBlockHtml(p){
 function renderDetail(p, opts){
   const split=!!(opts&&opts.split), id=p.pigeonid;
   const saved=S._justSaved===id; if(saved) S._justSaved=null;
+  const undone=S._justUndone===id; if(undone) S._justUndone=null;
+  if(S._undo && S._undo.pid!==id) S._undo=null;          // „Rückgängig“ gilt nur, solange man bei dieser Taube bleibt
+  const canUndo=!!(S._undo && S._undo.pid===id);
   const wsReady=WEBSITE_SETTINGS_CACHE.has(id) && !!PT_CACHE[id];
   if(S._dtabPid!==id){ S._dtabPid=id; S.dtab='stamm'; }
   let dtab=S.dtab||'stamm'; if(split && (dtab==='flug'||dtab==='score')) dtab='stamm';
@@ -6711,10 +6722,11 @@ function renderDetail(p, opts){
       ${split?`<div class="dtabs">${dtabBtn('stamm','📋 '+t('dt_stamm'))}${dtabBtn('web','🌐 '+t('dt_web'))}${dtabBtn('auc','🕊 '+t('dt_auc'))}</div>`:''}
 
       <div class="edit-bar${S._dirty?' dirty':''}" id="edit-bar">
-        <span class="edit-state" id="edit-state">${S._dirty?'● Ungespeicherte Änderungen':(saved?'✓ Gespeichert':'Alle Änderungen gespeichert')}</span>
-        <div style="display:flex;gap:8px">
+        <span class="edit-state" id="edit-state">${S._dirty?'● Ungespeicherte Änderungen':(saved?'✓ Gespeichert':(undone?'↶ Letzte Speicherung rückgängig gemacht':'Alle Änderungen gespeichert'))}</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-sm" onclick="saveEdit('${id}')">💾 ${t('btn_save')}</button>
-          <button class="btn btn-outline btn-sm" onclick="cancelEdit('${id}')" title="Änderungen verwerfen und gespeicherte Werte neu laden">↺ Zurücksetzen</button>
+          <button class="btn btn-outline btn-sm ed-discard" onclick="cancelEdit('${id}')" title="Ungespeicherte Änderungen verwerfen und den gespeicherten Stand wieder anzeigen">✕ Änderungen verwerfen</button>
+          ${canUndo?`<button class="btn btn-outline btn-sm ed-undo" onclick="edUndo('${id}')" title="Stellt den Stand vor der letzten Speicherung wieder her">↶ Rückgängig</button>`:''}
         </div>
       </div>
       <div id="edit-msg" style="display:none;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:14px;font-size:13px"></div>
@@ -6794,7 +6806,26 @@ function edRestore(snap){
   if(hid&&seg){ seg.querySelector('.m').classList.toggle('on',hid.value==='M'); seg.querySelector('.f').classList.toggle('on',hid.value==='F'); }
   pfRefresh('e'); zbInit(); edSetDirty(true);
 }
-// Beim Wegnavigieren mit ungespeicherten Änderungen nachfragen (OK = speichern und weiter)
+// Abfrage beim Wegnavigieren: 'save' | 'discard' | 'stay'
+function edAskLeave(){
+  return new Promise(res=>{
+    const w=document.createElement('div'); w.className='aa-ov'; w.style.zIndex=10001;
+    w.innerHTML='<div class="aa-box"><div class="aa-head"><div class="serif" style="font-size:18px">Ungespeicherte Änderungen</div></div>'
+      +'<div style="font-size:13px;color:var(--text2);margin:8px 0">Du hast Änderungen an dieser Taube noch nicht gespeichert. Was soll damit passieren?</div>'
+      +'<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px">'
+      +'<button type="button" class="btn btn-outline" data-v="stay">Hier bleiben</button>'
+      +'<button type="button" class="btn btn-outline" data-v="discard" style="color:#d9534f;border-color:#d9534f">✕ Verwerfen</button>'
+      +'<button type="button" class="btn" data-v="save">💾 Speichern</button></div></div>';
+    const kd=e=>{ if(e.key==='Escape'){ e.preventDefault(); done('stay'); } };
+    const done=v=>{ w.remove(); document.removeEventListener('keydown',kd,true); res(v); };
+    w.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>done(b.dataset.v));
+    w.onclick=e=>{ if(e.target===w) done('stay'); };
+    document.addEventListener('keydown',kd,true);
+    document.body.appendChild(w);
+    setTimeout(()=>{ const b=w.querySelector('[data-v=save]'); if(b) b.focus(); },0);
+  });
+}
+// Beim Wegnavigieren mit ungespeicherten Änderungen nachfragen: Speichern / Verwerfen / Hier bleiben
 function edGuard(name){
   const orig=window[name]; if(typeof orig!=='function') return;
   window[name]=function(){
@@ -6804,8 +6835,11 @@ function edGuard(name){
       return pedEditSave(true).then(ok=>{ if(ok) return orig.apply(self,args); });
     }
     if(S._dirty && root){
-      if(!confirm('Es gibt ungespeicherte Änderungen an dieser Taube.\n\nOK = speichern und weiter\nAbbrechen = hier bleiben (mit „Zurücksetzen“ lassen sie sich verwerfen)')) return;
-      return saveEdit(root.dataset.pid,{quiet:true}).then(ok=>{ if(ok) return orig.apply(self,args); });
+      const pid=root.dataset.pid;
+      return edAskLeave().then(v=>{
+        if(v==='save') return saveEdit(pid,{quiet:true}).then(ok=>{ if(ok) return orig.apply(self,args); });
+        if(v==='discard'){ edSetDirty(false); return orig.apply(self,args); }
+      });
     }
     return orig.apply(self,args);
   };
@@ -6893,8 +6927,12 @@ async function saveEdit(id, opts){
   // Leere Strings als null
   Object.keys(row).forEach(k=>{ if(row[k]==='') row[k]=null; });
   if(msg){ msg.style.display='block'; msg.style.background='var(--bg3)'; msg.style.color='var(--text2)'; msg.textContent='Speichern…'; }
+  // Stand vor dem Speichern direkt aus der Datenbank holen (für „Rückgängig“) – genau die Felder, die gleich geschrieben werden
+  let undoRow=null;
+  try{ const cur=await apiGet('/pigeons?pigeonid=eq.'+encodeURIComponent(id)+'&select='+Object.keys(row).join(',')); if(cur&&cur[0]) undoRow=cur[0]; }catch(e){}
   try{
     await apiPatch('pigeons', id, row);
+    if(undoRow && Object.keys(row).some(k=>!edSame(undoRow[k],row[k]))) S._undo={pid:id, row:undoRow};
     if(document.getElementById('w_profile_public')) await saveWebsiteSettings(id);   // nur wenn der Block geladen ist (sonst würden Standardwerte überschreiben)
     // Lokalen State aktualisieren
     const idx=S.pigeons.findIndex(p=>p.pigeonid===id);
@@ -6911,6 +6949,28 @@ async function saveEdit(id, opts){
   } catch(err){
     if(msg){ msg.style.display='block'; msg.style.background='#2a0f0f'; msg.style.color='#e07070'; msg.textContent='❌ Fehler: '+err.message; }
     return false;
+  }
+}
+
+function edSame(a,b){ const n=v=>(v===undefined||v===null)?'':String(v); return n(a)===n(b); }
+// Letzte Speicherung rückgängig machen (Stand vor dem letzten „Speichern“ wiederherstellen)
+async function edUndo(id){
+  const u=S._undo; if(!u || u.pid!==id) return;
+  const msg=document.getElementById('edit-msg');
+  if(msg){ msg.style.display='block'; msg.style.background='var(--bg3)'; msg.style.color='var(--text2)'; msg.textContent='Mache rückgängig…'; }
+  try{
+    await apiPatch('pigeons', id, u.row);
+    const idx=S.pigeons.findIndex(p=>p.pigeonid===id);
+    if(idx!==-1){ S.pigeons[idx]=Object.assign({},S.pigeons[idx],u.row,{pigeonid:id}); }
+    invalidatePedigreeCache();
+    S.selected=S.pigeons.find(p=>p.pigeonid===id)||null;
+    S._undo=null; S._dirty=false;
+    applyFilter();
+    S._justUndone=id;
+    if(document.getElementById('split-detail')){ if(document.getElementById('table-wrap')) renderTableOnly(); splitRefreshDetail(true); }
+    else { const y=window.scrollY; render(); window.scrollTo(0,y); }
+  }catch(err){
+    if(msg){ msg.style.display='block'; msg.style.background='#2a0f0f'; msg.style.color='#e07070'; msg.textContent='❌ Rückgängig fehlgeschlagen: '+err.message; }
   }
 }
 
