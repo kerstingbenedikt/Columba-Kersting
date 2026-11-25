@@ -6490,9 +6490,27 @@ function openPhotoLightbox(src){
   document.body.appendChild(overlay);
 }
 
-// Bisheriges Titelbild vor dem Ersetzen unter „Weitere Bilder“ ablegen, damit es nicht verloren geht.
-// Rückgabe: die neue Zeile in pigeon_photos, oder null, wenn es kein altes Titelbild gab. Wirft bei Fehlern.
+// Titelbild: pigeons.photo enthält eine kleine Anzeige-Version (480 px, schnell für Listen/Druck).
+// Zusätzlich liegt eine große Version (1400 px) in pigeon_photos mit kind='cover'. Diese wird beim
+// Ersetzen/Tauschen unter „Weitere Bilder“ übernommen, damit die Qualität erhalten bleibt.
+const PG_COVER_MAX = 480, PG_LARGE_MAX = 1400;
+function pgOldCoverCaption(){ return 'Früheres Titelbild (bis '+new Date().toLocaleDateString('de-DE')+')'; }
+function pgCoverRowOf(st){ return st && !st.missing ? (st.rows.find(r=>r.kind==='cover') || null) : null; }
+
+// Bisheriges Titelbild vor dem Ersetzen unter „Weitere Bilder“ ablegen (große Version, falls vorhanden).
+// Rückgabe: Info zum Rückgängigmachen, oder null, wenn es kein altes Titelbild gab. Wirft bei Fehlern.
 async function pgArchiveOldCover(id){
+  const st = await loadPigeonPhotos(id);
+  if(st.missing) throw new Error('Tabelle pigeon_photos nicht lesbar');
+  const sort = st.rows.reduce((m,r)=>Math.max(m, Number(r.sort_order)||0), 0) + 1;
+  const big = pgCoverRowOf(st);
+  if(big){
+    const patch = { kind:'other', caption:pgOldCoverCaption(), sort_order:sort };
+    await apiPatchBy('pigeon_photos','id=eq.'+encodeURIComponent(big.id), patch);
+    const before = { kind:big.kind, caption:big.caption, sort_order:big.sort_order };
+    Object.assign(big, patch);
+    return { type:'moved', row:big, before };
+  }
   const p = findById(id);
   let old = p && p.photo ? p.photo : null;
   if(!old){
@@ -6500,18 +6518,48 @@ async function pgArchiveOldCover(id){
     old = (r && r[0] && r[0].photo) || null;
   }
   if(!old) return null;
-  const st = PHOTO_CACHE.get(id);
-  let sort = 0;
-  if(st && !st.missing) sort = st.rows.reduce((m,r)=>Math.max(m, Number(r.sort_order)||0), 0);
-  else {
-    const ex = await apiGet('/pigeon_photos?pigeonid=eq.'+encodeURIComponent(id)+'&select=sort_order&order=sort_order.desc&limit=1');
-    sort = (ex && ex[0] && Number(ex[0].sort_order)) || 0;
-  }
-  const row = { id:crypto.randomUUID(), pigeonid:id, kind:'other', data:old,
-    caption:'Früheres Titelbild (bis '+new Date().toLocaleDateString('de-DE')+')', sort_order:sort+1 };
+  const row = { id:crypto.randomUUID(), pigeonid:id, kind:'other', data:old, caption:pgOldCoverCaption(), sort_order:sort };
   await apiPost('pigeon_photos', row);
-  if(st && !st.missing) st.rows.push(row);
-  return row;
+  st.rows.push(row);
+  return { type:'new', row };
+}
+async function pgUndoArchive(id, a){
+  if(!a) return;
+  const st = PHOTO_CACHE.get(id);
+  try{
+    if(a.type==='new'){
+      await apiDeleteBy('pigeon_photos','id=eq.'+encodeURIComponent(a.row.id));
+      if(st) st.rows = st.rows.filter(r=>r.id!==a.row.id);
+    } else {
+      await apiPatchBy('pigeon_photos','id=eq.'+encodeURIComponent(a.row.id), a.before);
+      Object.assign(a.row, a.before);
+    }
+  }catch(e){}
+}
+// Große Version des Titelbilds speichern (ersetzt eine evtl. vorhandene). Fehler sind nicht kritisch:
+// Das Titelbild selbst ist dann trotzdem gespeichert, nur ohne große Version.
+async function pgSaveLargeCover(id, data){
+  try{
+    const st = await loadPigeonPhotos(id);
+    if(st.missing) return;
+    const old = st.rows.filter(r=>r.kind==='cover');
+    const row = { id:crypto.randomUUID(), pigeonid:id, kind:'cover', data, caption:null, sort_order:0 };
+    await apiPost('pigeon_photos', row);
+    if(old.length) await apiDeleteBy('pigeon_photos','id=in.('+old.map(r=>r.id).join(',')+')');
+    st.rows = st.rows.filter(r=>r.kind!=='cover');
+    st.rows.push(row);
+  }catch(e){
+    console.warn('Große Titelbild-Version nicht gespeichert:', e);
+    const el = document.getElementById('pg-status');
+    if(el) el.textContent = 'Hinweis: Die große Version des Titelbilds konnte nicht gespeichert werden ('+e.message+').';
+  }
+}
+// Klick auf das Titelbild: große Version zeigen, falls vorhanden
+async function pgOpenCover(id, src){
+  let st = PHOTO_CACHE.get(id);
+  if(!st){ try{ st = await loadPigeonPhotos(id); }catch(e){} }
+  const big = pgCoverRowOf(st);
+  openPhotoLightbox(big ? big.data : src);
 }
 
 async function uploadPigeonPhoto(id, file){
@@ -6522,7 +6570,8 @@ async function uploadPigeonPhoto(id, file){
   let archived = null;
   try{
     if(imgEl) imgEl.style.opacity='.4';
-    const dataUrl = await compressImageFile(file, 480, .82);
+    const dataUrl = await compressImageFile(file, PG_COVER_MAX, .82);
+    const large = await compressImageFile(file, PG_LARGE_MAX, .82);
     // Altes Titelbild zuerst sichern (→ „Weitere Bilder“), erst danach überschreiben
     try{ archived = await pgArchiveOldCover(id); }
     catch(e){
@@ -6538,13 +6587,11 @@ async function uploadPigeonPhoto(id, file){
     PhDB.put(id, dataUrl, PG_HAS_LEN?dataUrl.length:null);
     if(imgEl){ imgEl.removeAttribute('data-ph'); imgEl.src=dataUrl; imgEl.style.opacity='1'; }
     if(document.getElementById('table-wrap')) renderTableOnly();
+    await pgSaveLargeCover(id, large);
     if(typeof pgRerender==='function') pgRerender(id);
   }catch(err){
-    // Titelbild wurde nicht ersetzt → die eben angelegte Sicherungskopie wieder entfernen
-    if(archived){
-      try{ await apiDeleteBy('pigeon_photos','id=eq.'+encodeURIComponent(archived.id)); }catch(e){}
-      const st = PHOTO_CACHE.get(id); if(st) st.rows = st.rows.filter(r=>r.id!==archived.id);
-    }
+    // Titelbild wurde nicht ersetzt → Sicherung rückgängig machen
+    await pgUndoArchive(id, archived);
     if(imgEl){ imgEl.style.opacity='1'; if(prevSrc) imgEl.src=prevSrc; }
     alert('Foto konnte nicht gespeichert werden: '+err.message+'\n\nHinweis: In Supabase muss die Tabelle "pigeons" eine Text-Spalte "photo" besitzen.');
   }
@@ -6619,7 +6666,7 @@ function renderDetail(p, opts){
           <div style="position:relative;flex-shrink:0;width:88px;height:76px;background:#fff;border-radius:8px;border:1px solid var(--border);overflow:hidden" title="${p.photo?'Eigenes Foto – zum Vergrößern klicken':'Farbvorschau'}">
             <img id="detail-photo-img"${phAttr(p)} src="${pigeonThumbSrc(p)}" alt=""
                  onerror="this.onerror=null;this.src=PIGEON_COLOR_THUMBS.leer"
-                 onclick="openPhotoLightbox(this.src)"
+                 onclick="pgOpenCover('${id}',this.src)"
                  style="width:100%;height:100%;object-fit:contain;display:block;cursor:zoom-in">
             <label for="detail-photo-input" title="Foto hochladen"
                    style="position:absolute;bottom:2px;right:2px;width:22px;height:22px;border-radius:50%;background:var(--green3);border:1px solid var(--green2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px">📷</label>
@@ -9669,7 +9716,7 @@ async function loadPigeonPhotos(id, force){
 function pgGalleryHtml(p){
   const id = p.pigeonid, st = PHOTO_CACHE.get(id);
   const eye = st ? st.rows.find(r=>r.kind==='eye') : null;
-  const others = st ? st.rows.filter(r=>r.kind!=='eye') : [];
+  const others = st ? st.rows.filter(r=>r.kind!=='eye' && r.kind!=='cover') : [];
   const btn = (icon, title, onclick) => `<button type="button" class="pg-btn" title="${escH(title)}" onclick="${onclick}">${icon}</button>`;
   const picker = (inputId, icon, title) => `<label class="pg-btn" for="${inputId}" title="${escH(title)}">${icon}</label>`;
   const view = 'openPhotoLightbox(this.querySelector(\'img\').src)';
@@ -9677,7 +9724,7 @@ function pgGalleryHtml(p){
   const dz = (t_) => ` ondragover="pgDragOver(event)" ondragleave="pgDragLeave(event)" ondrop="pgDrop(event,'${id}','${t_}')"`;
   const cover = `<div class="pg-tile"${dz('cover')}>
       <div class="pg-label">${t('pg_cover')}</div>
-      <div class="pg-img" onclick="${view}"><img${phAttr(p)} src="${escH(pigeonThumbSrc(p))}" alt="" onerror="this.onerror=null;this.src=PIGEON_COLOR_THUMBS.leer"></div>
+      <div class="pg-img" onclick="pgOpenCover('${id}',this.querySelector('img').src)"><img${phAttr(p)} src="${escH(pigeonThumbSrc(p))}" alt="" onerror="this.onerror=null;this.src=PIGEON_COLOR_THUMBS.leer"></div>
       <div class="pg-actions">${picker('pg-in-cover','📷',t('pg_replace'))}${p.photo?btn('🗑',t('pg_remove'),`pgRemoveCover('${id}')`):''}</div>
       <input type="file" id="pg-in-cover" accept="image/*" style="display:none" onchange="pgUploadCover('${id}',this.files[0]);this.value=''">
     </div>`;
@@ -9737,25 +9784,38 @@ async function pgSetCoverData(id, dataUrl){
   if(document.getElementById('table-wrap')) renderTableOnly();
 }
 async function pgDataToFile(dataUrl){ const b = await (await fetch(dataUrl)).blob(); return new File([b],'bild.jpg',{type:b.type||'image/jpeg'}); }
-// Ein Zusatzbild (oder das Augenfoto) wird Titelbild; das bisherige Titelbild rückt an dessen Stelle (Tausch, nichts geht verloren)
+// Ein Zusatzbild (oder das Augenfoto) wird Titelbild; das bisherige Titelbild rückt an dessen Stelle
+// (Tausch, nichts geht verloren). Die große Version des gewählten Bildes bleibt als große Titelbild-Version erhalten.
 async function pgMakeCover(id, photoId){
   const st = PHOTO_CACHE.get(id), row = st && st.rows.find(r=>r.id===photoId), p = findById(id);
   if(!row || !p) return;
   const say = x => { const el=document.getElementById('pg-status'); if(el) el.textContent=x; };
   try{
     say('Tausche Titelbild…');
-    const old = p.photo || null;
-    const cover = await compressImageFile(await pgDataToFile(row.data), 480, .82);
-    if(old){
-      await apiPatchBy('pigeon_photos','id=eq.'+encodeURIComponent(photoId),{data:old});   // erst sichern …
-      row.data = old;
+    const kind = row.kind, sort = row.sort_order;
+    const cap = kind==='eye' ? null : pgOldCoverCaption();
+    const cover = await compressImageFile(await pgDataToFile(row.data), PG_COVER_MAX, .82);
+    // 1. bisheriges Titelbild an die Stelle des gewählten Bildes setzen (große Version, sonst die kleine)
+    const big = pgCoverRowOf(st);
+    let old = p.photo || null;
+    if(!old && !big){
+      const r = await apiGet('/pigeons?pigeonid=eq.'+encodeURIComponent(id)+'&select=photo');
+      old = (r && r[0] && r[0].photo) || null;
     }
-    await pgSetCoverData(id, cover);                                                       // … dann Titelbild setzen
-    if(!old){
-      await apiDeleteBy('pigeon_photos','id=eq.'+encodeURIComponent(photoId));
-      st.rows = st.rows.filter(r=>r.id!==photoId);
+    if(big){
+      await apiPatchBy('pigeon_photos','id=eq.'+encodeURIComponent(big.id),{kind, sort_order:sort, caption:cap});
+      Object.assign(big, {kind, sort_order:sort, caption:cap});
+    } else if(old){
+      const nr = { id:crypto.randomUUID(), pigeonid:id, kind, data:old, caption:cap, sort_order:sort };
+      await apiPost('pigeon_photos', nr);
+      st.rows.push(nr);
     }
-  }catch(e){ alert('Tausch fehlgeschlagen: '+e.message); }
+    // 2. gewähltes Bild wird zur großen Titelbild-Version (Daten bleiben unverändert)
+    await apiPatchBy('pigeon_photos','id=eq.'+encodeURIComponent(photoId),{kind:'cover', sort_order:0, caption:null});
+    Object.assign(row, {kind:'cover', sort_order:0, caption:null});
+    // 3. kleine Anzeige-Version setzen
+    await pgSetCoverData(id, cover);
+  }catch(e){ alert('Tausch fehlgeschlagen: '+e.message); await pgReload(id); }
   say(''); pgRerender(id);
 }
 function pgDragStart(ev, photoId){ try{ ev.dataTransfer.setData('text/pg-photo', photoId); ev.dataTransfer.effectAllowed='move'; }catch(e){} }
@@ -9781,6 +9841,8 @@ async function pgRemoveCover(id){
   if(!confirm('Titelbild entfernen? Danach wird wieder die Farbvorschau angezeigt.')) return;
   try{
     await apiPatch('pigeons', id, { photo:null });
+    try{ await apiDeleteBy('pigeon_photos','pigeonid=eq.'+encodeURIComponent(id)+'&kind=eq.cover'); }catch(e){}
+    { const st = PHOTO_CACHE.get(id); if(st) st.rows = st.rows.filter(r=>r.kind!=='cover'); }
     const p = findById(id); if(p){ p.photo = null; if(PG_HAS_LEN) p.photo_len = null; }
     if(PHOTO_IDS) PHOTO_IDS.delete(id); PhDB.del(id);
     const img = document.getElementById('detail-photo-img'); if(img && p) img.src = pigeonThumbSrc(p);
