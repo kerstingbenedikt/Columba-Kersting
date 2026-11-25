@@ -476,6 +476,28 @@ tr:hover td{background:var(--bg3);color:var(--text);cursor:pointer}
 .tag.clickable:hover{border-color:var(--green);color:var(--green)}
 .stat-card.clickable{cursor:pointer;transition:border-color .12s,transform .12s}
 .stat-card.clickable:hover{border-color:var(--green);transform:translateY(-1px)}
+.stb-card .card-title{margin-bottom:12px}
+.stb-meta{font-size:12px;color:var(--text3);font-weight:400}
+.stb-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.stb-kpis .stat-card{padding:14px 10px}
+.stb-kpis .stat-num{font-size:28px}
+.stb-kpis .stb-main .stat-num{color:var(--gold,#c9a227)}
+.stb-sub{font-size:11px;color:var(--text3);margin-top:3px}
+.stb-wait{opacity:.5}
+.stb-tbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.stb-tlbl{font-size:12px;color:var(--text3);margin-right:4px}
+.stb-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:var(--radius-sm)}
+.stb-tbl{min-width:640px}
+.stb-tbl th.stb-k{position:sticky;left:0;background:var(--bg2);color:var(--text);font-size:13px;text-transform:none;letter-spacing:0;font-weight:500;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;z-index:1}
+.stb-tbl thead th:first-child{position:sticky;left:0;background:var(--bg2);z-index:2}
+.stb-tbl td.stb-c,.stb-tbl th.stb-c{cursor:pointer}
+.stb-tbl td.stb-c:hover,.stb-tbl th.stb-c:hover{color:var(--green);text-decoration:underline}
+.stb-tbl td.stb-0{color:var(--text3);opacity:.5}
+.stb-tbl tfoot tr.stb-sum th,.stb-tbl tfoot tr.stb-sum td{font-weight:700;border-top:2px solid var(--border);border-bottom:none}
+.stb-note{font-size:11px;color:var(--text3);margin-top:6px}
+.stb-db{font-size:12px;color:var(--text3);margin:-4px 2px 14px}
+.stb-db a{color:var(--green);cursor:pointer}
+@media(max-width:700px){.stb-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.stb-kpis .stat-card{padding:10px 8px}.stb-kpis .stat-num{font-size:22px}.stb-tbl{min-width:0;font-size:12px}.stb-tbl th,.stb-tbl td{padding:6px 7px}.stb-tbl th.stb-k{max-width:110px;font-size:12px}}
 
 /* ── Neue Taube / Formular ── */
 .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
@@ -20608,6 +20630,106 @@ function statsFilterOwner(owner){
   applyFilter(); window.scrollTo(0,0);
 }
 
+// ══ BESTAND AUF EINEN BLICK (oben in der Statistik) ══════════════════════════
+// Zählt nur Tauben im Bestand. Elite = beste einzelne Saison erfüllt die Elite-Kriterien (wie in der Detailansicht),
+// erfolgreich = eigene Flüge mit Preisquote ≥ VERERBER_ERFOLG_MIN_PREISQUOTE % und mind. VERERBER_ERFOLG_MIN_TOPAS Preisen über der AS-Schwelle.
+const STB = { loading:false, error:null, group:null };
+function stbGroup(){ if(!STB.group){ try{ STB.group=localStorage.getItem('stb_group')||'standort'; }catch(e){ STB.group='standort'; } } return STB.group; }
+function stbSetGroup(g){ STB.group=g; try{ localStorage.setItem('stb_group',g); }catch(e){} render(); }
+// Liste mit Bestandsfilter + beliebigen weiteren Filtern öffnen
+function statsFilterStock(f){
+  statsGoToListe(); resetTaubenFilter();
+  S.inStockFilter='yes';
+  if(f.sex) S.sexFilter=f.sex;
+  if(f.year!=null) S.yearFilter=String(f.year);
+  if(f.standort!=null) S.standortFilter=String(f.standort);
+  if(f.type!=null) S.typeFilter=String(f.type);
+  applyFilter(); window.scrollTo(0,0);
+}
+function stbAgeClass(p, yNow){
+  const y=Number(p.date_year); if(!y) return 'unk';
+  return y>=yNow ? 'jung' : y===yNow-1 ? 'jaehrig' : 'alt';
+}
+function stbCount(list, yNow, perfReady){
+  const c={n:0,m:0,f:0,u:0,jung:0,jaehrig:0,alt:0,reise:0,zucht:0,flown:0,erf:0,elite:0};
+  list.forEach(p=>{
+    c.n++; const s=sex_(p); if(s==='M') c.m++; else if(s==='F') c.f++; else c.u++;
+    const a=stbAgeClass(p,yNow); if(a!=='unk') c[a]++;
+    if(p.pigeontype==='Reisetaube') c.reise++; else if(p.pigeontype==='Zuchttaube') c.zucht++;
+    if(perfReady){
+      const si=offspringSuccessInfo(p);
+      if(si.ready && si.hasFlights){ c.flown++; if(si.erfolgreich) c.erf++; }
+      const el=computeEliteSeason(p.pigeonid); if(el.ready && el.elite) c.elite++;
+    }
+  });
+  return c;
+}
+function renderBestandSummary(){
+  const yNow=new Date().getFullYear();
+  const stock=S.pigeons.filter(p=>p.instock && !p.deleted && !p._virtual);
+  // Flugdaten der Bestandstauben nachladen (einmalig)
+  const missing=stock.filter(p=>!PT_CACHE[p.pigeonid]).map(p=>p.pigeonid);
+  const perfReady=!missing.length;
+  if(missing.length && !STB.loading && !STB.error){
+    STB.loading=true;
+    withTimeout(loadPigeonTripsBatchChunked(missing),60000)
+      .then(()=>{ STB.loading=false; missing.forEach(id=>{ if(!PT_CACHE[id]) PT_CACHE[id]=[]; }); if(S.tab==='tauben' && S.taubenView==='statistik') render(); })
+      .catch(e=>{ STB.loading=false; STB.error=(e&&e.message)||'Fehler'; if(S.tab==='tauben' && S.taubenView==='statistik') render(); });
+  }
+  const T=stbCount(stock, yNow, perfReady);
+  const fmt=n=>Number(n).toLocaleString('de');
+  const pend=STB.error?'<span title="'+escH(STB.error)+'">–</span>':'<span class="stb-wait">…</span>';
+  const perf=n=>perfReady?fmt(n):pend;
+  const tile=(num,label,sub,onclick,title,cls)=>`<div class="stat-card${onclick?' clickable':''} ${cls||''}"${onclick?` onclick="${onclick}"`:''}${title?` title="${escH(title)}"`:''}><div class="stat-num">${num}</div><div class="stat-label">${label}</div>${sub?`<div class="stb-sub">${sub}</div>`:''}</div>`;
+  const pct=(a,b)=>b?Math.round(a/b*100)+' %':'';
+  const kpis=`<div class="stb-kpis">
+      ${tile(fmt(T.n),'📦 Im Bestand',T.u?fmt(T.u)+' ohne Geschlecht':'', 'statsFilterInstock()','Alle Tauben im Bestand anzeigen','stb-main')}
+      ${tile(fmt(T.m),'♂ Vögel',pct(T.m,T.n),"statsFilterStock({sex:'M'})",'Vögel im Bestand anzeigen')}
+      ${tile(fmt(T.f),'♀ Weibchen',pct(T.f,T.n),"statsFilterStock({sex:'F'})",'Weibchen im Bestand anzeigen')}
+      ${tile(fmt(T.jung),'🐣 Jungtauben '+yNow,fmt(T.jaehrig)+' Jährige · '+fmt(T.alt)+' Alte',`statsFilterStock({year:${yNow}})`,'Jungtauben '+yNow+' im Bestand anzeigen')}
+      ${tile(fmt(T.reise),'✈ Reisetauben',pct(T.reise,T.n),"statsFilterStock({type:'Reisetaube'})",'Reisetauben im Bestand anzeigen')}
+      ${tile(fmt(T.zucht),'🥚 Zuchttauben',pct(T.zucht,T.n),"statsFilterStock({type:'Zuchttaube'})",'Zuchttauben im Bestand anzeigen')}
+      ${tile(perf(T.elite),'⭐ Elite',perfReady&&T.flown?'von '+fmt(T.flown)+' geflogenen':'',"showEliteCriteriaModal()",'Beste Saison: mind. '+VERERBER_ELITE_MIN_PREISE+' Preise, Preisquote ≥ '+VERERBER_ELITE_MIN_PREISQUOTE+' %, mind. '+VERERBER_ELITE_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS – Klick für die Kriterien')}
+      ${tile(perf(T.erf),'✅ Erfolgreich',perfReady&&T.flown?pct(T.erf,T.flown)+' der geflogenen':'',null,'Eigene Flüge: Preisquote ≥ '+VERERBER_ERFOLG_MIN_PREISQUOTE+' % und mind. '+VERERBER_ERFOLG_MIN_TOPAS+' Preise über '+VERERBER_ELITE_AS_SCHWELLE+' AS')}
+    </div>`;
+
+  // Aufschlüsselung
+  const g=stbGroup();
+  const groups=new Map();
+  const keyOf=p=> g==='typ' ? (p.pigeontype||'') : g==='jahr' ? String(p.date_year||'') : (p.standort||'');
+  stock.forEach(p=>{ const k=keyOf(p); if(!groups.has(k)) groups.set(k,[]); groups.get(k).push(p); });
+  let keys=[...groups.keys()];
+  if(g==='jahr') keys.sort((a,b)=>(Number(b)||0)-(Number(a)||0));
+  else keys.sort((a,b)=>(a===''?1:0)-(b===''?1:0) || groups.get(b).length-groups.get(a).length || a.localeCompare(b,'de'));
+  const emptyLbl = g==='typ'?'ohne Taubentyp':g==='jahr'?'ohne Jahrgang':'ohne Standort';
+  const fKey=k=> g==='typ' ? {type: k===''?'__none':k} : g==='jahr' ? (k===''?null:{year:k}) : {standort:k};
+  const cell=(n,f,extra)=>{ if(!n) return '<td class="num stb-0">–</td>'; if(!f) return `<td class="num">${fmt(n)}</td>`;
+    return `<td class="num stb-c" onclick="statsFilterStock(${escH(JSON.stringify(Object.assign({},f,extra||{})))})">${fmt(n)}</td>`; };
+  const pcell=n=>perfReady?(n?`<td class="num">${fmt(n)}</td>`:'<td class="num stb-0">–</td>'):`<td class="num">${pend}</td>`;
+  const showU=T.u>0;
+  const row=(label,c,f,cls)=>`<tr class="${cls||''}"><th scope="row" class="stb-k${f?' stb-c':''}"${f?` onclick="statsFilterStock(${escH(JSON.stringify(f))})"`:''}>${label}</th>
+      ${cell(c.n,f)}${cell(c.m,f,{sex:'M'})}${cell(c.f,f,{sex:'F'})}${showU?cell(c.u,null):''}
+      ${g==='jahr'?'':cell(c.jung,f,{year:yNow})+cell(c.jaehrig,f,{year:yNow-1})+cell(c.alt,null)}
+      ${g==='typ'?'':cell(c.reise,f,{type:'Reisetaube'})+cell(c.zucht,f,{type:'Zuchttaube'})}
+      ${pcell(c.flown)}${pcell(c.erf)}${pcell(c.elite)}</tr>`;
+  const body=keys.map(k=>row(k===''?`<i>${emptyLbl}</i>`:escH(k), stbCount(groups.get(k),yNow,perfReady), fKey(k))).join('');
+  const gbtn=(k,l)=>`<button type="button" class="subnav-btn ${g===k?'active':''}" onclick="stbSetGroup('${k}')">${l}</button>`;
+  const table=`<div class="stb-tbar"><span class="stb-tlbl">Aufgeteilt nach</span>${gbtn('standort','📍 Standort')}${gbtn('typ','🏁 Taubentyp')}${gbtn('jahr','📅 Jahrgang')}</div>
+    <div class="stb-scroll"><table class="bw-tbl stb-tbl no-mcard"><thead><tr>
+      <th>${g==='typ'?'Taubentyp':g==='jahr'?'Jahrgang':'Standort'}</th><th class="num">Bestand</th><th class="num">♂ Vögel</th><th class="num">♀ Weibchen</th>${showU?'<th class="num" title="ohne Geschlecht">?</th>':''}
+      ${g==='jahr'?'':`<th class="num">Jung ${yNow}</th><th class="num">Jährige</th><th class="num">Alte</th>`}
+      ${g==='typ'?'':'<th class="num">✈ Reise</th><th class="num">🥚 Zucht</th>'}
+      <th class="num" title="mit eigenen Flügen">Geflogen</th><th class="num">✅ Erfolgr.</th><th class="num">⭐ Elite</th>
+    </tr></thead><tbody>${body}</tbody><tfoot>${row('Summe',T,{},'stb-sum')}</tfoot></table></div>
+    <div class="stb-note">Zahlen anklicken, um die passenden Tauben in der Liste zu sehen. ${perfReady?'':(STB.error?'Flugdaten konnten nicht geladen werden ('+escH(STB.error)+').':'Flugdaten werden geladen…')}</div>`;
+
+  return `<div class="card stb-card">
+      <div class="card-title" style="justify-content:space-between;flex-wrap:wrap"><span>🕊 Bestand auf einen Blick</span><span class="stb-meta">Stand ${new Date().toLocaleDateString('de-DE')} · nur Tauben im Bestand</span></div>
+      ${kpis}
+      ${table}
+    </div>`;
+}
+
 function renderStats(){
   const total=S.pigeons.length,males=S.pigeons.filter(p=>sex_(p)==='M').length,females=S.pigeons.filter(p=>sex_(p)==='F').length;
   const instock=S.pigeons.filter(p=>p.instock).length;
@@ -20653,16 +20775,8 @@ function renderStats(){
   const maxV=Math.max(...topVererber.map(x=>x.n),1);
 
   return `
-    <div class="stats-grid">
-      <div class="stat-card" onclick="statsGoToListe();resetTaubenFilter();applyFilter();window.scrollTo(0,0)" style="cursor:pointer" title="${t('stats_title_total')}"><div class="stat-num">${total.toLocaleString('de')}</div><div class="stat-label">${t('stats_total')}</div></div>
-      <div class="stat-card clickable" onclick="statsFilterSex('M')" title="${t('stats_title_male')}"><div class="stat-num">${males.toLocaleString('de')}</div><div class="stat-label">${t('stats_male')}</div></div>
-      <div class="stat-card clickable" onclick="statsFilterSex('F')" title="${t('stats_title_female')}"><div class="stat-num">${females.toLocaleString('de')}</div><div class="stat-label">${t('stats_female')}</div></div>
-    </div>
-    <div class="stat3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
-      <div class="stat-card clickable" onclick="statsFilterInstock()" title="${t('stats_title_instock')}"><div class="stat-num" style="font-size:24px">${instock.toLocaleString('de')}</div><div class="stat-label">${t('stats_instock')}</div></div>
-      <div class="stat-card" title="Bei diesen Tauben sind Vater UND Mutter im Stammbaum eingetragen. Je höher der Anteil, desto besser lassen sich Abstammung und Inzucht auswerten."><div class="stat-num" style="font-size:24px">${withBoth.toLocaleString('de')}</div><div class="stat-label">${t('stats_with_both_parents')}</div><div class="stat-sub">Vater &amp; Mutter eingetragen · ${total?Math.round(withBoth/total*100):0} %</div></div>
-      <div class="stat-card"><div class="stat-num" style="font-size:24px">${Object.keys(years).length}</div><div class="stat-label">${t('stats_vintages')}</div></div>
-    </div>
+    ${renderBestandSummary()}
+    <div class="stb-db">Gesamte Datenbank (inkl. Archiv): <a onclick="statsGoToListe();resetTaubenFilter();applyFilter();window.scrollTo(0,0)">${total.toLocaleString('de')} Tauben</a> · ${males.toLocaleString('de')} Vögel · ${females.toLocaleString('de')} Weibchen · ${Object.keys(years).length} Jahrgänge · <span title="Bei diesen Tauben sind Vater UND Mutter im Stammbaum eingetragen.">${withBoth.toLocaleString('de')} mit vollständigen Eltern</span></div>
     ${sectNav([['st_bestand','📦 Bestand'],['st_merk','🎨 Merkmale'],['st_top','🐣 Meiste Nachkommen'],['st_score','📋 Erfolgs-Score'],['st_ver','🧬 Vererbungsstärke']])}
     ${glossHtml()}
     ${sectStart('st_bestand','📦','Bestand &amp; Jahrgänge','Bestand nach Taubentyp, Anzahl je Jahrgang – anklickbar zum Filtern',true)}
