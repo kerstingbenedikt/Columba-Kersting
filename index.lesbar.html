@@ -6490,14 +6490,47 @@ function openPhotoLightbox(src){
   document.body.appendChild(overlay);
 }
 
+// Bisheriges Titelbild vor dem Ersetzen unter „Weitere Bilder“ ablegen, damit es nicht verloren geht.
+// Rückgabe: die neue Zeile in pigeon_photos, oder null, wenn es kein altes Titelbild gab. Wirft bei Fehlern.
+async function pgArchiveOldCover(id){
+  const p = findById(id);
+  let old = p && p.photo ? p.photo : null;
+  if(!old){
+    const r = await apiGet('/pigeons?pigeonid=eq.'+encodeURIComponent(id)+'&select=photo');
+    old = (r && r[0] && r[0].photo) || null;
+  }
+  if(!old) return null;
+  const st = PHOTO_CACHE.get(id);
+  let sort = 0;
+  if(st && !st.missing) sort = st.rows.reduce((m,r)=>Math.max(m, Number(r.sort_order)||0), 0);
+  else {
+    const ex = await apiGet('/pigeon_photos?pigeonid=eq.'+encodeURIComponent(id)+'&select=sort_order&order=sort_order.desc&limit=1');
+    sort = (ex && ex[0] && Number(ex[0].sort_order)) || 0;
+  }
+  const row = { id:crypto.randomUUID(), pigeonid:id, kind:'other', data:old,
+    caption:'Früheres Titelbild (bis '+new Date().toLocaleDateString('de-DE')+')', sort_order:sort+1 };
+  await apiPost('pigeon_photos', row);
+  if(st && !st.missing) st.rows.push(row);
+  return row;
+}
+
 async function uploadPigeonPhoto(id, file){
   if(!file) return;
   if(file.size>15*1024*1024){ alert('Datei zu groß (max. 15 MB).'); return; }
   const imgEl = document.getElementById('detail-photo-img');
   const prevSrc = imgEl ? imgEl.src : null;
+  let archived = null;
   try{
     if(imgEl) imgEl.style.opacity='.4';
     const dataUrl = await compressImageFile(file, 480, .82);
+    // Altes Titelbild zuerst sichern (→ „Weitere Bilder“), erst danach überschreiben
+    try{ archived = await pgArchiveOldCover(id); }
+    catch(e){
+      if(!confirm('Das bisherige Titelbild konnte nicht unter „Weitere Bilder“ gesichert werden ('+e.message+').\n\nTrotzdem ersetzen? Das alte Bild geht dann verloren.')){
+        if(imgEl) imgEl.style.opacity='1';
+        return;
+      }
+    }
     await apiPatch('pigeons', id, {photo: dataUrl});
     const p = findById(id);
     if(p){ p.photo = dataUrl; if(PG_HAS_LEN) p.photo_len = dataUrl.length; }
@@ -6507,6 +6540,11 @@ async function uploadPigeonPhoto(id, file){
     if(document.getElementById('table-wrap')) renderTableOnly();
     if(typeof pgRerender==='function') pgRerender(id);
   }catch(err){
+    // Titelbild wurde nicht ersetzt → die eben angelegte Sicherungskopie wieder entfernen
+    if(archived){
+      try{ await apiDeleteBy('pigeon_photos','id=eq.'+encodeURIComponent(archived.id)); }catch(e){}
+      const st = PHOTO_CACHE.get(id); if(st) st.rows = st.rows.filter(r=>r.id!==archived.id);
+    }
     if(imgEl){ imgEl.style.opacity='1'; if(prevSrc) imgEl.src=prevSrc; }
     alert('Foto konnte nicht gespeichert werden: '+err.message+'\n\nHinweis: In Supabase muss die Tabelle "pigeons" eine Text-Spalte "photo" besitzen.');
   }
